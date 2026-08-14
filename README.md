@@ -2,10 +2,10 @@
 
 > Zero-overhead real-time web monitor & GPU telemetry for VerthashMiner (Vertcoin / VTC)
 
-![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)
-![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white)
-![GPU](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900?logo=nvidia&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-blue.svg)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)](https://britto.is-a.dev)
+[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white)](https://britto.is-a.dev)
+[![GPU](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900?logo=nvidia&logoColor=white)](https://britto.is-a.dev)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://britto.is-a.dev)
 
 Web monitor dashboard for the [VerthashMiner](https://github.com/CryptoGraphics/VerthashMiner).
 
