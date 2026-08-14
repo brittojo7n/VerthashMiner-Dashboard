@@ -6,7 +6,7 @@
 <title>VerthashMiner Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #0b0e14;
@@ -21,13 +21,14 @@
     --red: #ef4444;
     --purple: #8b5cf6;
     --font: 'Outfit', sans-serif;
+    --mono: 'JetBrains Mono', 'Consolas', monospace;
   }
   
   body {
     margin: 0;
     min-height: 100vh;
-    background: radial-gradient(circle at 15% 50px, rgba(79, 172, 254, 0.15), transparent 25%),
-                radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.15), transparent 25%),
+    background: radial-gradient(circle at 15% 50px, rgba(79, 172, 254, 0.12), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.12), transparent 25%),
                 var(--bg);
     color: var(--text);
     font-family: var(--font);
@@ -80,11 +81,11 @@
     border-radius: 20px;
     padding: 24px;
     box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s;
   }
   .panel:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 20px 40px -10px rgba(0,0,0,0.6);
+    transform: translateY(-2px);
+    box-shadow: 0 16px 36px -10px rgba(0,0,0,0.6);
     border-color: rgba(255,255,255,0.15);
   }
 
@@ -123,17 +124,235 @@
   .bar-bg {
     height: 6px; border-radius: 10px; background: rgba(255,255,255,0.1); margin-top: 12px; overflow: hidden;
   }
-  .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); width: 0%; transition: width 0.5s ease-out; box-shadow: 0 0 10px rgba(79,172,254,0.5); }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); width: 0%; transition: width 0.3s ease-out; box-shadow: 0 0 10px rgba(79,172,254,0.5); }
   
   .errorbox {
     margin-top: 16px; padding: 16px; border: 1px solid rgba(239,68,68,0.3);
     border-radius: 12px; background: rgba(239,68,68,0.1); color: #fca5a5;
-    word-break: break-word; font-family: monospace;
+    word-break: break-word; font-family: var(--mono); font-size: 13px;
   }
   
-  .term {
-    background: #000; color: #a3e635; font-family: 'Consolas', monospace; font-size: 13px;
-    padding: 12px 16px; border-radius: 10px; margin-top: 16px; border: 1px solid rgba(255,255,255,0.1);
+  /* Compact Sleek Terminal Component */
+  .console-box {
+    margin-top: 20px;
+    background: #080c14;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  }
+
+  .console-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .console-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .console-dots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .cdot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .cdot-red { background: #ef4444; }
+  .cdot-yellow { background: #f59e0b; }
+  .cdot-green { background: #10b981; }
+
+  .console-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #94a3b8;
+    text-transform: uppercase;
+  }
+
+  .console-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #34d399;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .pulse-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 6px #10b981;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .console-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .console-counter {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 4px;
+  }
+
+  .c-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-family: var(--font);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .c-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #f0f4f8;
+  }
+
+  .c-btn.active {
+    background: rgba(0, 242, 254, 0.12);
+    border-color: rgba(0, 242, 254, 0.4);
+    color: #00f2fe;
+  }
+
+  .console-terminal {
+    min-height: 330px;
+    max-height: 480px;
+    overflow-y: auto;
+    overflow-x: auto;
+    padding: 14px 18px;
+    background: #05070c;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: #a3e635;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) rgba(0, 0, 0, 0.2);
+  }
+
+  .console-terminal::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .console-terminal::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+  }
+  .console-terminal::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+  }
+
+  .log-lines-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .log-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    word-break: break-all;
+    white-space: pre-wrap;
+  }
+
+  .log-entry:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .log-time {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 500;
+    user-select: none;
+    flex-shrink: 0;
+    padding-top: 1px;
+  }
+
+  .log-prompt {
+    color: #4facfe;
+    font-weight: bold;
+    user-select: none;
+    flex-shrink: 0;
+  }
+
+  .log-msg {
+    flex-grow: 1;
+    color: #e2e8f0;
+  }
+
+  .log-type-error .log-msg { color: #f87171; }
+  .log-type-error .log-prompt { color: #ef4444; }
+  .log-type-warn .log-msg { color: #fbbf24; }
+  .log-type-warn .log-prompt { color: #f59e0b; }
+  .log-type-success .log-msg { color: #34d399; }
+  .log-type-success .log-prompt { color: #10b981; }
+  .log-type-accent .log-msg { color: #38bdf8; }
+  .log-type-accent .log-prompt { color: #00f2fe; }
+  .log-type-info .log-msg { color: #cbd5e1; }
+
+  .hl-hash { color: #00f2fe; font-weight: 700; }
+  .hl-acc { color: #34d399; font-weight: 700; }
+  .hl-err { color: #f87171; font-weight: 700; }
+  .hl-warn { color: #fbbf24; font-weight: 700; }
+  .hl-diff { color: #c084fc; font-weight: 700; }
+  .hl-tag { color: #fbbf24; font-weight: 700; }
+  .hl-info { color: #38bdf8; font-weight: 600; }
+  .hl-debug { color: #64748b; font-weight: 600; }
+
+  .log-empty {
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+  }
+
+  .term-cursor {
+    display: inline-block;
+    color: #00f2fe;
+    font-weight: bold;
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
   }
 
   @media (max-width: 950px) {
@@ -143,6 +362,8 @@
     .wrap { padding: 16px; }
     .grid, .metrics { grid-template-columns: 1fr; }
     .top { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .console-topbar { flex-direction: column; align-items: flex-start; }
+    .console-actions { width: 100%; justify-content: space-between; }
   }
 </style>
 </head>
@@ -193,8 +414,34 @@
         <div class="metric"><div class="label">Last Share</div><div class="mvalue" id="lastAccepted">—</div></div>
       </div>
       <div id="error" style="display:none" class="errorbox"></div>
-      <div class="term">
-        > <span id="lastLine">Waiting for miner output...</span>
+      
+      <div class="console-box">
+        <div class="console-topbar">
+          <div class="console-title-group">
+            <div class="console-dots">
+              <span class="cdot cdot-red"></span>
+              <span class="cdot cdot-yellow"></span>
+              <span class="cdot cdot-green"></span>
+            </div>
+            <span class="console-title">MINER CONSOLE</span>
+            <span class="console-live-badge"><span class="pulse-indicator"></span>LIVE</span>
+          </div>
+          <div class="console-actions">
+            <span class="console-counter" id="logCount">0 logs</span>
+            <button type="button" class="c-btn active" id="btnAutoScroll" title="Toggle Auto Scroll">Auto-scroll: ON</button>
+            <button type="button" class="c-btn" id="btnCopyLogs" title="Copy Console Logs">Copy</button>
+            <button type="button" class="c-btn" id="btnClearLogs" title="Clear Console View">Clear</button>
+          </div>
+        </div>
+        <div class="console-terminal" id="terminal">
+          <div id="logLines" class="log-lines-wrapper">
+            <div class="log-empty">
+              <span class="log-prompt">&gt;</span>
+              <span class="log-text">VerthashMiner console initialized. Waiting for miner output...</span>
+              <span class="term-cursor">_</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -203,10 +450,7 @@
 <script>
 (() => {
   const el = id => document.getElementById(id);
-
-  function fmt(v, digits=1) {
-    return v == null || !Number.isFinite(v) ? "—" : Number(v).toFixed(digits);
-  }
+  const fmt = (v, digits=1) => v == null || !Number.isFinite(v) ? "—" : Number(v).toFixed(digits);
 
   function fmtUptime(s) {
     s = Math.max(0, Math.floor(s || 0));
@@ -218,11 +462,96 @@
     return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
   }
 
-  function tempClass(t) {
-    if (t == null) return "";
-    if (t >= 80) return "red";
-    if (t >= 72) return "yellow";
-    return "green";
+  const tempClass = t => t == null ? "" : t >= 80 ? "red" : t >= 72 ? "yellow" : "green";
+
+  const terminal = el("terminal");
+  const logLinesEl = el("logLines");
+  const logCountEl = el("logCount");
+  const btnAutoScroll = el("btnAutoScroll");
+  const btnCopyLogs = el("btnCopyLogs");
+  const btnClearLogs = el("btnClearLogs");
+
+  let autoScroll = true, logsList = [], isCleared = false, lastRenderedCount = 0;
+
+  btnAutoScroll.onclick = () => {
+    autoScroll = !autoScroll;
+    btnAutoScroll.className = "c-btn " + (autoScroll ? "active" : "");
+    btnAutoScroll.textContent = "Auto-scroll: " + (autoScroll ? "ON" : "OFF");
+    if (autoScroll) scrollToBottom();
+  };
+
+  terminal.addEventListener("scroll", () => {
+    const isAtBottom = terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight < 25;
+    if (isAtBottom !== autoScroll) {
+      autoScroll = isAtBottom;
+      btnAutoScroll.className = "c-btn " + (autoScroll ? "active" : "");
+      btnAutoScroll.textContent = "Auto-scroll: " + (autoScroll ? "ON" : "OFF");
+    }
+  }, { passive: true });
+
+  const scrollToBottom = () => {
+    requestAnimationFrame(() => { terminal.scrollTop = terminal.scrollHeight; });
+  };
+
+  btnCopyLogs.onclick = async () => {
+    if (!logsList.length) return;
+    const text = logsList.map(l => `[${l.time || '--:--:--'}] ${l.text}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      const prev = btnCopyLogs.textContent;
+      btnCopyLogs.textContent = "Copied!";
+      setTimeout(() => { btnCopyLogs.textContent = prev; }, 1200);
+    } catch {}
+  };
+
+  btnClearLogs.onclick = () => {
+    isCleared = true;
+    logsList = [];
+    lastRenderedCount = 0;
+    renderLogs([]);
+  };
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  function highlightSyntax(rawText) {
+    let text = escapeHtml(rawText);
+    text = text.replace(/(\b[\d.]+\s*(?:kH|MH|GH|TH)\/s\b)/gi, '<span class="hl-hash">$1</span>');
+    text = text.replace(/(\baccepted:\s*\d+\s*\/\s*\d+(?:\s*\([\d.]*%\))?)/gi, '<span class="hl-acc">$1</span>');
+    text = text.replace(/(\bdifficulty(?:\s*(?:set|is))?\s*(?:to|:)?\s*[\d.]+\b)/gi, '<span class="hl-diff">$1</span>');
+    text = text.replace(/(\b(?:errors?|err):\s*0\b)/gi, '<span class="hl-acc">$1</span>');
+    text = text.replace(/(\bwarnings?:\s*0\b)/gi, '<span class="hl-acc">$1</span>');
+    text = text.replace(/(\b(?:errors?|err):\s*[1-9]\d*\b)/gi, '<span class="hl-err">$1</span>');
+    text = text.replace(/(\b(?:cuda\s+error|fatal\s+error|connection\s+failed|connection\s+refused|out\s+of\s+memory|failed\s+to\s+\w+|exception|enoent|rejected\s+share)\b[^\n<]*)/gi, '<span class="hl-err">$1</span>');
+    text = text.replace(/\b(INFO)\b/g, '<span class="hl-info">$1</span>');
+    text = text.replace(/\b(DEBUG)\b/g, '<span class="hl-debug">$1</span>');
+    text = text.replace(/\b(WARN(?:ING)?)\b/g, '<span class="hl-warn">$1</span>');
+    text = text.replace(/\b(ERROR|FATAL)\b/g, '<span class="hl-err">$1</span>');
+    text = text.replace(/^(\[(?:SYSTEM|WARN|ERROR|INFO|DEBUG)\])/g, '<span class="hl-tag">$1</span>');
+    return text;
+  }
+
+  function renderLogs(logs) {
+    if (!logs || !logs.length) {
+      logLinesEl.innerHTML = `<div class="log-empty"><span class="log-prompt">&gt;</span><span class="log-text">VerthashMiner console active. Waiting for miner output...</span><span class="term-cursor">_</span></div>`;
+      logCountEl.textContent = "0 logs";
+      return;
+    }
+
+    logCountEl.textContent = `${logs.length} log${logs.length === 1 ? '' : 's'}`;
+    let html = "";
+    for (let i = 0; i < logs.length; i++) {
+      const l = logs[i];
+      html += `<div class="log-entry log-type-${l.type || 'info'}"><span class="log-time">[${l.time || '--:--:--'}]</span><span class="log-prompt">&gt;</span><span class="log-msg">${highlightSyntax(l.text)}</span></div>`;
+    }
+    logLinesEl.innerHTML = html;
+    if (autoScroll) scrollToBottom();
   }
 
   function render(s) {
@@ -238,10 +567,16 @@
     el("rejected").textContent = s.mining.rejected;
     el("invalid").textContent = s.mining.invalid;
     el("difficulty").textContent = s.mining.difficulty == null ? "—" : s.mining.difficulty;
-    el("lastAccepted").textContent = s.mining.lastAcceptedAt
-      ? new Date(s.mining.lastAcceptedAt).toLocaleTimeString() : "—";
+    el("lastAccepted").textContent = s.mining.lastAcceptedAt ? new Date(s.mining.lastAcceptedAt).toLocaleTimeString() : "—";
 
-    el("lastLine").textContent = s.miner.lastLine || "—";
+    if (s.miner.logs && Array.isArray(s.miner.logs)) {
+      if (!isCleared || s.miner.logs.length !== lastRenderedCount) {
+        isCleared = false;
+        logsList = s.miner.logs;
+        lastRenderedCount = logsList.length;
+        renderLogs(logsList);
+      }
+    }
 
     if (s.miner.lastError) {
       el("error").style.display = "block";
@@ -313,22 +648,13 @@
     }
   }
 
-  function escapeHtml(value) {
-    return String(value)
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
-  }
-
   const params = new URLSearchParams(window.location.search);
   const token = params.get("token");
   const eventsUrl = token ? `/events?token=${encodeURIComponent(token)}` : "/events";
   const es = new EventSource(eventsUrl);
   es.addEventListener("stats", event => {
     try { render(JSON.parse(event.data)); }
-    catch (e) { console.error(e); }
+    catch {}
   });
 
   es.onerror = () => {
