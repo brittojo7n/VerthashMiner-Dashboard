@@ -9,7 +9,7 @@ try {
     const m = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
     if (m) process.env[m[1]] = (m[2] || "").replace(/^["']|["']$/g, "").trim();
   }
-} catch {}
+} catch { }
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -19,6 +19,14 @@ const MINER_EXE = process.env.MINER_EXE || "VerthashMiner.exe";
 const MINER_ARGS = (process.env.MINER_ARGS || "").match(/"([^"]*)"|(\S+)/g)?.map(m => m.replace(/^"|"$/g, "")) || [];
 const MINER_CWD = process.env.MINER_CWD || "";
 const TOKEN = process.env.DASHBOARD_TOKEN || "";
+
+let wallet = "";
+for (let i = 0; i < MINER_ARGS.length; i++) {
+  if ((MINER_ARGS[i] === "-u" || MINER_ARGS[i] === "--user") && i + 1 < MINER_ARGS.length) {
+    wallet = MINER_ARGS[i + 1].split(".")[0];
+    break;
+  }
+}
 
 class CircularLogBuffer {
   constructor(cap) {
@@ -46,7 +54,7 @@ const loadStatic = (rel, uri) => {
   try {
     const buf = fs.readFileSync(path.join(__dirname, "public", rel));
     staticFiles[uri] = { buf, type: MIME[path.extname(rel)] || "application/octet-stream" };
-  } catch {}
+  } catch { }
 };
 loadStatic("index.html", "/");
 loadStatic("index.html", "/index.html");
@@ -55,7 +63,7 @@ loadStatic("style.css", "/style.css");
 const logs = new CircularLogBuffer(MAX_LOGS);
 const state = {
   startedAt: Date.now(),
-  miner: { running: false, exitCode: null, signal: null, lastLine: "", lastError: "", logs },
+  miner: { running: false, exitCode: null, signal: null, lastLine: "", lastError: "", logs, wallet },
   mining: { hashrateKHs: null, accepted: 0, submitted: 0, rejected: 0, invalid: 0, difficulty: null, status: "STARTING", lastAcceptedAt: null },
   gpu: [],
   host: { hostname: os.hostname() }
@@ -276,7 +284,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (p === "/health") return send(res, 200, "text/plain", "ok");
-  
+
   const staticFile = staticFiles[p];
   if (staticFile) return send(res, 200, staticFile.type, staticFile.buf, staticFile.buf.length);
 
@@ -292,7 +300,7 @@ server.listen(PORT, HOST, () => {
 });
 
 const cleanExit = () => {
-  if (minerProc && !minerProc.killed) try { minerProc.kill(); } catch {}
+  if (minerProc && !minerProc.killed) try { minerProc.kill(); } catch { }
   process.exit(0);
 };
 process.on("SIGINT", cleanExit);

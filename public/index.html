@@ -1,251 +1,281 @@
 <!doctype html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VerthashMiner Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>VerthashMiner Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-<div class="wrap">
-  <div class="top">
-    <div>
-      <h1>VerthashMiner Dashboard</h1>
-      <div class="sub" id="host">Initializing connection...</div>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>VerthashMiner Dashboard</h1>
+        <div class="sub" id="host">Initializing connection...</div>
+      </div>
+      <div class="status"><span class="dot" id="dot"></span><span id="status">CONNECTING</span></div>
     </div>
-    <div class="status"><span class="dot" id="dot"></span><span id="status">CONNECTING</span></div>
+
+    <div class="grid">
+      <div class="panel">
+        <div class="label">Hashrate</div>
+        <div class="value gradient-text" id="hashrate">—<span class="unit">kH/s</span></div>
+      </div>
+      <div class="panel">
+        <div class="label">Shares (Acc / Total)</div>
+        <div class="value green" id="accepted">0 / 0</div>
+      </div>
+      <div class="panel">
+        <div class="label">Acceptance Ratio</div>
+        <div class="value" id="ratio">—</div>
+      </div>
+      <div class="panel">
+        <div class="label">Uptime</div>
+        <div class="value" id="uptime">—</div>
+      </div>
+
+      <div class="panel wide">
+        <div class="gpu-head">
+          <div>
+            <div class="gpu-name">GPU Telemetry</div>
+            <div class="small">Live data from nvidia-smi</div>
+          </div>
+        </div>
+        <div id="gpus"></div>
+      </div>
+
+      <div class="panel wide">
+        <div class="gpu-head">
+          <div style="min-width: 0;">
+            <div class="gpu-name">Mining Metrics</div>
+            <div class="small wallet-addr" id="walletAddress">—</div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="label">Rejected</div>
+            <div class="mvalue red" id="rejected">0</div>
+          </div>
+          <div class="metric">
+            <div class="label">Invalid</div>
+            <div class="mvalue red" id="invalid">0</div>
+          </div>
+          <div class="metric">
+            <div class="label">Network Difficulty</div>
+            <div class="mvalue purple" id="difficulty">—</div>
+          </div>
+          <div class="metric">
+            <div class="label">Last Share</div>
+            <div class="mvalue" id="lastAccepted">—</div>
+          </div>
+        </div>
+        <div id="error" class="errorbox"></div>
+
+        <div class="console-box">
+          <div class="console-topbar">
+            <div class="console-title-group">
+              <div class="console-dots">
+                <span class="cdot cdot-red"></span>
+                <span class="cdot cdot-yellow"></span>
+                <span class="cdot cdot-green"></span>
+              </div>
+              <span class="console-title">MINER CONSOLE</span>
+              <span class="console-live-badge"><span class="pulse-indicator"></span>LIVE</span>
+            </div>
+            <div class="console-actions">
+              <span class="console-counter" id="logCount">0 logs</span>
+              <button type="button" class="c-btn active" id="btnAutoScroll" title="Toggle Auto Scroll">Auto-scroll:
+                ON</button>
+              <button type="button" class="c-btn" id="btnCopyLogs" title="Copy Console Logs">Copy</button>
+            </div>
+          </div>
+          <div class="console-terminal" id="terminal">
+            <div id="logLines" class="log-lines-wrapper">
+              <div class="log-empty">
+                <span class="log-prompt">&gt;</span>
+                <span class="log-text">VerthashMiner console initialized. Waiting for miner output...</span>
+                <span class="term-cursor">_</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <div class="grid">
-    <div class="panel">
-      <div class="label">Hashrate</div>
-      <div class="value gradient-text" id="hashrate">—<span class="unit">kH/s</span></div>
-    </div>
-    <div class="panel">
-      <div class="label">Shares (Acc / Total)</div>
-      <div class="value green" id="accepted">0 / 0</div>
-    </div>
-    <div class="panel">
-      <div class="label">Acceptance Ratio</div>
-      <div class="value" id="ratio">—</div>
-    </div>
-    <div class="panel">
-      <div class="label">Uptime</div>
-      <div class="value" id="uptime">—</div>
-    </div>
+  <script>
+    (() => {
+      const el = id => document.getElementById(id);
+      const fmt = (v, digits = 1) => v == null || !Number.isFinite(v) ? "—" : Number(v).toFixed(digits);
 
-    <div class="panel wide">
-      <div class="gpu-head">
-        <div>
-          <div class="gpu-name">GPU Telemetry</div>
-          <div class="small">Live data from nvidia-smi</div>
-        </div>
-      </div>
-      <div id="gpus"></div>
-    </div>
+      const fmtUptime = s => {
+        s = Math.max(0, Math.floor(s || 0));
+        const d = Math.floor(s / 86400); s %= 86400;
+        const h = Math.floor(s / 3600); s %= 3600;
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return d > 0 ? `${d}d ${h}h ${m}m` : `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+      };
 
-    <div class="panel wide">
-      <div class="label">Mining Statistics</div>
-      <div class="metrics">
-        <div class="metric"><div class="label">Rejected</div><div class="mvalue red" id="rejected">0</div></div>
-        <div class="metric"><div class="label">Invalid</div><div class="mvalue red" id="invalid">0</div></div>
-        <div class="metric"><div class="label">Network Difficulty</div><div class="mvalue purple" id="difficulty">—</div></div>
-        <div class="metric"><div class="label">Last Share</div><div class="mvalue" id="lastAccepted">—</div></div>
-      </div>
-      <div id="error" class="errorbox"></div>
-      
-      <div class="console-box">
-        <div class="console-topbar">
-          <div class="console-title-group">
-            <div class="console-dots">
-              <span class="cdot cdot-red"></span>
-              <span class="cdot cdot-yellow"></span>
-              <span class="cdot cdot-green"></span>
-            </div>
-            <span class="console-title">MINER CONSOLE</span>
-            <span class="console-live-badge"><span class="pulse-indicator"></span>LIVE</span>
-          </div>
-          <div class="console-actions">
-            <span class="console-counter" id="logCount">0 logs</span>
-            <button type="button" class="c-btn active" id="btnAutoScroll" title="Toggle Auto Scroll">Auto-scroll: ON</button>
-            <button type="button" class="c-btn" id="btnCopyLogs" title="Copy Console Logs">Copy</button>
-          </div>
-        </div>
-        <div class="console-terminal" id="terminal">
-          <div id="logLines" class="log-lines-wrapper">
-            <div class="log-empty">
-              <span class="log-prompt">&gt;</span>
-              <span class="log-text">VerthashMiner console initialized. Waiting for miner output...</span>
-              <span class="term-cursor">_</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+      const tempClass = t => t == null ? "" : t >= 80 ? "red" : t >= 72 ? "yellow" : "green";
 
-<script>
-(() => {
-  const el = id => document.getElementById(id);
-  const fmt = (v, digits = 1) => v == null || !Number.isFinite(v) ? "—" : Number(v).toFixed(digits);
+      const hostEl = el("host");
+      const statusEl = el("status");
+      const dotEl = el("dot");
+      const hashrateEl = el("hashrate");
+      const acceptedEl = el("accepted");
+      const ratioEl = el("ratio");
+      const uptimeEl = el("uptime");
+      const rejectedEl = el("rejected");
+      const invalidEl = el("invalid");
+      const difficultyEl = el("difficulty");
+      const lastAcceptedEl = el("lastAccepted");
+      const errorEl = el("error");
+      const gpusBox = el("gpus");
+      const walletEl = el("walletAddress");
 
-  const fmtUptime = s => {
-    s = Math.max(0, Math.floor(s || 0));
-    const d = Math.floor(s / 86400); s %= 86400;
-    const h = Math.floor(s / 3600); s %= 3600;
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return d > 0 ? `${d}d ${h}h ${m}m` : `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-  };
+      const terminal = el("terminal");
+      const logLinesEl = el("logLines");
+      const logCountEl = el("logCount");
+      const btnAutoScroll = el("btnAutoScroll");
+      const btnCopyLogs = el("btnCopyLogs");
 
-  const tempClass = t => t == null ? "" : t >= 80 ? "red" : t >= 72 ? "yellow" : "green";
+      let autoScroll = true, logsList = [], lastRenderedLogId = null;
 
-  const hostEl = el("host");
-  const statusEl = el("status");
-  const dotEl = el("dot");
-  const hashrateEl = el("hashrate");
-  const acceptedEl = el("accepted");
-  const ratioEl = el("ratio");
-  const uptimeEl = el("uptime");
-  const rejectedEl = el("rejected");
-  const invalidEl = el("invalid");
-  const difficultyEl = el("difficulty");
-  const lastAcceptedEl = el("lastAccepted");
-  const errorEl = el("error");
-  const gpusBox = el("gpus");
+      btnAutoScroll.onclick = () => {
+        autoScroll = !autoScroll;
+        btnAutoScroll.className = "c-btn " + (autoScroll ? "active" : "");
+        btnAutoScroll.textContent = "Auto-scroll: " + (autoScroll ? "ON" : "OFF");
+        if (autoScroll) scrollToBottom();
+      };
 
-  const terminal = el("terminal");
-  const logLinesEl = el("logLines");
-  const logCountEl = el("logCount");
-  const btnAutoScroll = el("btnAutoScroll");
-  const btnCopyLogs = el("btnCopyLogs");
-
-  let autoScroll = true, logsList = [], lastRenderedLogId = null;
-
-  btnAutoScroll.onclick = () => {
-    autoScroll = !autoScroll;
-    btnAutoScroll.className = "c-btn " + (autoScroll ? "active" : "");
-    btnAutoScroll.textContent = "Auto-scroll: " + (autoScroll ? "ON" : "OFF");
-    if (autoScroll) scrollToBottom();
-  };
-
-  terminal.addEventListener("scroll", () => {
-    const isAtBottom = terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight < 25;
-    if (isAtBottom !== autoScroll) {
-      autoScroll = isAtBottom;
-      btnAutoScroll.className = "c-btn " + (autoScroll ? "active" : "");
-      btnAutoScroll.textContent = "Auto-scroll: " + (autoScroll ? "ON" : "OFF");
-    }
-  }, { passive: true });
-
-  const scrollToBottom = () => {
-    requestAnimationFrame(() => { terminal.scrollTop = terminal.scrollHeight; });
-  };
-
-  btnCopyLogs.onclick = async () => {
-    if (!logsList.length) return;
-    const text = logsList.map(l => `> ${l.text}`).join("\n");
-    try {
-      await navigator.clipboard.writeText(text);
-      const prev = btnCopyLogs.textContent;
-      btnCopyLogs.textContent = "Copied!";
-      setTimeout(() => { btnCopyLogs.textContent = prev; }, 1200);
-    } catch {}
-  };
-
-  const escapeHtml = value => String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-
-  const highlightSyntax = rawText => {
-    let text = escapeHtml(rawText);
-    return text
-      .replace(/(\b[\d.]+\s*(?:kH|MH|GH|TH)\/s\b)/gi, '<span class="hl-hash">$1</span>')
-      .replace(/(\baccepted:\s*\d+\s*\/\s*\d+(?:\s*\([\d.]*%\))?)/gi, '<span class="hl-acc">$1</span>')
-      .replace(/(\bdifficulty(?:\s*(?:set|is))?\s*(?:to|:)?\s*[\d.]+\b)/gi, '<span class="hl-diff">$1</span>')
-      .replace(/(\b(?:errors?|err):\s*0\b)/gi, '<span class="hl-acc">$1</span>')
-      .replace(/(\bwarnings?:\s*0\b)/gi, '<span class="hl-acc">$1</span>')
-      .replace(/(\b(?:errors?|err):\s*[1-9]\d*\b)/gi, '<span class="hl-err">$1</span>')
-      .replace(/(\b(?:cuda\s+error|fatal\s+error|connection\s+failed|connection\s+refused|out\s+of\s+memory|failed\s+to\s+\w+|exception|enoent|rejected\s+share)\b[^\n<]*)/gi, '<span class="hl-err">$1</span>')
-      .replace(/\b(INFO)\b/g, '<span class="hl-info">$1</span>')
-      .replace(/\b(DEBUG)\b/g, '<span class="hl-debug">$1</span>')
-      .replace(/\b(WARN(?:ING)?)\b/g, '<span class="hl-warn">$1</span>')
-      .replace(/\b(ERROR|FATAL)\b/g, '<span class="hl-err">$1</span>')
-      .replace(/^(\[(?:SYSTEM|WARN|ERROR|INFO|DEBUG)\])/g, '<span class="hl-tag">$1</span>');
-  };
-
-  const renderLogs = logs => {
-    if (!logs || !logs.length) {
-      logLinesEl.innerHTML = '<div class="log-empty"><span class="log-prompt">&gt;</span><span class="log-text">VerthashMiner console active. Waiting for miner output...</span><span class="term-cursor">_</span></div>';
-      logCountEl.textContent = "0 logs";
-      return;
-    }
-
-    logCountEl.textContent = `${logs.length} log${logs.length === 1 ? '' : 's'}`;
-    let html = "";
-    for (let i = 0; i < logs.length; i++) {
-      const l = logs[i];
-      html += `<div class="log-entry log-type-${l.type || 'info'}"><span class="log-prompt">&gt;</span><span class="log-msg">${highlightSyntax(l.text)}</span></div>`;
-    }
-    logLinesEl.innerHTML = html;
-    if (autoScroll) scrollToBottom();
-  };
-
-  const render = s => {
-    hostEl.textContent = `Connected to ${s.host.hostname}`;
-    statusEl.textContent = s.mining.status;
-    dotEl.className = "dot " + (s.mining.status === "ERROR" ? "err" : "ok");
-
-    hashrateEl.innerHTML = `${fmt(s.mining.hashrateKHs, 2)}<span class="unit">kH/s</span>`;
-    acceptedEl.textContent = `${s.mining.accepted} / ${s.mining.submitted}`;
-    ratioEl.textContent = s.acceptedRatio == null ? "—" : `${fmt(s.acceptedRatio, 1)}%`;
-    uptimeEl.textContent = fmtUptime(s.uptimeSeconds);
-
-    rejectedEl.textContent = s.mining.rejected;
-    invalidEl.textContent = s.mining.invalid;
-    difficultyEl.textContent = s.mining.difficulty == null ? "—" : s.mining.difficulty;
-    lastAcceptedEl.textContent = s.mining.lastAcceptedAt ? new Date(s.mining.lastAcceptedAt).toLocaleTimeString() : "—";
-
-    if (s.miner.logs && Array.isArray(s.miner.logs)) {
-      if (s.miner.logs.length > 0) {
-        const latestId = s.miner.logs[s.miner.logs.length - 1].id;
-        if (latestId !== lastRenderedLogId) {
-          logsList = s.miner.logs;
-          lastRenderedLogId = latestId;
-          renderLogs(logsList);
+      terminal.addEventListener("scroll", () => {
+        const isAtBottom = terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight < 25;
+        if (isAtBottom !== autoScroll) {
+          autoScroll = isAtBottom;
+          btnAutoScroll.className = "c-btn " + (autoScroll ? "active" : "");
+          btnAutoScroll.textContent = "Auto-scroll: " + (autoScroll ? "ON" : "OFF");
         }
-      } else if (lastRenderedLogId !== null) {
-        logsList = [];
-        lastRenderedLogId = null;
-        renderLogs(logsList);
-      }
-    }
+      }, { passive: true });
 
-    if (s.miner.lastError) {
-      errorEl.className = "errorbox show";
-      errorEl.textContent = `CRITICAL ERROR: ${s.miner.lastError}`;
-    } else {
-      errorEl.className = "errorbox";
-    }
+      const scrollToBottom = () => {
+        requestAnimationFrame(() => { terminal.scrollTop = terminal.scrollHeight; });
+      };
 
-    const gpus = s.gpu || [];
-    if (gpus.length === 0) {
-      gpusBox.innerHTML = '<div class="small gpu-empty">Waiting for GPU telemetry data...</div>';
-      return;
-    }
+      btnCopyLogs.onclick = async () => {
+        if (!logsList.length) return;
+        const text = logsList.map(l => `> ${l.text}`).join("\n");
+        try {
+          await navigator.clipboard.writeText(text);
+          const prev = btnCopyLogs.textContent;
+          btnCopyLogs.textContent = "Copied!";
+          setTimeout(() => { btnCopyLogs.textContent = prev; }, 1200);
+        } catch { }
+      };
 
-    if (gpusBox.children.length !== gpus.length || !el("gpu-0-temp")) {
-      let html = "";
-      for (const gpu of gpus) {
-        html += `
-        <div class="panel gpu-panel">
+      const escapeHtml = value => String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+
+      const highlightSyntax = rawText => {
+        let text = escapeHtml(rawText);
+        return text
+          .replace(/(\b[\d.]+\s*(?:kH|MH|GH|TH)\/s\b)/gi, '<span class="hl-hash">$1</span>')
+          .replace(/(\baccepted:\s*\d+\s*\/\s*\d+(?:\s*\([\d.]*%\))?)/gi, '<span class="hl-acc">$1</span>')
+          .replace(/(\bdifficulty(?:\s*(?:set|is))?\s*(?:to|:)?\s*[\d.]+\b)/gi, '<span class="hl-diff">$1</span>')
+          .replace(/(\b(?:errors?|err):\s*0\b)/gi, '<span class="hl-acc">$1</span>')
+          .replace(/(\bwarnings?:\s*0\b)/gi, '<span class="hl-acc">$1</span>')
+          .replace(/(\b(?:errors?|err):\s*[1-9]\d*\b)/gi, '<span class="hl-err">$1</span>')
+          .replace(/(\b(?:cuda\s+error|fatal\s+error|connection\s+failed|connection\s+refused|out\s+of\s+memory|failed\s+to\s+\w+|exception|enoent|rejected\s+share)\b[^\n<]*)/gi, '<span class="hl-err">$1</span>')
+          .replace(/\b(INFO)\b/g, '<span class="hl-info">$1</span>')
+          .replace(/\b(DEBUG)\b/g, '<span class="hl-debug">$1</span>')
+          .replace(/\b(WARN(?:ING)?)\b/g, '<span class="hl-warn">$1</span>')
+          .replace(/\b(ERROR|FATAL)\b/g, '<span class="hl-err">$1</span>')
+          .replace(/^(\[(?:SYSTEM|WARN|ERROR|INFO|DEBUG)\])/g, '<span class="hl-tag">$1</span>');
+      };
+
+      const renderLogs = logs => {
+        if (!logs || !logs.length) {
+          logLinesEl.innerHTML = '<div class="log-empty"><span class="log-prompt">&gt;</span><span class="log-text">VerthashMiner console active. Waiting for miner output...</span><span class="term-cursor">_</span></div>';
+          logCountEl.textContent = "0 logs";
+          return;
+        }
+
+        logCountEl.textContent = `${logs.length} log${logs.length === 1 ? '' : 's'}`;
+        let html = "";
+        for (let i = 0; i < logs.length; i++) {
+          const l = logs[i];
+          html += `<div class="log-entry log-type-${l.type || 'info'}"><span class="log-prompt">&gt;</span><span class="log-msg">${highlightSyntax(l.text)}</span></div>`;
+        }
+        logLinesEl.innerHTML = html;
+        if (autoScroll) scrollToBottom();
+      };
+
+      const fmtDate = ms => {
+        const d = new Date(ms);
+        const pad = n => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      };
+
+      const render = s => {
+        hostEl.textContent = `Connected to ${s.host.hostname}`;
+        statusEl.textContent = s.mining.status;
+        dotEl.className = "dot " + (s.mining.status === "ERROR" ? "err" : "ok");
+
+        hashrateEl.innerHTML = `${fmt(s.mining.hashrateKHs, 2)}<span class="unit">kH/s</span>`;
+        acceptedEl.textContent = `${s.mining.accepted} / ${s.mining.submitted}`;
+        ratioEl.textContent = s.acceptedRatio == null ? "—" : `${fmt(s.acceptedRatio, 1)}%`;
+        uptimeEl.textContent = fmtUptime(s.uptimeSeconds);
+
+        rejectedEl.textContent = s.mining.rejected;
+        invalidEl.textContent = s.mining.invalid;
+        difficultyEl.textContent = s.mining.difficulty == null ? "—" : s.mining.difficulty;
+        lastAcceptedEl.textContent = s.mining.lastAcceptedAt ? fmtDate(s.mining.lastAcceptedAt) : "—";
+        walletEl.textContent = s.miner.wallet || "—";
+
+        if (s.miner.logs && Array.isArray(s.miner.logs)) {
+          if (s.miner.logs.length > 0) {
+            const latestId = s.miner.logs[s.miner.logs.length - 1].id;
+            if (latestId !== lastRenderedLogId) {
+              logsList = s.miner.logs;
+              lastRenderedLogId = latestId;
+              renderLogs(logsList);
+            }
+          } else if (lastRenderedLogId !== null) {
+            logsList = [];
+            lastRenderedLogId = null;
+            renderLogs(logsList);
+          }
+        }
+
+        if (s.miner.lastError) {
+          errorEl.className = "errorbox show";
+          errorEl.textContent = `CRITICAL ERROR: ${s.miner.lastError}`;
+        } else {
+          errorEl.className = "errorbox";
+        }
+
+        const gpus = s.gpu || [];
+        if (gpus.length === 0) {
+          gpusBox.innerHTML = '<div class="small gpu-empty">Waiting for GPU telemetry data...</div>';
+          return;
+        }
+
+        if (gpusBox.children.length !== gpus.length || !el("gpu-0-temp")) {
+          let html = "";
+          for (const gpu of gpus) {
+            html += `
+        <div class="gpu-panel">
           <div class="gpu-head">
             <div class="gpu-name">GPU ${gpu.index} • <span id="gpu-${gpu.index}-name"></span></div>
             <span class="status status-badge">P-State: <span id="gpu-${gpu.index}-pstate"></span></span>
@@ -268,50 +298,51 @@
             <span class="text-dim" id="gpu-${gpu.index}-vram-pct"></span>
           </div>
         </div>`;
-      }
-      gpusBox.innerHTML = html;
-    }
+          }
+          gpusBox.innerHTML = html;
+        }
 
-    for (const gpu of gpus) {
-      const idx = gpu.index;
-      el(`gpu-${idx}-name`).textContent = gpu.name || "Unknown";
-      el(`gpu-${idx}-pstate`).textContent = gpu.pstate || "—";
-      
-      const tempEl = el(`gpu-${idx}-temp`);
-      tempEl.textContent = `${fmt(gpu.temperatureC, 0)}°C`;
-      tempEl.className = `mvalue ${tempClass(gpu.temperatureC)}`;
-      
-      el(`gpu-${idx}-power`).textContent = fmt(gpu.powerW, 1);
-      el(`gpu-${idx}-core`).textContent = fmt(gpu.coreMHz, 0);
-      el(`gpu-${idx}-mem`).textContent = fmt(gpu.memoryMHz, 0);
-      el(`gpu-${idx}-util`).textContent = fmt(gpu.utilizationPct, 1);
-      
-      const util = gpu.utilizationPct;
-      const safeUtil = util == null ? 0 : Math.max(0, Math.min(100, util));
-      el(`gpu-${idx}-bar`).style.width = `${safeUtil}%`;
-      
-      el(`gpu-${idx}-vram-used`).textContent = fmt(gpu.memoryUsedMB, 0);
-      el(`gpu-${idx}-vram-total`).textContent = fmt(gpu.memoryTotalMB, 0);
-      const memPct = gpu.memoryUsedMB != null && gpu.memoryTotalMB ? Math.min(100, (gpu.memoryUsedMB / gpu.memoryTotalMB) * 100) : 0;
-      el(`gpu-${idx}-vram-pct`).textContent = `(${fmt(memPct, 1)}%)`;
-    }
-  };
+        for (const gpu of gpus) {
+          const idx = gpu.index;
+          el(`gpu-${idx}-name`).textContent = gpu.name || "Unknown";
+          el(`gpu-${idx}-pstate`).textContent = gpu.pstate || "—";
 
-  const params = new URLSearchParams(window.location.search);
-  const token = params.get("token");
-  const eventsUrl = token ? `/events?token=${encodeURIComponent(token)}` : "/events";
-  const es = new EventSource(eventsUrl);
-  
-  es.addEventListener("stats", event => {
-    try { render(JSON.parse(event.data)); }
-    catch {}
-  });
+          const tempEl = el(`gpu-${idx}-temp`);
+          tempEl.textContent = `${fmt(gpu.temperatureC, 0)}°C`;
+          tempEl.className = `mvalue ${tempClass(gpu.temperatureC)}`;
 
-  es.onerror = () => {
-    statusEl.textContent = "OFFLINE";
-    dotEl.className = "dot err";
-  };
-})();
-</script>
+          el(`gpu-${idx}-power`).textContent = fmt(gpu.powerW, 1);
+          el(`gpu-${idx}-core`).textContent = fmt(gpu.coreMHz, 0);
+          el(`gpu-${idx}-mem`).textContent = fmt(gpu.memoryMHz, 0);
+          el(`gpu-${idx}-util`).textContent = fmt(gpu.utilizationPct, 1);
+
+          const util = gpu.utilizationPct;
+          const safeUtil = util == null ? 0 : Math.max(0, Math.min(100, util));
+          el(`gpu-${idx}-bar`).style.width = `${safeUtil}%`;
+
+          el(`gpu-${idx}-vram-used`).textContent = fmt(gpu.memoryUsedMB, 0);
+          el(`gpu-${idx}-vram-total`).textContent = fmt(gpu.memoryTotalMB, 0);
+          const memPct = gpu.memoryUsedMB != null && gpu.memoryTotalMB ? Math.min(100, (gpu.memoryUsedMB / gpu.memoryTotalMB) * 100) : 0;
+          el(`gpu-${idx}-vram-pct`).textContent = `(${fmt(memPct, 1)}%)`;
+        }
+      };
+
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("token");
+      const eventsUrl = token ? `/events?token=${encodeURIComponent(token)}` : "/events";
+      const es = new EventSource(eventsUrl);
+
+      es.addEventListener("stats", event => {
+        try { render(JSON.parse(event.data)); }
+        catch { }
+      });
+
+      es.onerror = () => {
+        statusEl.textContent = "OFFLINE";
+        dotEl.className = "dot err";
+      };
+    })();
+  </script>
 </body>
+
 </html>

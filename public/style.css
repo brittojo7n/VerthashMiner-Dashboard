@@ -1,6 +1,6 @@
 :root {
   --bg: #0b0e14;
-  --card-bg: #141923;
+  --card-bg: rgba(20, 25, 35, 0.7);
   --border: rgba(255, 255, 255, 0.08);
   --border-hover: rgba(255, 255, 255, 0.15);
   --text: #f0f4f8;
@@ -13,6 +13,23 @@
   --purple: #8b5cf6;
   --font: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --mono: 'JetBrains Mono', 'Consolas', monospace;
+
+  /* ── Spacing ── */
+  --gap: 14px;
+  --pad: 20px;
+  --radius: 18px;
+
+  /* ── Font sizes ── */
+  --fs-h1: 26px;
+  --fs-section: 17px;
+  --fs-value: 28px;
+  --fs-mvalue: 18px;
+  --fs-label: 12px;
+  --fs-sub: 13px;
+  --fs-small: 12px;
+  --fs-unit: 13px;
+  --fs-badge: 11px;
+  --fs-btn: 11px;
 }
 
 *, *::before, *::after {
@@ -22,8 +39,8 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at 15% 50px, rgba(79, 172, 254, 0.12), transparent 25%),
-              radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.12), transparent 25%),
+  background: radial-gradient(circle at 15% 50px, rgba(79, 172, 254, 0.1), transparent 25%),
+              radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.1), transparent 25%),
               var(--bg);
   color: var(--text);
   font-family: var(--font);
@@ -34,23 +51,27 @@ body {
 .wrap {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 40px 20px;
+  padding: 32px 16px;
 }
 
+/* ── Header ── */
 .top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 30px;
+  margin-bottom: var(--gap);
   background: var(--card-bg);
-  padding: 20px 30px;
-  border-radius: 20px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: var(--pad) calc(var(--pad) + 4px);
+  border-radius: var(--radius);
   border: 1px solid var(--border);
 }
 
 h1 {
   margin: 0;
-  font-size: 28px;
+  font-family: var(--font);
+  font-size: var(--fs-h1);
   font-weight: 800;
   letter-spacing: -0.5px;
   background: linear-gradient(90deg, #fff, #cbd5e1);
@@ -62,8 +83,9 @@ h1 {
 .sub {
   color: var(--muted);
   margin-top: 6px;
+  font-family: var(--font);
   font-weight: 400;
-  font-size: 14px;
+  font-size: var(--fs-sub);
 }
 
 .status {
@@ -74,15 +96,19 @@ h1 {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 50px;
   background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-family: var(--font);
   font-weight: 700;
-  font-size: 13px;
+  font-size: var(--fs-badge);
   letter-spacing: 1px;
   text-transform: uppercase;
 }
 
 .status-badge {
   padding: 4px 12px;
-  font-size: 11px;
+  font-family: var(--font);
+  font-size: var(--fs-badge);
   background: rgba(255, 255, 255, 0.05);
   border: none;
 }
@@ -105,24 +131,25 @@ h1 {
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
 }
 
+/* ── Grid ── */
 .grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  gap: var(--gap);
 }
 
 .panel {
   background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 24px;
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s, border-color 0.2s;
+  border-radius: var(--radius);
+  padding: var(--pad);
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.2s;
 }
 
-.panel:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.6);
+.panel:not(.wide):hover {
   border-color: var(--border-hover);
 }
 
@@ -131,32 +158,42 @@ h1 {
 }
 
 .gpu-panel {
-  margin-top: 20px;
+  margin-top: var(--gap);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: calc(var(--radius) - 4px);
+  padding: var(--pad);
 }
 
 .gpu-empty {
   text-align: center;
-  padding: 20px;
+  padding: var(--pad);
+  font-family: var(--font);
 }
 
+/* ── Labels ── */
 .label {
   color: var(--muted);
-  font-size: 13px;
+  font-family: var(--font);
+  font-size: var(--fs-label);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 1px;
   margin-bottom: 8px;
 }
 
+/* ── Top stat card values ── */
 .value {
-  font-size: 36px;
+  font-family: var(--font);
+  font-size: var(--fs-value);
   font-weight: 800;
   letter-spacing: -1px;
   line-height: 1.1;
 }
 
 .unit {
-  font-size: 16px;
+  font-family: var(--font);
+  font-size: var(--fs-unit);
   font-weight: 500;
   opacity: 0.7;
   margin-left: 4px;
@@ -174,17 +211,18 @@ h1 {
 .red { color: var(--red); }
 .purple { color: var(--purple); }
 
+/* ── Metric grids ── */
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-top: 16px;
+  gap: var(--gap);
+  margin-top: var(--gap);
 }
 
 .metric {
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 14px;
-  padding: 16px;
+  border-radius: calc(var(--radius) - 4px);
+  padding: var(--pad);
   background: rgba(0, 0, 0, 0.2);
   transition: background 0.2s;
 }
@@ -193,40 +231,60 @@ h1 {
   background: rgba(0, 0, 0, 0.3);
 }
 
+/* ── All metric data values: uniform size ── */
 .metric .mvalue {
+  font-family: var(--font);
   font-weight: 700;
-  font-size: 22px;
+  font-size: var(--fs-mvalue);
   margin-top: 4px;
 }
 
 .metric-util {
-  margin-top: 16px;
+  margin-top: var(--gap);
   background: rgba(0, 0, 0, 0.4);
 }
 
 .mvalue-sm {
-  font-size: 16px;
+  font-family: var(--font);
+  font-size: 14px;
 }
 
+/* ── Section headings ── */
 .gpu-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 16px;
-  margin-bottom: 16px;
+  padding-bottom: var(--gap);
+  margin-bottom: var(--gap);
 }
 
 .gpu-name {
-  font-size: 18px;
+  font-family: var(--font);
+  font-size: var(--fs-section);
   font-weight: 700;
 }
 
 .small {
   color: var(--muted);
-  font-size: 13px;
+  font-family: var(--font);
+  font-size: var(--fs-small);
 }
 
+/* ── Wallet address (below Mining Metrics heading) ── */
+.wallet-addr {
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  opacity: 0.55;
+  font-family: var(--font);
+  font-size: var(--fs-small);
+  letter-spacing: 0.3px;
+}
+
+/* ── Progress bar ── */
 .bar-bg {
   height: 6px;
   border-radius: 10px;
@@ -243,30 +301,32 @@ h1 {
   box-shadow: 0 0 10px rgba(79, 172, 254, 0.5);
 }
 
+/* ── Error box ── */
 .errorbox {
   display: none;
-  margin-top: 16px;
-  padding: 16px;
+  margin-top: var(--gap);
+  padding: var(--pad);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 12px;
   background: rgba(239, 68, 68, 0.1);
   color: #fca5a5;
   word-break: break-word;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: var(--fs-small);
 }
 
 .errorbox.show {
   display: block;
 }
 
+/* ── Console / Terminal ── */
 .console-box {
-  margin-top: 20px;
+  margin-top: var(--gap);
   background: #080c14;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
+  border-radius: calc(var(--radius) - 2px);
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .console-topbar {
@@ -304,7 +364,8 @@ h1 {
 .cdot-green { background: #10b981; }
 
 .console-title {
-  font-size: 12px;
+  font-family: var(--font);
+  font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 1px;
   color: #94a3b8;
@@ -320,6 +381,7 @@ h1 {
   background: rgba(16, 185, 129, 0.12);
   border: 1px solid rgba(16, 185, 129, 0.3);
   color: #34d399;
+  font-family: var(--font);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -347,7 +409,8 @@ h1 {
 
 .console-counter {
   color: #64748b;
-  font-size: 11px;
+  font-family: var(--font);
+  font-size: var(--fs-badge);
   font-weight: 600;
   margin-right: 4px;
 }
@@ -359,7 +422,7 @@ h1 {
   padding: 4px 10px;
   border-radius: 6px;
   font-family: var(--font);
-  font-size: 11px;
+  font-size: var(--fs-btn);
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -376,6 +439,7 @@ h1 {
   color: #00f2fe;
 }
 
+/* Terminal uses mono font */
 .console-terminal {
   min-height: 330px;
   max-height: 480px;
@@ -423,15 +487,6 @@ h1 {
 
 .log-entry:hover {
   background: rgba(255, 255, 255, 0.04);
-}
-
-.log-time {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 500;
-  user-select: none;
-  flex-shrink: 0;
-  padding-top: 1px;
 }
 
 .log-prompt {
@@ -485,6 +540,7 @@ h1 {
   50% { opacity: 0; }
 }
 
+/* ── Utilities ── */
 .flex-between-end {
   display: flex;
   justify-content: space-between;
@@ -499,31 +555,106 @@ h1 {
 .text-dim { opacity: 0.5 !important; }
 .hidden { display: none !important; }
 
+/* ── Tablet ── */
 @media (max-width: 950px) {
-  .grid, .metrics {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .metrics {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
+/* ── Mobile ── */
 @media (max-width: 600px) {
+  :root {
+    --gap: 10px;
+    --pad: 14px;
+    --radius: 14px;
+    --fs-h1: 20px;
+    --fs-section: 15px;
+    --fs-value: 22px;
+    --fs-mvalue: 15px;
+    --fs-label: 11px;
+    --fs-sub: 12px;
+    --fs-small: 11px;
+    --fs-unit: 11px;
+    --fs-badge: 10px;
+    --fs-btn: 10px;
+  }
+
   .wrap {
-    padding: 16px;
+    padding: 10px;
   }
-  .grid, .metrics {
-    grid-template-columns: 1fr;
-  }
+
   .top {
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
-    padding: 16px 20px;
+    gap: 10px;
   }
+
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .panel {
+    overflow: hidden;
+  }
+
+  .metric .mvalue {
+    word-break: break-all;
+  }
+
+  .gpu-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
   .console-topbar {
     flex-direction: column;
     align-items: flex-start;
+    gap: 8px;
   }
+
   .console-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .console-terminal {
+    min-height: 200px;
+    max-height: 350px;
+    font-size: 11px;
+  }
+
+  .log-entry {
+    gap: 6px;
+    padding: 2px;
+  }
+
+  .status {
+    padding: 6px 14px;
+  }
+
+  .status-badge {
+    padding: 3px 8px;
+  }
+
+  .mvalue-sm {
+    font-size: 13px;
+  }
+}
+
+/* ── Very small screens ── */
+@media (max-width: 380px) {
+  :root {
+    --fs-h1: 18px;
+    --fs-value: 20px;
+    --fs-mvalue: 14px;
+  }
+
+  .grid,
+  .metrics {
+    grid-template-columns: 1fr;
   }
 }
