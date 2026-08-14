@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VerthashMiner Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0e14;
+    --card-bg: #141923;
+    --border: rgba(255, 255, 255, 0.08);
+    --text: #f0f4f8;
+    --muted: #94a3b8;
+    --accent: #00f2fe;
+    --accent2: #4facfe;
+    --green: #10b981;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --purple: #8b5cf6;
+    --font: 'Outfit', sans-serif;
+  }
+  
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(circle at 15% 50px, rgba(79, 172, 254, 0.15), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.15), transparent 25%),
+                var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    background-attachment: fixed;
+  }
+
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
+  
+  .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 30px;
+    background: var(--card-bg);
+    padding: 20px 30px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+  }
+
+  h1 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; background: linear-gradient(90deg, #fff, #cbd5e1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .sub { color: var(--muted); margin-top: 6px; font-weight: 400; }
+  
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 50px;
+    background: rgba(0,0,0,0.4);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--green); box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
+  .dot.err { background: var(--red); box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+
+  .panel {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s;
+  }
+  .panel:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px -10px rgba(0,0,0,0.6);
+    border-color: rgba(255,255,255,0.15);
+  }
+
+  .wide { grid-column: 1 / -1; }
+  
+  .label { color: var(--muted); font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .value { font-size: 36px; font-weight: 800; letter-spacing: -1px; line-height: 1.1; }
+  .unit { font-size: 16px; font-weight: 500; opacity: 0.7; margin-left: 4px; }
+  
+  .gradient-text {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .green { color: var(--green); }
+  .yellow { color: var(--yellow); }
+  .red { color: var(--red); }
+  .purple { color: var(--purple); }
+
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 16px; }
+  .metric {
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 14px;
+    padding: 16px;
+    background: rgba(0,0,0,0.2);
+    transition: background 0.2s;
+  }
+  .metric:hover { background: rgba(0,0,0,0.3); }
+  .metric .mvalue { font-weight: 700; font-size: 22px; margin-top: 4px; }
+  
+  .gpu-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 16px; }
+  .gpu-name { font-size: 18px; font-weight: 700; }
+  .small { color: var(--muted); font-size: 13px; }
+  
+  .bar-bg {
+    height: 6px; border-radius: 10px; background: rgba(255,255,255,0.1); margin-top: 12px; overflow: hidden;
+  }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); width: 0%; transition: width 0.5s ease-out; box-shadow: 0 0 10px rgba(79,172,254,0.5); }
+  
+  .errorbox {
+    margin-top: 16px; padding: 16px; border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 12px; background: rgba(239,68,68,0.1); color: #fca5a5;
+    word-break: break-word; font-family: monospace;
+  }
+  
+  .term {
+    background: #000; color: #a3e635; font-family: 'Consolas', monospace; font-size: 13px;
+    padding: 12px 16px; border-radius: 10px; margin-top: 16px; border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  @media (max-width: 950px) {
+    .grid, .metrics { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .wrap { padding: 16px; }
+    .grid, .metrics { grid-template-columns: 1fr; }
+    .top { flex-direction: column; align-items: flex-start; gap: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>VerthashMiner Dashboard</h1>
+      <div class="sub" id="host">Initializing connection...</div>
+    </div>
+    <div class="status"><span class="dot" id="dot"></span><span id="status">CONNECTING</span></div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="label">Total Hashrate</div>
+      <div class="value gradient-text" id="hashrate">—<span class="unit">kH/s</span></div>
+    </div>
+    <div class="panel">
+      <div class="label">Shares (Acc / Sub)</div>
+      <div class="value green" id="accepted">0 / 0</div>
+    </div>
+    <div class="panel">
+      <div class="label">Acceptance Ratio</div>
+      <div class="value" id="ratio">—</div>
+    </div>
+    <div class="panel">
+      <div class="label">Miner Uptime</div>
+      <div class="value" id="uptime">—</div>
+    </div>
+
+    <div class="panel wide">
+      <div class="gpu-head">
+        <div>
+          <div class="gpu-name">GPU Telemetry</div>
+          <div class="small">Live data from nvidia-smi</div>
+        </div>
+      </div>
+      <div id="gpus"></div>
+    </div>
+
+    <div class="panel wide">
+      <div class="label">Mining Statistics</div>
+      <div class="metrics">
+        <div class="metric"><div class="label">Rejected</div><div class="mvalue red" id="rejected">0</div></div>
+        <div class="metric"><div class="label">Invalid</div><div class="mvalue red" id="invalid">0</div></div>
+        <div class="metric"><div class="label">Network Difficulty</div><div class="mvalue purple" id="difficulty">—</div></div>
+        <div class="metric"><div class="label">Last Share</div><div class="mvalue" id="lastAccepted">—</div></div>
+      </div>
+      <div id="error" style="display:none" class="errorbox"></div>
+      <div class="term">
+        > <span id="lastLine">Waiting for miner output...</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const el = id => document.getElementById(id);
+
+  function fmt(v, digits=1) {
+    return v == null || !Number.isFinite(v) ? "—" : Number(v).toFixed(digits);
+  }
+
+  function fmtUptime(s) {
+    s = Math.max(0, Math.floor(s || 0));
+    const d = Math.floor(s / 86400); s %= 86400;
+    const h = Math.floor(s / 3600); s %= 3600;
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    if (d > 0) return `${d}d ${h}h ${m}m`;
+    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
+  }
+
+  function tempClass(t) {
+    if (t == null) return "";
+    if (t >= 80) return "red";
+    if (t >= 72) return "yellow";
+    return "green";
+  }
+
+  function render(s) {
+    el("host").textContent = `${s.host.hostname} — Node running on ${location.hostname}:${location.port || 80}`;
+    el("status").textContent = s.mining.status;
+    el("dot").className = "dot " + (s.mining.status === "ERROR" ? "err" : "ok");
+
+    el("hashrate").innerHTML = `${fmt(s.mining.hashrateKHs, 2)}<span class="unit">kH/s</span>`;
+    el("accepted").textContent = `${s.mining.accepted} / ${s.mining.submitted}`;
+    el("ratio").textContent = s.acceptedRatio == null ? "—" : `${fmt(s.acceptedRatio, 1)}%`;
+    el("uptime").textContent = fmtUptime(s.uptimeSeconds);
+
+    el("rejected").textContent = s.mining.rejected;
+    el("invalid").textContent = s.mining.invalid;
+    el("difficulty").textContent = s.mining.difficulty == null ? "—" : s.mining.difficulty;
+    el("lastAccepted").textContent = s.mining.lastAcceptedAt
+      ? new Date(s.mining.lastAcceptedAt).toLocaleTimeString() : "—";
+
+    el("lastLine").textContent = s.miner.lastLine || "—";
+
+    if (s.miner.lastError) {
+      el("error").style.display = "block";
+      el("error").textContent = `CRITICAL ERROR: ${s.miner.lastError}`;
+    } else {
+      el("error").style.display = "none";
+    }
+
+    const box = el("gpus");
+    const gpus = s.gpu || [];
+    if (gpus.length === 0) {
+      box.innerHTML = `<div class="small" style="text-align:center; padding: 20px;">Waiting for GPU telemetry data...</div>`;
+      return;
+    }
+
+    if (box.children.length !== gpus.length || !el(`gpu-0-temp`)) {
+      let html = "";
+      for (const gpu of gpus) {
+        html += `
+        <div class="panel" style="margin-top:20px">
+          <div class="gpu-head">
+            <div class="gpu-name">GPU ${gpu.index} • <span id="gpu-${gpu.index}-name"></span></div>
+            <span class="status" style="padding:4px 12px;font-size:11px;background:rgba(255,255,255,0.05);border:none;">P-State: <span id="gpu-${gpu.index}-pstate"></span></span>
+          </div>
+          <div class="metrics" style="margin-top:0;">
+            <div class="metric"><div class="label">Core Temp</div><div class="mvalue" id="gpu-${gpu.index}-temp"></div></div>
+            <div class="metric"><div class="label">Power Draw</div><div class="mvalue"><span id="gpu-${gpu.index}-power"></span> <span class="unit">W</span></div></div>
+            <div class="metric"><div class="label">Core Clock</div><div class="mvalue"><span id="gpu-${gpu.index}-core"></span> <span class="unit">MHz</span></div></div>
+            <div class="metric"><div class="label">Mem Clock</div><div class="mvalue"><span id="gpu-${gpu.index}-mem"></span> <span class="unit">MHz</span></div></div>
+          </div>
+          <div class="metric" style="margin-top:16px; background:rgba(0,0,0,0.4)">
+            <div style="display:flex; justify-content:space-between; align-items:flex-end">
+              <div class="label" style="margin:0">Compute Utilization</div>
+              <div class="mvalue" style="font-size:16px; margin:0"><span id="gpu-${gpu.index}-util"></span>%</div>
+            </div>
+            <div class="bar-bg"><div class="bar-fill" id="gpu-${gpu.index}-bar"></div></div>
+          </div>
+          <div class="small" style="margin-top:12px; text-align:right">
+            VRAM Allocation: <span style="color:#fff" id="gpu-${gpu.index}-vram-used"></span> / <span id="gpu-${gpu.index}-vram-total"></span> MB
+            <span style="opacity:0.5" id="gpu-${gpu.index}-vram-pct"></span>
+          </div>
+        </div>`;
+      }
+      box.innerHTML = html;
+    }
+
+    for (const gpu of gpus) {
+      const idx = gpu.index;
+      el(`gpu-${idx}-name`).textContent = gpu.name || "Unknown";
+      el(`gpu-${idx}-pstate`).textContent = gpu.pstate || "—";
+      
+      const tempEl = el(`gpu-${idx}-temp`);
+      tempEl.textContent = `${fmt(gpu.temperatureC,0)}°C`;
+      tempEl.className = `mvalue ${tempClass(gpu.temperatureC)}`;
+      
+      el(`gpu-${idx}-power`).textContent = fmt(gpu.powerW,1);
+      el(`gpu-${idx}-core`).textContent = fmt(gpu.coreMHz,0);
+      el(`gpu-${idx}-mem`).textContent = fmt(gpu.memoryMHz,0);
+      el(`gpu-${idx}-util`).textContent = fmt(gpu.utilizationPct,1);
+      
+      const util = gpu.utilizationPct;
+      const safeUtil = util == null ? 0 : Math.max(0, Math.min(100, util));
+      el(`gpu-${idx}-bar`).style.width = `${safeUtil}%`;
+      
+      el(`gpu-${idx}-vram-used`).textContent = fmt(gpu.memoryUsedMB,0);
+      el(`gpu-${idx}-vram-total`).textContent = fmt(gpu.memoryTotalMB,0);
+      const memPct = gpu.memoryUsedMB != null && gpu.memoryTotalMB ? Math.min(100, (gpu.memoryUsedMB / gpu.memoryTotalMB) * 100) : 0;
+      el(`gpu-${idx}-vram-pct`).textContent = `(${fmt(memPct,1)}%)`;
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token");
+  const eventsUrl = token ? `/events?token=${encodeURIComponent(token)}` : "/events";
+  const es = new EventSource(eventsUrl);
+  es.addEventListener("stats", event => {
+    try { render(JSON.parse(event.data)); }
+    catch (e) { console.error(e); }
+  });
+
+  es.onerror = () => {
+    el("status").textContent = "OFFLINE";
+    el("dot").className = "dot err";
+  };
+})();
+</script>
+</body>
+</html>
