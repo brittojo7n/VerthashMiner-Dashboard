@@ -14,12 +14,10 @@
   --font: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --mono: 'JetBrains Mono', 'Consolas', monospace;
 
-  /* ── Spacing ── */
   --gap: 14px;
   --pad: 20px;
   --radius: 18px;
 
-  /* ── Font sizes ── */
   --fs-h1: 26px;
   --fs-section: 17px;
   --fs-value: 28px;
@@ -54,7 +52,6 @@ body {
   padding: 32px 16px;
 }
 
-/* ── Header ── */
 .top {
   display: flex;
   align-items: center;
@@ -131,7 +128,6 @@ h1 {
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
 }
 
-/* ── Grid ── */
 .grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -171,7 +167,6 @@ h1 {
   font-family: var(--font);
 }
 
-/* ── Labels ── */
 .label {
   color: var(--muted);
   font-family: var(--font);
@@ -182,7 +177,6 @@ h1 {
   margin-bottom: 8px;
 }
 
-/* ── Top stat card values ── */
 .value {
   font-family: var(--font);
   font-size: var(--fs-value);
@@ -211,7 +205,6 @@ h1 {
 .red { color: var(--red); }
 .purple { color: var(--purple); }
 
-/* ── Metric grids ── */
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -231,7 +224,6 @@ h1 {
   background: rgba(0, 0, 0, 0.3);
 }
 
-/* ── All metric data values: uniform size ── */
 .metric .mvalue {
   font-family: var(--font);
   font-weight: 700;
@@ -249,7 +241,6 @@ h1 {
   font-size: 14px;
 }
 
-/* ── Section headings ── */
 .gpu-head {
   display: flex;
   justify-content: space-between;
@@ -271,7 +262,6 @@ h1 {
   font-size: var(--fs-small);
 }
 
-/* ── Wallet address (below Mining Metrics heading) ── */
 .wallet-addr {
   margin-top: 2px;
   overflow: hidden;
@@ -284,7 +274,6 @@ h1 {
   letter-spacing: 0.3px;
 }
 
-/* ── Progress bar ── */
 .bar-bg {
   height: 6px;
   border-radius: 10px;
@@ -301,7 +290,6 @@ h1 {
   box-shadow: 0 0 10px rgba(79, 172, 254, 0.5);
 }
 
-/* ── Error box ── */
 .errorbox {
   display: none;
   margin-top: var(--gap);
@@ -319,7 +307,6 @@ h1 {
   display: block;
 }
 
-/* ── Console / Terminal ── */
 .console-box {
   margin-top: var(--gap);
   background: #080c14;
@@ -439,7 +426,6 @@ h1 {
   color: #00f2fe;
 }
 
-/* Terminal uses mono font */
 .console-terminal {
   min-height: 330px;
   max-height: 480px;
@@ -540,7 +526,6 @@ h1 {
   50% { opacity: 0; }
 }
 
-/* ── Utilities ── */
 .flex-between-end {
   display: flex;
   justify-content: space-between;
@@ -555,7 +540,6 @@ h1 {
 .text-dim { opacity: 0.5 !important; }
 .hidden { display: none !important; }
 
-/* ── Tablet ── */
 @media (max-width: 950px) {
   .grid {
     grid-template-columns: repeat(2, 1fr);
@@ -565,7 +549,6 @@ h1 {
   }
 }
 
-/* ── Mobile ── */
 @media (max-width: 600px) {
   :root {
     --gap: 10px;
@@ -645,7 +628,6 @@ h1 {
   }
 }
 
-/* ── Very small screens ── */
 @media (max-width: 380px) {
   :root {
     --fs-h1: 18px;
