@@ -22,7 +22,7 @@ const parseCmdArgs = str => {
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "127.0.0.1";
-const POLL_MS = Number(process.env.GPU_POLL_MS || 2000);
+const POLL_MS = Number(process.env.GPU_POLL_MS || 3000);
 const MINER_EXE = process.env.MINER_EXE || "VerthashMiner.exe";
 const MINER_ARGS = parseCmdArgs(process.env.MINER_ARGS);
 const MINER_CWD = process.env.MINER_CWD || process.cwd();

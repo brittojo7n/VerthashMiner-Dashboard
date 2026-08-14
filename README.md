@@ -1,4 +1,11 @@
-# VerthashMiner-Dashboard
+# VerthashMiner Dashboard
+
+> Zero-overhead real-time web monitor & GPU telemetry for VerthashMiner (Vertcoin / VTC)
+
+![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white)
+![GPU](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900?logo=nvidia&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
 
 Web monitor dashboard for the [VerthashMiner](https://github.com/CryptoGraphics/VerthashMiner).
 
@@ -34,7 +41,7 @@ Copy `.env.example` to `.env` and fill it out:
 ```env
 PORT=3000
 HOST=127.0.0.1
-GPU_POLL_MS=2000
+GPU_POLL_MS=3000
 DASHBOARD_TOKEN=a1b2c3d4e5f
 MINER_EXE=VerthashMiner.exe
 MINER_CWD=C:\Mining\VerthashMiner
