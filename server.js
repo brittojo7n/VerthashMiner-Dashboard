@@ -4,37 +4,21 @@ const os = require("node:os");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const loadEnv = filePath => {
-  try {
-    for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
-      const m = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-      if (m) process.env[m[1]] = (m[2] || "").replace(/^["']|["']$/g, "").trim();
-    }
-  } catch { }
-};
-loadEnv(path.join(__dirname, ".env"));
-
-const parseArgs = s => {
-  const args = [], rx = /"([^"]*)"|(\S+)/g;
-  let m;
-  while ((m = rx.exec(s || ""))) args.push(m[1] !== undefined ? m[1] : m[2]);
-  return args;
-};
-
-const matchNum = (str, rx, idx = 1) => {
-  const m = str.match(rx);
-  return m ? Number(m[idx]) : null;
-};
+try {
+  for (const line of fs.readFileSync(path.join(__dirname, ".env"), "utf8").split(/\r?\n/)) {
+    const m = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+    if (m) process.env[m[1]] = (m[2] || "").replace(/^["']|["']$/g, "").trim();
+  }
+} catch {}
 
 const PORT = Number(process.env.PORT || 3000);
-const HOST = process.env.HOST || "0.0.0.0";
-const POLL_MS = Number(process.env.GPU_POLL_MS || 3000);
+const HOST = process.env.HOST || "127.0.0.1";
+const POLL_MS = Number(process.env.GPU_POLL_MS || 2000);
 const MAX_LOGS = Math.min(500, Math.max(15, Number(process.env.MAX_LOGS || 50)));
 const MINER_EXE = process.env.MINER_EXE || "VerthashMiner.exe";
-const MINER_ARGS = parseArgs(process.env.MINER_ARGS);
-const MINER_CWD = process.env.MINER_CWD || process.cwd();
+const MINER_ARGS = (process.env.MINER_ARGS || "").match(/"([^"]*)"|(\S+)/g)?.map(m => m.replace(/^"|"$/g, "")) || [];
+const MINER_CWD = process.env.MINER_CWD || "";
 const TOKEN = process.env.DASHBOARD_TOKEN || "";
-const HTML_FILE = path.join(__dirname, "public", "index.html");
 
 class CircularLogBuffer {
   constructor(cap) {
@@ -58,11 +42,17 @@ class CircularLogBuffer {
   }
 }
 
-let htmlBuf = null;
-const getHtml = () => {
-  try { return htmlBuf || (htmlBuf = fs.readFileSync(HTML_FILE)); }
-  catch { return Buffer.from("Not Found"); }
+const MIME = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8" };
+const staticFiles = {};
+const loadStatic = (rel, uri) => {
+  try {
+    const buf = fs.readFileSync(path.join(__dirname, "public", rel));
+    staticFiles[uri] = { buf, type: MIME[path.extname(rel)] || "application/octet-stream" };
+  } catch {}
 };
+loadStatic("index.html", "/");
+loadStatic("index.html", "/index.html");
+loadStatic("style.css", "/style.css");
 
 const logs = new CircularLogBuffer(MAX_LOGS);
 const state = {
@@ -85,6 +75,11 @@ const rxZeroErr = /\b(?:errors?|err):\s*0\b/i;
 const rxWarn = /\b(?:\[warn(?:ing)?\]|warning:|warn:|\bwarnings?:\s*[1-9]\d*)\b/i;
 const rxSuccess = /\b(?:accepted:\s*\d+\s*\/\s*\d+|share\s+accepted|loaded\s+succes|verified\s+succes|successfully\s+configured)\b/i;
 const smiArgs = ["--query-gpu=name,temperature.gpu,power.draw,utilization.gpu,clocks.gr,clocks.mem,memory.used,memory.total,pstate", "--format=csv,noheader,nounits"];
+
+const matchNum = (str, rx, idx = 1) => {
+  const m = str.match(rx);
+  return m ? Number(m[idx]) : null;
+};
 
 const pushLog = (raw, type = "info") => {
   const line = String(raw).replace(rxNorm, "").trim();
@@ -206,8 +201,8 @@ const manageGpu = () => {
 
 let minerProc = null;
 const startMiner = () => {
-  if (!MINER_ARGS.length) {
-    const msg = "MINER_ARGS not configured in .env";
+  if (!MINER_CWD || !MINER_ARGS.length) {
+    const msg = !MINER_CWD ? "MINER_CWD not configured in .env" : "MINER_ARGS not configured in .env";
     state.miner.lastError = msg;
     state.mining.status = "STOPPED";
     pushLog(msg, "warn");
@@ -250,8 +245,10 @@ const startMiner = () => {
   });
 };
 
-const send = (res, status, type, body) => {
-  res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store" });
+const send = (res, status, type, body, len) => {
+  const headers = { "Content-Type": type, "Cache-Control": "no-store" };
+  if (len !== undefined) headers["Content-Length"] = len;
+  res.writeHead(status, headers);
   res.end(body);
 };
 
@@ -281,11 +278,10 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (p === "/health") return send(res, 200, "text/plain", "ok");
-  if (p === "/" || p === "/index.html") {
-    const html = getHtml();
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Length": html.length, "Cache-Control": "no-store" });
-    return res.end(html);
-  }
+  
+  const staticFile = staticFiles[p];
+  if (staticFile) return send(res, 200, staticFile.type, staticFile.buf, staticFile.buf.length);
+
   send(res, 404, "text/plain", "Not found");
 });
 
@@ -298,8 +294,8 @@ server.listen(PORT, HOST, () => {
 });
 
 const cleanExit = () => {
-  if (minerProc && !minerProc.killed) try { minerProc.kill(); } catch { }
-  server.close(() => process.exit(0));
+  if (minerProc && !minerProc.killed) try { minerProc.kill(); } catch {}
+  process.exit(0);
 };
 process.on("SIGINT", cleanExit);
 process.on("SIGTERM", cleanExit);

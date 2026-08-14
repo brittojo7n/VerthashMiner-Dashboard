@@ -48,8 +48,8 @@ Copy `.env.example` to `.env` and configure your settings:
 ```env
 PORT=3000
 HOST=127.0.0.1
-GPU_POLL_MS=3000
-MAX_LOGS=60
+GPU_POLL_MS=2000
+MAX_LOGS=50
 DASHBOARD_TOKEN=a1b2c3d4e5f
 MINER_EXE=VerthashMiner.exe
 MINER_CWD=C:\Mining\VerthashMiner
@@ -66,13 +66,20 @@ _Make sure to include `--all-cu-devices` in `MINER_ARGS` since this dashboard tr
 
 ### 4. Running the Dashboard
 
-The recommended setup is to place this entire `VerthashMiner-Dashboard` folder directly inside your VerthashMiner directory.
-
-Then in your main miner folder, create a batch file (name it whatever you like, e.g. `launch.bat` or `!START.bat`) with the following inside:
+Put the entire folder (`VerthashMiner-Dashboard`) right where the folder for `VerthashMiner` is situated, and then create the following batch file outside both folders (name it anything you like, such as `launch.bat` or `start.bat`):
 
 ```bat
 @echo off
+setlocal
+
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    powershell -NoProfile -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b
+)
+
 cd /d "%~dp0"
+
 node ".\VerthashMiner-Dashboard\server.js"
 pause
 ```
