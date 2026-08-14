@@ -148,7 +148,7 @@
 
   btnCopyLogs.onclick = async () => {
     if (!logsList.length) return;
-    const text = logsList.map(l => `[${l.time || '--:--:--'}] ${l.text}`).join("\n");
+    const text = logsList.map(l => `> ${l.text}`).join("\n");
     try {
       await navigator.clipboard.writeText(text);
       const prev = btnCopyLogs.textContent;
@@ -192,7 +192,7 @@
     let html = "";
     for (let i = 0; i < logs.length; i++) {
       const l = logs[i];
-      html += `<div class="log-entry log-type-${l.type || 'info'}"><span class="log-time">[${l.time || '--:--:--'}]</span><span class="log-prompt">&gt;</span><span class="log-msg">${highlightSyntax(l.text)}</span></div>`;
+      html += `<div class="log-entry log-type-${l.type || 'info'}"><span class="log-prompt">&gt;</span><span class="log-msg">${highlightSyntax(l.text)}</span></div>`;
     }
     logLinesEl.innerHTML = html;
     if (autoScroll) scrollToBottom();

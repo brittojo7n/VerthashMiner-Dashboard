@@ -29,9 +29,7 @@ class CircularLogBuffer {
     this.seq = 0;
   }
   push(text, type = "info") {
-    const d = new Date();
-    const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
-    this.buf[this.head] = { id: ++this.seq, time, text, type };
+    this.buf[this.head] = { id: ++this.seq, text, type };
     this.head = (this.head + 1) % this.capacity;
     if (this.count < this.capacity) this.count++;
   }
