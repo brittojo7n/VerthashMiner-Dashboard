@@ -30,11 +30,18 @@ A lightweight, zero-overhead Windows dashboard that acts as a wrapper around Ver
 
 ## Setup & Configuration
 
-This dashboard is configured entirely through a `.env` file. We have provided a `.env.example` file that you should rename or copy to `.env`.
+### 1. Clone the Repository
 
-### 1. Create your `.env`
+Clone this repository directly into your VerthashMiner directory (or any preferred location):
 
-Copy `.env.example` to `.env` and fill it out:
+```bash
+git clone https://github.com/brittojo7n/VerthashMiner-Dashboard.git
+cd VerthashMiner-Dashboard
+```
+
+### 2. Create your `.env`
+
+Copy `.env.example` to `.env` and configure your settings:
 
 **Example:**
 
@@ -48,14 +55,14 @@ MINER_CWD=C:\Mining\VerthashMiner
 MINER_ARGS=-u vtc1qwddxt3rmwx00ev9yg4qcwpxnguw5zm7mwej2xk -p c=VTC -o stratum+tcp://verthash.sea.mine.zpool.ca:6144 --verthash-data ..\Vertcoin\Vertcoin\verthash.dat --all-cu-devices
 ```
 
-### 2. Configure Paths and Arguments
+### 3. Configure Paths and Arguments
 
 - **`MINER_CWD`**: This is the working directory where `VerthashMiner.exe` is located (e.g. `C:\Mining\VerthashMiner`). It must be set so the dashboard can find the executable and the `verthash.dat` file properly.
 - **`MINER_ARGS`**: This variable determines how the dashboard launches the miner. You must supply your wallet address, pool, and path to the `verthash.dat` file exactly as you would in a normal `.bat` file.
 
 _Make sure to include `--all-cu-devices` in `MINER_ARGS` since this dashboard tracks NVIDIA GPUs!_
 
-### 3. Running the Dashboard
+### 4. Running the Dashboard
 
 The recommended setup is to place this entire `VerthashMiner-Dashboard` folder directly inside your VerthashMiner directory.
 
@@ -72,7 +79,7 @@ Now you can just double click your batch file to spin up both the miner and dash
 
 _(Alternatively, you can open CMD directly inside the dashboard folder and run `node server.js`)_
 
-### 4. Access the Dashboard
+### 5. Access the Dashboard
 
 - Local access (default): `http://127.0.0.1:3000`
 - **Remote access**: To access the dashboard from another device on your LAN (e.g. `http://HOST:PORT`), you must edit your `.env` file and change `HOST=127.0.0.1` to `HOST=0.0.0.0` and restart the dashboard.
