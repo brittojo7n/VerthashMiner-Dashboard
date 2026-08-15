@@ -22,6 +22,16 @@ class CircularLogBuffer {
   }
 }
 
+function getServerTz() {
+  const off = -(new Date().getTimezoneOffset());
+  const sign = off >= 0 ? "+" : "-";
+  const abs = Math.abs(off);
+  return `UTC${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
+}
+
+const SERVER_TZ = getServerTz();
+const HOSTNAME = os.hostname();
+
 function createState(wallet = "", maxLogs = 50) {
   const logs = new CircularLogBuffer(maxLogs);
   return {
@@ -40,35 +50,45 @@ function createState(wallet = "", maxLogs = 50) {
       accepted: 0,
       submitted: 0,
       rejected: 0,
-      invalid: 0,
       difficulty: null,
       status: "STARTING",
       lastAcceptedAt: null
     },
     gpu: [],
     host: {
-      hostname: os.hostname()
+      hostname: HOSTNAME,
+      tz: SERVER_TZ
     }
   };
 }
 
 function formatStatsSnapshot(state) {
   const now = Date.now();
-  const uptimeSeconds = Math.max(0, Math.floor((now - state.startedAt) / 1000));
-  const acceptedRatio = state.mining.submitted > 0
-    ? (state.mining.accepted / state.mining.submitted) * 100
-    : null;
+  const uptimeMin = (now - state.startedAt) / 60000;
+  const spm = uptimeMin > 0 ? state.mining.accepted / uptimeMin : state.mining.accepted;
 
   return {
     now,
-    uptimeSeconds,
-    acceptedRatio,
-    ...state
+    uptimeSeconds: Math.max(0, Math.floor((now - state.startedAt) / 1000)),
+    acceptedRatio: state.mining.submitted > 0 ? (state.mining.accepted / state.mining.submitted) * 100 : null,
+    startedAt: state.startedAt,
+    miner: state.miner,
+    mining: {
+      hashrateKHs: state.mining.hashrateKHs,
+      accepted: state.mining.accepted,
+      submitted: state.mining.submitted,
+      rejected: state.mining.rejected,
+      sharesPerMinute: spm,
+      difficulty: state.mining.difficulty,
+      status: state.mining.status,
+      lastAcceptedAt: state.mining.lastAcceptedAt
+    },
+    gpu: state.gpu,
+    host: state.host
   };
 }
 
 module.exports = {
-  CircularLogBuffer,
   createState,
   formatStatsSnapshot
 };

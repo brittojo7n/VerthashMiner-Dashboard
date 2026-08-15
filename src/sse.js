@@ -6,6 +6,8 @@ class SseHub {
     this.onSubscriberChange = onSubscriberChange;
     this.clients = new Set();
     this.bcastTimer = null;
+    this.syncTimer = setInterval(() => this.broadcast(), 2000);
+    this.syncTimer.unref();
   }
 
   get size() {
@@ -13,11 +15,11 @@ class SseHub {
   }
 
   broadcast() {
-    if (!this.clients.size || this.bcastTimer) return;
+    if (this.clients.size === 0 || this.bcastTimer !== null) return;
 
     this.bcastTimer = setImmediate(() => {
       this.bcastTimer = null;
-      if (!this.clients.size) return;
+      if (this.clients.size === 0) return;
 
       const payload = `event: stats\ndata: ${JSON.stringify(formatStatsSnapshot(this.state))}\n\n`;
 
@@ -33,13 +35,6 @@ class SseHub {
   }
 
   handleConnection(req, res) {
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      "Connection": "keep-alive",
-      "X-Accel-Buffering": "no"
-    });
-
     this.clients.add(res);
     this._notifyChange();
     this.broadcast();
@@ -73,6 +68,10 @@ class SseHub {
   }
 
   closeAll() {
+    if (this.syncTimer) {
+      clearInterval(this.syncTimer);
+      this.syncTimer = null;
+    }
     for (const res of this.clients) {
       try {
         res.end();
@@ -83,6 +82,4 @@ class SseHub {
   }
 }
 
-module.exports = {
-  SseHub
-};
+module.exports = { SseHub };

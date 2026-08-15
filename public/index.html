@@ -10,7 +10,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 
 <body>
@@ -64,8 +64,8 @@
             <div class="mvalue red" id="rejected">0</div>
           </div>
           <div class="metric">
-            <div class="label">Invalid</div>
-            <div class="mvalue red" id="invalid">0</div>
+            <div class="label">Shares Per Minute</div>
+            <div class="mvalue green" id="sharesPerMinute">—</div>
           </div>
           <div class="metric">
             <div class="label">Network Difficulty</div>
@@ -110,6 +110,10 @@
     </div>
   </div>
 
+  <div class="local-time-bar" id="localTimeBar">
+    <span class="local-time-value" id="localTime">—</span>
+  </div>
+
   <script>
     (() => {
       const el = id => document.getElementById(id);
@@ -134,12 +138,13 @@
       const ratioEl = el("ratio");
       const uptimeEl = el("uptime");
       const rejectedEl = el("rejected");
-      const invalidEl = el("invalid");
+      const sharesPerMinuteEl = el("sharesPerMinute");
       const difficultyEl = el("difficulty");
       const lastAcceptedEl = el("lastAccepted");
       const errorEl = el("error");
       const gpusBox = el("gpus");
       const walletEl = el("walletAddress");
+      const localTimeEl = el("localTime");
 
       const terminal = el("terminal");
       const logLinesEl = el("logLines");
@@ -148,6 +153,8 @@
       const btnCopyLogs = el("btnCopyLogs");
 
       let autoScroll = true, logsList = [], lastRenderedLogId = null;
+      let serverStartedAt = null, serverNowBase = null, serverNowCapturedAt = null, serverTz = null;
+      let tickInterval = null, spmInterval = null, latestAccepted = 0;
 
       btnAutoScroll.onclick = () => {
         autoScroll = !autoScroll;
@@ -227,7 +234,63 @@
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
       };
 
+      const fmtServerTime = (ms, tz) => {
+        const d = new Date(ms);
+        const pad = n => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${tz ? ` (${tz})` : ""}`;
+      };
+
+      const tickServerTime = () => {
+        if (serverNowBase == null) return;
+        const elapsed = Date.now() - serverNowCapturedAt;
+        localTimeEl.textContent = fmtServerTime(serverNowBase + elapsed, serverTz);
+      };
+
+      const tickUptime = () => {
+        if (serverNowBase == null) return;
+        const serverNow = serverNowBase + (Date.now() - serverNowCapturedAt);
+        const elapsed = Math.floor((serverNow - serverStartedAt) / 1000);
+        uptimeEl.textContent = fmtUptime(elapsed);
+      };
+
+      const tickSpm = () => {
+        if (serverStartedAt == null || serverNowBase == null) return;
+        const serverNow = serverNowBase + (Date.now() - serverNowCapturedAt);
+        const uptimeMin = (serverNow - serverStartedAt) / 60000;
+        const spm = uptimeMin > 0 ? latestAccepted / uptimeMin : latestAccepted;
+        sharesPerMinuteEl.textContent = spm > 0 ? fmt(spm, 3) : "—";
+      };
+
+      const startTicking = () => {
+        if (!tickInterval) {
+          tickInterval = setInterval(() => { tickServerTime(); tickUptime(); }, 1000);
+        }
+        if (!spmInterval) {
+          spmInterval = setInterval(tickSpm, 2000);
+        }
+      };
+
+      const stopTicking = () => {
+        if (tickInterval) {
+          clearInterval(tickInterval);
+          tickInterval = null;
+        }
+        if (spmInterval) {
+          clearInterval(spmInterval);
+          spmInterval = null;
+        }
+      };
+
       const render = s => {
+        serverNowBase = s.now;
+        serverNowCapturedAt = Date.now();
+        serverStartedAt = s.startedAt;
+        serverTz = s.host.tz;
+        latestAccepted = s.mining.accepted;
+        tickServerTime();
+        tickUptime();
+        if (sharesPerMinuteEl.textContent === "—" && latestAccepted > 0) tickSpm();
+
         hostEl.textContent = `Connected to ${s.host.hostname}`;
         statusEl.textContent = s.mining.status;
         dotEl.className = "dot " + (s.mining.status === "ERROR" ? "err" : "ok");
@@ -235,10 +298,8 @@
         hashrateEl.innerHTML = `${fmt(s.mining.hashrateKHs, 2)}<span class="unit">kH/s</span>`;
         acceptedEl.textContent = `${s.mining.accepted} / ${s.mining.submitted}`;
         ratioEl.textContent = s.acceptedRatio == null ? "—" : `${fmt(s.acceptedRatio, 1)}%`;
-        uptimeEl.textContent = fmtUptime(s.uptimeSeconds);
 
         rejectedEl.textContent = s.mining.rejected;
-        invalidEl.textContent = s.mining.invalid;
         difficultyEl.textContent = s.mining.difficulty == null ? "—" : s.mining.difficulty;
         lastAcceptedEl.textContent = s.mining.lastAcceptedAt ? fmtDate(s.mining.lastAcceptedAt) : "—";
         walletEl.textContent = s.miner.wallet || "—";
@@ -316,8 +377,7 @@
           el(`gpu-${idx}-mem`).textContent = fmt(gpu.memoryMHz, 0);
           el(`gpu-${idx}-util`).textContent = fmt(gpu.utilizationPct, 1);
 
-          const util = gpu.utilizationPct;
-          const safeUtil = util == null ? 0 : Math.max(0, Math.min(100, util));
+          const safeUtil = gpu.utilizationPct == null ? 0 : Math.max(0, Math.min(100, gpu.utilizationPct));
           el(`gpu-${idx}-bar`).style.width = `${safeUtil}%`;
 
           el(`gpu-${idx}-vram-used`).textContent = fmt(gpu.memoryUsedMB, 0);
@@ -333,11 +393,14 @@
       const es = new EventSource(eventsUrl);
 
       es.addEventListener("stats", event => {
-        try { render(JSON.parse(event.data)); }
-        catch { }
+        try {
+          startTicking();
+          render(JSON.parse(event.data));
+        } catch { }
       });
 
       es.onerror = () => {
+        stopTicking();
         statusEl.textContent = "OFFLINE";
         dotEl.className = "dot err";
       };

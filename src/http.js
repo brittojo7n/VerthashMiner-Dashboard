@@ -4,104 +4,110 @@ const path = require("node:path");
 const os = require("node:os");
 const { formatStatsSnapshot } = require("./state");
 
-const MIME_TYPES = {
+const HDR_JSON = Object.freeze({ "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+const HDR_TEXT = Object.freeze({ "Content-Type": "text/plain", "Cache-Control": "no-store" });
+const HDR_SSE  = Object.freeze({ "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", "Connection": "keep-alive", "X-Accel-Buffering": "no" });
+
+const MIME = {
   ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon"
+  ".css":  "text/css; charset=utf-8",
+  ".js":   "text/javascript; charset=utf-8"
 };
 
-function loadStaticCache(publicDir = path.resolve(__dirname, "..", "public")) {
-  const staticCache = {};
+function loadStaticCache(publicDir) {
+  const dir = publicDir || path.resolve(__dirname, "..", "public");
+  const cache = Object.create(null);
 
-  const registerFile = (relPath, uri) => {
+  const register = (rel, uri) => {
     try {
-      const fullPath = path.join(publicDir, relPath);
-      if (fs.existsSync(fullPath)) {
-        const buf = fs.readFileSync(fullPath);
-        const ext = path.extname(relPath);
-        staticCache[uri] = {
-          buf,
-          type: MIME_TYPES[ext] || "application/octet-stream"
-        };
-      }
+      const full = path.join(dir, rel);
+      if (!fs.existsSync(full)) return;
+      const buf = fs.readFileSync(full);
+      cache[uri] = {
+        buf,
+        hdr: Object.freeze({
+          "Content-Type": MIME[path.extname(rel)] || "application/octet-stream",
+          "Cache-Control": "public, max-age=0",
+          "Content-Length": buf.length
+        })
+      };
     } catch { }
   };
 
-  registerFile("index.html", "/");
-  registerFile("index.html", "/index.html");
-  registerFile("style.css", "/style.css");
-
-  return staticCache;
-}
-
-function send(res, status, type, body, len) {
-  const headers = {
-    "Content-Type": type,
-    "Cache-Control": "no-store"
-  };
-  if (len !== undefined) {
-    headers["Content-Length"] = len;
-  }
-  res.writeHead(status, headers);
-  res.end(body);
+  register("index.html", "/");
+  register("index.html", "/index.html");
+  register("style.css",  "/style.css");
+  return cache;
 }
 
 function getLanIp() {
   let lan = "127.0.0.1";
-  const interfaces = os.networkInterfaces();
-  for (const entries of Object.values(interfaces)) {
-    for (const e of entries || []) {
-      if (e.family === "IPv4" && !e.internal) {
-        lan = e.address;
-      }
+  for (const addrs of Object.values(os.networkInterfaces())) {
+    for (const a of addrs || []) {
+      if (a.family === "IPv4" && !a.internal) lan = a.address;
     }
   }
   return lan;
 }
 
+function parsePathname(rawUrl) {
+  const q = rawUrl.indexOf("?");
+  return q === -1 ? rawUrl : rawUrl.slice(0, q);
+}
+
+function parseToken(rawUrl) {
+  const q = rawUrl.indexOf("token=");
+  if (q === -1) return null;
+  const amp = rawUrl.indexOf("&", q);
+  return amp === -1 ? rawUrl.slice(q + 6) : rawUrl.slice(q + 6, amp);
+}
+
 function createHttpServer({ config, state, sseHub, publicDir }) {
   const staticFiles = loadStaticCache(publicDir);
+  const useToken = config.TOKEN.length > 0;
 
   const server = http.createServer((req, res) => {
-    const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+    const raw = req.url || "/";
 
-    if (config.TOKEN && url.searchParams.get("token") !== config.TOKEN) {
-      return send(res, 401, "text/plain", "Unauthorized");
+    if (useToken && parseToken(raw) !== config.TOKEN) {
+      res.writeHead(401, HDR_TEXT);
+      res.end("Unauthorized");
+      return;
     }
 
-    const pathname = url.pathname;
-
-    if (pathname === "/api/status") {
-      const payload = JSON.stringify(formatStatsSnapshot(state));
-      return send(res, 200, "application/json; charset=utf-8", payload);
-    }
+    const pathname = parsePathname(raw);
 
     if (pathname === "/events") {
-      return sseHub.handleConnection(req, res);
+      res.writeHead(200, HDR_SSE);
+      sseHub.handleConnection(req, res);
+      return;
     }
 
     if (pathname === "/health") {
-      return send(res, 200, "text/plain", "ok");
+      res.writeHead(200, HDR_TEXT);
+      res.end("ok");
+      return;
     }
 
-    const staticFile = staticFiles[pathname];
-    if (staticFile) {
-      return send(res, 200, staticFile.type, staticFile.buf, staticFile.buf.length);
+    if (pathname === "/api/status") {
+      const body = JSON.stringify(formatStatsSnapshot(state));
+      res.writeHead(200, HDR_JSON);
+      res.end(body);
+      return;
     }
 
-    send(res, 404, "text/plain", "Not found");
+    const sf = staticFiles[pathname];
+    if (sf) {
+      res.writeHead(200, sf.hdr);
+      res.end(sf.buf);
+      return;
+    }
+
+    res.writeHead(404, HDR_TEXT);
+    res.end("Not found");
   });
 
   return server;
 }
 
-module.exports = {
-  MIME_TYPES,
-  loadStaticCache,
-  send,
-  getLanIp,
-  createHttpServer
-};
+module.exports = { getLanIp, createHttpServer };
