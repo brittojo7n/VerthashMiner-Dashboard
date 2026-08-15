@@ -50,7 +50,7 @@ PORT=3000
 HOST=127.0.0.1
 GPU_POLL_MS=2000
 MAX_LOGS=50
-DASHBOARD_TOKEN=a1b2c3d4e5f
+PASSPHRASE=abc123
 MINER_EXE=VerthashMiner.exe
 MINER_CWD=C:\Mining\VerthashMiner
 MINER_ARGS=-u vtc1qwddxt3rmwx00ev9yg4qcwpxnguw5zm7mwej2xk -p c=VTC -o stratum+tcp://verthash.sea.mine.zpool.ca:6144 --verthash-data ..\Vertcoin\Vertcoin\verthash.dat --all-cu-devices

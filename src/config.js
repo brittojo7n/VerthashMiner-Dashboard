@@ -20,12 +20,20 @@ const MAX_LOGS = Math.min(500, Math.max(15, Number(process.env.MAX_LOGS || 50)))
 const MINER_EXE = process.env.MINER_EXE || "VerthashMiner.exe";
 const MINER_ARGS = ((process.env.MINER_ARGS || "").match(/"([^"]*)"|(\S+)/g) || []).map(m => m.replace(/^"|"$/g, ""));
 const MINER_CWD = process.env.MINER_CWD || "";
-const TOKEN = process.env.DASHBOARD_TOKEN || "";
+const PASSPHRASE = process.env.PASSPHRASE || "";
+
+if (!MINER_ARGS.includes("-P") && !MINER_ARGS.includes("--protocol-dump")) {
+  MINER_ARGS.push("--protocol-dump");
+}
 
 let WALLET = "";
 for (let i = 0; i < MINER_ARGS.length; i++) {
-  if ((MINER_ARGS[i] === "-u" || MINER_ARGS[i] === "--user") && i + 1 < MINER_ARGS.length) {
+  const arg = MINER_ARGS[i];
+  if ((arg === "-u" || arg === "--user") && i + 1 < MINER_ARGS.length) {
     WALLET = MINER_ARGS[i + 1].split(".")[0];
+    break;
+  } else if (arg.startsWith("-u=") || arg.startsWith("--user=")) {
+    WALLET = arg.split("=")[1].split(".")[0];
     break;
   }
 }
@@ -38,6 +46,6 @@ module.exports = {
   MINER_EXE,
   MINER_ARGS,
   MINER_CWD,
-  TOKEN,
+  PASSPHRASE,
   WALLET
 };

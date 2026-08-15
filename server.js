@@ -34,7 +34,8 @@ class Server {
     this.httpServer = createHttpServer({
       config: this.config,
       state: this.state,
-      sseHub: this.sseHub
+      sseHub: this.sseHub,
+      minerManager: this.minerManager
     });
 
     this.boundExit = this.stop.bind(this);

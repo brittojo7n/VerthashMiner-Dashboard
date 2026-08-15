@@ -51,8 +51,12 @@ function createState(wallet = "", maxLogs = 50) {
       submitted: 0,
       rejected: 0,
       difficulty: null,
-      status: "STARTING",
-      lastAcceptedAt: null
+      status: "STOPPED",
+      lastAcceptedAt: null,
+      gpuHashrates: {},
+      seenDevices: [],
+      hashratesReady: false,
+      pciMap: {}
     },
     gpu: [],
     host: {
@@ -64,8 +68,6 @@ function createState(wallet = "", maxLogs = 50) {
 
 function formatStatsSnapshot(state) {
   const now = Date.now();
-  const uptimeMin = (now - state.startedAt) / 60000;
-  const spm = uptimeMin > 0 ? state.mining.accepted / uptimeMin : state.mining.accepted;
 
   return {
     now,
@@ -78,12 +80,19 @@ function formatStatsSnapshot(state) {
       accepted: state.mining.accepted,
       submitted: state.mining.submitted,
       rejected: state.mining.rejected,
-      sharesPerMinute: spm,
       difficulty: state.mining.difficulty,
       status: state.mining.status,
       lastAcceptedAt: state.mining.lastAcceptedAt
     },
-    gpu: state.gpu,
+    gpu: state.gpu.map(g => {
+      const cuIndex = state.mining.pciMap[g.pciBusId] !== undefined 
+        ? state.mining.pciMap[g.pciBusId] 
+        : g.index;
+      return {
+        ...g,
+        hashrate: state.mining.gpuHashrates[`cu_${cuIndex}`]
+      };
+    }),
     host: state.host
   };
 }

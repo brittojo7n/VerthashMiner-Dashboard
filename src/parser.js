@@ -1,7 +1,7 @@
 const RX_NORM    = /\x1b\[[0-?]*[ -/]*[@-~]/g;
-const RX_HASH    = /(?:total )?hashrate:\s*([\d.]+)\s*kH\/s/i;
+const RX_DEV_HASH = /(cu|cl)_device\((\d+)\).*?hashrate:\s*([\d.]+)/i;
 const RX_DIFF    = /difficulty(?:\s*(?:set|is))?\s*(?:to|:)?\s*([\d.]+)/i;
-const RX_ACC     = /accepted:\s*(\d+)\s*\/\s*(\d+)/i;
+const RX_ACC     = /accepted:\s*(\d+)\s*\/\s*(\d+)(?:.*?total hashrate:\s*([\d.]+|\(pending...\)))?/i;
 const RX_ERR     = /\b(?:\[error\]|\[fatal\]|error:|fatal:|cuda\s+error|out\s+of\s+memory|failed\s+to|connection\s+refused|connection\s+failed|enoent|exception)\b/i;
 const RX_NZERR   = /\b(?:errors?|err):\s*[1-9]\d*\b/i;
 const RX_WARN    = /\b(?:\[warn(?:ing)?\]|warning:|warn:|\bwarnings?:\s*[1-9]\d*)\b/i;
@@ -9,6 +9,7 @@ const RX_SUCCESS = /\b(?:accepted:\s*\d+\s*\/\s*\d+|share\s+accepted|loaded\s+su
 const RX_FATAL   = /\b(?:cuda\s+error|failed\s+to|fatal|exception|enoent)\b/i;
 const RX_WARN0   = /\bwarnings?:\s*0\b/i;
 const RX_ERR0    = /\b(?:errors?|err):\s*0\b/i;
+const RX_REJECT  = /"result"\s*:\s*false\s*,\s*"error"\s*:\s*\[\s*\d+\s*,\s*"([^"]+)"/i;
 
 function classifyLine(line, lc) {
   const isErr = RX_NZERR.test(line) || (RX_ERR.test(line) && (!RX_ERR0.test(line) || RX_FATAL.test(line)));
@@ -32,7 +33,18 @@ function parseMinerLine(raw, state, pushLog) {
 
   if (isErr) {
     state.miner.lastError = line;
-    state.mining.status = "ERROR";
+    state.mining.status = "CRASHED";
+  }
+
+  const rejectMatch = line.match(RX_REJECT);
+  if (rejectMatch) {
+    const reason = rejectMatch[1];
+    state.mining.lastRejectReason = reason;
+    if (typeof pushLog === "function") {
+      pushLog(`[Stratum] Share Rejected: ${reason}`, "error");
+    } else if (state.miner.logs) {
+      state.miner.logs.push(`[Stratum] Share Rejected: ${reason}`, "error");
+    }
   }
 
   if (typeof pushLog === "function") {
@@ -42,10 +54,31 @@ function parseMinerLine(raw, state, pushLog) {
     state.miner.lastLine = line;
   }
 
-  const hrMatch = line.match(RX_HASH);
-  if (hrMatch) {
-    const hr = Number(hrMatch[1]);
-    state.mining.hashrateKHs = hr;
+  const devHashMatch = line.match(RX_DEV_HASH);
+  if (devHashMatch) {
+    const prefix = devHashMatch[1].toLowerCase();
+    const id = devHashMatch[2];
+    const hr = Number(devHashMatch[3]);
+    const deviceKey = `${prefix}_${id}`;
+    
+    state.mining.gpuHashrates[deviceKey] = hr;
+    
+    if (!state.mining.hashratesReady) {
+      if (state.mining.seenDevices.includes(deviceKey)) {
+        state.mining.hashratesReady = true;
+      } else {
+        state.mining.seenDevices.push(deviceKey);
+      }
+    }
+    
+    if (state.mining.hashratesReady) {
+      let total = 0;
+      for (const k in state.mining.gpuHashrates) {
+        total += state.mining.gpuHashrates[k];
+      }
+      state.mining.hashrateKHs = total;
+    }
+
     if (hr > 0) {
       state.mining.status = "MINING";
       if (!isErr) state.miner.lastError = "";
@@ -64,6 +97,10 @@ function parseMinerLine(raw, state, pushLog) {
     state.mining.status       = "MINING";
     state.mining.lastAcceptedAt = Date.now();
     state.miner.lastError     = "";
+    
+    if (acc[3] && acc[3] !== "(pending...)") {
+      state.mining.hashrateKHs = Number(acc[3]);
+    }
   }
 
   if (!isErr && state.mining.status !== "MINING") {

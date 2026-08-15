@@ -36,6 +36,12 @@ class MinerManager {
   }
 
   start() {
+    if (this.state.miner.running || this._stopPromise || this.state.mining.status === "STARTING") {
+      return;
+    }
+
+    this._resetMiningStats();
+
     const { MINER_EXE, MINER_ARGS, MINER_CWD } = this.config;
 
     if (!MINER_CWD || !MINER_ARGS.length) {
@@ -48,6 +54,62 @@ class MinerManager {
       return;
     }
 
+    this.state.mining.status = "STARTING";
+    if (typeof this.onUpdate === "function") this.onUpdate();
+
+    this.pushLog("Starting miner...", "warn");
+    this.pushLog("Building PCI to CUDA device map...", "info");
+
+    try {
+      const listProc = spawn(MINER_EXE, ["--device-list"], {
+        cwd: MINER_CWD,
+        windowsHide: true,
+        shell: false,
+        detached: false
+      });
+
+      let buf = "";
+      listProc.stdout.on("data", c => buf += String(c));
+      listProc.stderr.on("data", c => buf += String(c));
+
+      listProc.on("close", () => {
+        let inCuda = false;
+        for (const line of buf.split("\n")) {
+          if (line.includes("CUDA devices:")) { inCuda = true; continue; }
+          if (line.includes("OpenCL devices:")) { inCuda = false; continue; }
+          if (inCuda) {
+            const match = line.match(/Index:\s*(\d+).*?pcieId:\s*([0-9a-fA-F:.]+)/i);
+            if (match) {
+              const id = match[1];
+              let pci = match[2];
+              const m = pci.match(/([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.?([0-9a-fA-F]?)/i);
+              if (m) pci = `${m[1].toLowerCase()}:${m[2].toLowerCase()}:${(m[3]||"0").toLowerCase()}`;
+              this.state.mining.pciMap[pci] = id;
+            }
+          }
+        }
+        this._startMiner();
+      });
+
+      listProc.on("error", () => this._startMiner());
+    } catch {
+      this._startMiner();
+    }
+  }
+
+  _resetMiningStats() {
+    this.state.mining.hashrateKHs = null;
+    this.state.mining.accepted = 0;
+    this.state.mining.submitted = 0;
+    this.state.mining.rejected = 0;
+    this.state.mining.difficulty = null;
+    this.state.mining.lastAcceptedAt = null;
+    this.state.mining.gpuHashrates = {};
+    this.state.mining.hashratesReady = false;
+  }
+
+  _startMiner() {
+    const { MINER_EXE, MINER_ARGS, MINER_CWD } = this.config;
     this.pushLog(`Starting: ${MINER_EXE} ${MINER_ARGS.join(" ")}`, "info");
 
     try {
@@ -61,7 +123,7 @@ class MinerManager {
     } catch (err) {
       this.state.miner.running = false;
       this.state.miner.lastError = err.message;
-      this.state.mining.status = "ERROR";
+      this.state.mining.status = "CRASHED";
       this.pushLog(err.message, "error");
       if (typeof this.onUpdate === "function") this.onUpdate();
       return;
@@ -82,7 +144,8 @@ class MinerManager {
     this.proc.on("error", err => {
       this.state.miner.running = false;
       this.state.miner.lastError = err.message;
-      this.state.mining.status = "ERROR";
+      this.state.mining.status = "CRASHED";
+      this._resetMiningStats();
       this.pushLog(err.message, "error");
       this._settle();
       if (typeof this.onUpdate === "function") this.onUpdate();
@@ -91,7 +154,8 @@ class MinerManager {
     this.proc.on("close", (code, sig) => {
       this.state.miner.running = false;
       this.state.miner.exitCode = code;
-      this.state.mining.status = "STOPPED";
+      this.state.mining.status = (code === 0 || code === null) ? "STOPPED" : "CRASHED";
+      this._resetMiningStats();
       this.pushLog(
         `Exited (code: ${code}${sig ? `, sig: ${sig}` : ""})`,
         code === 0 ? "info" : "warn"
@@ -111,15 +175,21 @@ class MinerManager {
       return this._stopPromise;
     }
 
+    this.state.mining.status = "STOPPING";
+    this.pushLog("Sending terminate signal to miner...", "warn");
+    if (typeof this.onUpdate === "function") this.onUpdate();
+
     this._stopPromise = new Promise(resolve => {
       this._stopResolve = resolve;
+
+      try { this.proc.kill("SIGTERM"); } catch { }
 
       this._forceKillTimer = setTimeout(() => {
         if (this.proc && !this.proc.killed) {
           try { this.proc.kill("SIGKILL"); } catch { }
         }
-        resolve();
-      }, 60000);
+        this._settle();
+      }, 10000);
       this._forceKillTimer.unref();
     });
 
@@ -135,6 +205,16 @@ class MinerManager {
       this._stopResolve();
       this._stopResolve = null;
     }
+    this._stopPromise = null;
+  }
+
+  restart() {
+    if (this._stopPromise) return this._stopPromise.then(() => this.start());
+    if (this.state.miner.running) {
+      return this.stop().then(() => this.start());
+    }
+    this.start();
+    return Promise.resolve();
   }
 }
 

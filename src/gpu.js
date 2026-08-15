@@ -1,7 +1,7 @@
 const { execFile } = require("node:child_process");
 
 const SMI_QUERY = [
-  "--query-gpu=name,temperature.gpu,power.draw,utilization.gpu,clocks.gr,clocks.mem,memory.used,memory.total,pstate",
+  "--query-gpu=name,temperature.gpu,power.draw,utilization.gpu,clocks.gr,clocks.mem,memory.used,memory.total,pstate,pci.bus_id",
   "--format=csv,noheader,nounits"
 ];
 
@@ -14,6 +14,11 @@ function parseSmiOutput(raw) {
 
   for (let i = 0; i < lines.length; i++) {
     const p = lines[i].split(",");
+    const rawPci = (p[9] || "").trim();
+    let pciBusId = rawPci;
+    const m = rawPci.match(/([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.([0-9a-fA-F])/);
+    if (m) pciBusId = `${m[1].toLowerCase()}:${m[2].toLowerCase()}:${m[3].toLowerCase()}`;
+
     result[i] = {
       index: i,
       name:            (p[0] || "").trim() || `GPU ${i}`,
@@ -24,7 +29,8 @@ function parseSmiOutput(raw) {
       memoryMHz:       Number(p[5]) || null,
       memoryUsedMB:    Number(p[6]) || null,
       memoryTotalMB:   Number(p[7]) || null,
-      pstate:          (p[8] || "").trim() || null
+      pstate:          (p[8] || "").trim() || null,
+      pciBusId
     };
   }
   return result;

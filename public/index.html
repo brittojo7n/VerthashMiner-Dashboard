@@ -14,23 +14,37 @@
 </head>
 
 <body>
+  <div class="modal-backdrop" id="authModal">
+    <div class="auth-modal">
+      <h2>Dashboard Secured</h2>
+      <p>Please enter your passphrase to continue.</p>
+      <input type="password" class="auth-input" id="authInput" placeholder="Passphrase">
+      <div class="auth-error" id="authError">Invalid passphrase</div>
+      <button class="auth-btn" id="authSubmit">Unlock</button>
+    </div>
+  </div>
+
   <div class="wrap">
     <div class="top">
       <div>
         <h1>VerthashMiner Dashboard</h1>
         <div class="sub" id="host">Initializing connection...</div>
       </div>
-      <div class="status"><span class="dot" id="dot"></span><span id="status">CONNECTING</span></div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button class="c-btn" id="btnAction" disabled>START</button>
+        <button class="c-btn" id="btnRestart" disabled>RESTART</button>
+        <div class="status"><span class="dot" id="dot"></span><span id="status">CONNECTING</span></div>
+      </div>
     </div>
 
     <div class="grid">
       <div class="panel">
-        <div class="label">Hashrate</div>
+        <div class="label">Total Hashrate</div>
         <div class="value gradient-text" id="hashrate">—<span class="unit">kH/s</span></div>
       </div>
       <div class="panel">
-        <div class="label">Shares (Acc / Total)</div>
-        <div class="value green" id="accepted">0 / 0</div>
+        <div class="label">SHARES (ACC / SUB)</div>
+        <div class="value green" id="accepted">—</div>
       </div>
       <div class="panel">
         <div class="label">Acceptance Ratio</div>
@@ -130,9 +144,16 @@
 
       const tempClass = t => t == null ? "" : t >= 80 ? "red" : t >= 72 ? "yellow" : "green";
 
+      const authModal = el("authModal");
+      const authInput = el("authInput");
+      const authError = el("authError");
+      const authSubmit = el("authSubmit");
+
       const hostEl = el("host");
       const statusEl = el("status");
       const dotEl = el("dot");
+      const btnAction = el("btnAction");
+      const btnRestart = el("btnRestart");
       const hashrateEl = el("hashrate");
       const acceptedEl = el("accepted");
       const ratioEl = el("ratio");
@@ -291,12 +312,29 @@
         tickUptime();
         if (sharesPerMinuteEl.textContent === "—" && latestAccepted > 0) tickSpm();
 
-        hostEl.textContent = `Connected to ${s.host.hostname}`;
+        hostEl.textContent = `Host: ${s.host.hostname}`;
         statusEl.textContent = s.mining.status;
-        dotEl.className = "dot " + (s.mining.status === "ERROR" ? "err" : "ok");
+        let dotClass = "ok";
+        if (s.mining.status === "CRASHED" || s.mining.status === "STOPPED" || s.mining.status === "ERROR") dotClass = "err";
+        else if (s.mining.status === "CONNECTING" || s.mining.status === "STARTING" || s.mining.status === "WAITING" || s.mining.status === "STOPPING") dotClass = "warn";
+        dotEl.className = "dot " + dotClass;
+
+        if (s.mining.status === "STOPPED" || s.mining.status === "CRASHED" || s.mining.status === "ERROR") {
+          btnAction.textContent = "START";
+          btnAction.disabled = false;
+          btnRestart.disabled = true;
+        } else if (s.mining.status === "MINING" || s.mining.status === "CONNECTED" || s.mining.status === "WAITING") {
+          btnAction.textContent = "STOP";
+          btnAction.disabled = false;
+          btnRestart.disabled = false;
+        } else {
+          btnAction.textContent = "STOP";
+          btnAction.disabled = true;
+          btnRestart.disabled = true;
+        }
 
         hashrateEl.innerHTML = `${fmt(s.mining.hashrateKHs, 2)}<span class="unit">kH/s</span>`;
-        acceptedEl.textContent = `${s.mining.accepted} / ${s.mining.submitted}`;
+        acceptedEl.textContent = s.mining.submitted === 0 ? "—" : `${s.mining.accepted} / ${s.mining.submitted}`;
         ratioEl.textContent = s.acceptedRatio == null ? "—" : `${fmt(s.acceptedRatio, 1)}%`;
 
         rejectedEl.textContent = s.mining.rejected;
@@ -339,13 +377,16 @@
         <div class="gpu-panel">
           <div class="gpu-head">
             <div class="gpu-name">GPU ${gpu.index} • <span id="gpu-${gpu.index}-name"></span></div>
-            <span class="status status-badge">P-State: <span id="gpu-${gpu.index}-pstate"></span></span>
           </div>
           <div class="metrics mt-0">
-            <div class="metric"><div class="label">Core Temp</div><div class="mvalue" id="gpu-${gpu.index}-temp"></div></div>
-            <div class="metric"><div class="label">Power Draw</div><div class="mvalue"><span id="gpu-${gpu.index}-power"></span> <span class="unit">W</span></div></div>
+            <div class="metric"><div class="label">P-State</div><div class="mvalue" style="color: #4facfe;" id="gpu-${gpu.index}-pstate"></div></div>
+            <div class="metric"><div class="label">GPU Temp</div><div class="mvalue" id="gpu-${gpu.index}-temp"></div></div>
+            <div class="metric"><div class="label">Power</div><div class="mvalue"><span id="gpu-${gpu.index}-power"></span> <span class="unit">W</span></div></div>
             <div class="metric"><div class="label">Core Clock</div><div class="mvalue"><span id="gpu-${gpu.index}-core"></span> <span class="unit">MHz</span></div></div>
-            <div class="metric"><div class="label">Mem Clock</div><div class="mvalue"><span id="gpu-${gpu.index}-mem"></span> <span class="unit">MHz</span></div></div>
+            <div class="metric"><div class="label">Memory Clock</div><div class="mvalue"><span id="gpu-${gpu.index}-mem"></span> <span class="unit">MHz</span></div></div>
+            <div class="metric"><div class="label">VRAM</div><div class="mvalue" style="font-size: 15px;"><span id="gpu-${gpu.index}-vram-used"></span> <span class="unit">/ <span id="gpu-${gpu.index}-vram-total"></span> MB</span></div></div>
+            <div class="metric"><div class="label">Hashrate</div><div class="mvalue gradient-text"><span id="gpu-${gpu.index}-hashrate">—</span> <span class="unit">kH/s</span></div></div>
+            <div class="metric"><div class="label">Efficiency</div><div class="mvalue"><span id="gpu-${gpu.index}-eff">—</span> <span class="unit">kH/s/W</span></div></div>
           </div>
           <div class="metric metric-util">
             <div class="flex-between-end">
@@ -353,10 +394,6 @@
               <div class="mvalue mvalue-sm m-0"><span id="gpu-${gpu.index}-util"></span>%</div>
             </div>
             <div class="bar-bg"><div class="bar-fill" id="gpu-${gpu.index}-bar"></div></div>
-          </div>
-          <div class="small text-right mt-12">
-            VRAM Allocation: <span class="text-white" id="gpu-${gpu.index}-vram-used"></span> / <span id="gpu-${gpu.index}-vram-total"></span> MB
-            <span class="text-dim" id="gpu-${gpu.index}-vram-pct"></span>
           </div>
         </div>`;
           }
@@ -367,43 +404,118 @@
           const idx = gpu.index;
           el(`gpu-${idx}-name`).textContent = gpu.name || "Unknown";
           el(`gpu-${idx}-pstate`).textContent = gpu.pstate || "—";
+          el(`gpu-${idx}-hashrate`).textContent = gpu.hashrate != null ? fmt(gpu.hashrate, 2) : "—";
 
           const tempEl = el(`gpu-${idx}-temp`);
-          tempEl.textContent = `${fmt(gpu.temperatureC, 0)}°C`;
+          tempEl.textContent = gpu.temperatureC != null ? `${fmt(gpu.temperatureC, 0)}°C` : "—";
           tempEl.className = `mvalue ${tempClass(gpu.temperatureC)}`;
 
-          el(`gpu-${idx}-power`).textContent = fmt(gpu.powerW, 1);
-          el(`gpu-${idx}-core`).textContent = fmt(gpu.coreMHz, 0);
-          el(`gpu-${idx}-mem`).textContent = fmt(gpu.memoryMHz, 0);
-          el(`gpu-${idx}-util`).textContent = fmt(gpu.utilizationPct, 1);
+          el(`gpu-${idx}-power`).textContent = gpu.powerW != null ? fmt(gpu.powerW, 1) : "—";
+          el(`gpu-${idx}-core`).textContent = gpu.coreMHz != null ? fmt(gpu.coreMHz, 0) : "—";
+          el(`gpu-${idx}-mem`).textContent = gpu.memoryMHz != null ? fmt(gpu.memoryMHz, 0) : "—";
+          el(`gpu-${idx}-util`).textContent = gpu.utilizationPct != null ? fmt(gpu.utilizationPct, 1) : "—";
 
           const safeUtil = gpu.utilizationPct == null ? 0 : Math.max(0, Math.min(100, gpu.utilizationPct));
           el(`gpu-${idx}-bar`).style.width = `${safeUtil}%`;
 
-          el(`gpu-${idx}-vram-used`).textContent = fmt(gpu.memoryUsedMB, 0);
-          el(`gpu-${idx}-vram-total`).textContent = fmt(gpu.memoryTotalMB, 0);
-          const memPct = gpu.memoryUsedMB != null && gpu.memoryTotalMB ? Math.min(100, (gpu.memoryUsedMB / gpu.memoryTotalMB) * 100) : 0;
-          el(`gpu-${idx}-vram-pct`).textContent = `(${fmt(memPct, 1)}%)`;
+          el(`gpu-${idx}-vram-used`).textContent = gpu.memoryUsedMB != null ? fmt(gpu.memoryUsedMB, 0) : "—";
+          el(`gpu-${idx}-vram-total`).textContent = gpu.memoryTotalMB != null ? fmt(gpu.memoryTotalMB, 0) : "—";
+          
+          const eff = (gpu.hashrate > 0 && gpu.powerW > 0) ? (gpu.hashrate / gpu.powerW) : null;
+          el(`gpu-${idx}-eff`).textContent = eff != null ? fmt(eff, 2) : "—";
         }
       };
 
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get("token");
-      const eventsUrl = token ? `/events?token=${encodeURIComponent(token)}` : "/events";
-      const es = new EventSource(eventsUrl);
+      let sessionToken = localStorage.getItem("verthash_token") || "";
 
-      es.addEventListener("stats", event => {
+      const showAuthModal = () => {
+        authModal.classList.add("show");
+        authInput.value = "";
+        authInput.focus();
+      };
+
+      const hideAuthModal = () => {
+        authModal.classList.remove("show");
+        authError.style.display = "none";
+      };
+
+      const doLogin = async () => {
+        const passphrase = authInput.value;
         try {
-          startTicking();
-          render(JSON.parse(event.data));
+          const res = await fetch("/api/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ passphrase })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            sessionToken = data.token;
+            localStorage.setItem("verthash_token", sessionToken);
+            hideAuthModal();
+            connectSSE();
+          } else {
+            authError.style.display = "block";
+          }
+        } catch {
+          authError.style.display = "block";
+        }
+      };
+
+      authSubmit.addEventListener("click", doLogin);
+      authInput.addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+
+      let es = null;
+
+      const connectSSE = () => {
+        if (es) { es.close(); es = null; }
+        const eventsUrl = sessionToken ? `/events?token=${encodeURIComponent(sessionToken)}` : "/events";
+        es = new EventSource(eventsUrl);
+
+        es.addEventListener("stats", event => {
+          try {
+            startTicking();
+            render(JSON.parse(event.data));
+          } catch { }
+        });
+
+        es.onerror = async () => {
+          stopTicking();
+          if (es && es.readyState === EventSource.CLOSED) {
+            try {
+              const res = await fetch("/api/status", { headers: { "Authorization": `Bearer ${sessionToken}` }});
+              if (res.status === 401) {
+                showAuthModal();
+                return;
+              }
+            } catch { }
+          }
+          statusEl.textContent = "OFFLINE";
+          dotEl.className = "dot err";
+          hostEl.textContent = "Host Unreachable";
+          btnAction.disabled = true;
+          btnRestart.disabled = true;
+        };
+      };
+
+      connectSSE();
+
+      const postAction = async action => {
+        btnAction.disabled = true;
+        btnRestart.disabled = true;
+        try {
+          const u = sessionToken ? `/api/miner/${action}?token=${encodeURIComponent(sessionToken)}` : `/api/miner/${action}`;
+          const res = await fetch(u, { method: "POST" });
+          if (res.status === 401) showAuthModal();
         } catch { }
+      };
+
+      btnAction.addEventListener("click", () => {
+        postAction(btnAction.textContent === "START" ? "start" : "stop");
       });
 
-      es.onerror = () => {
-        stopTicking();
-        statusEl.textContent = "OFFLINE";
-        dotEl.className = "dot err";
-      };
+      btnRestart.addEventListener("click", () => {
+        postAction("restart");
+      });
     })();
   </script>
 </body>

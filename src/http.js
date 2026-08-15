@@ -2,6 +2,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
+const crypto = require("node:crypto");
 const { formatStatsSnapshot } = require("./state");
 
 const HDR_JSON = Object.freeze({ "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
@@ -62,20 +63,55 @@ function parseToken(rawUrl) {
   return amp === -1 ? rawUrl.slice(q + 6) : rawUrl.slice(q + 6, amp);
 }
 
-function createHttpServer({ config, state, sseHub, publicDir }) {
+function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
   const staticFiles = loadStaticCache(publicDir);
-  const useToken = config.TOKEN.length > 0;
+  const usePassphrase = config.PASSPHRASE.length > 0;
+  const sessions = new Map();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [t, exp] of sessions) {
+      if (now > exp) sessions.delete(t);
+    }
+  }, 10 * 60 * 1000).unref();
 
   const server = http.createServer((req, res) => {
     const raw = req.url || "/";
+    const pathname = parsePathname(raw);
 
-    if (useToken && parseToken(raw) !== config.TOKEN) {
-      res.writeHead(401, HDR_TEXT);
-      res.end("Unauthorized");
+    if (usePassphrase && req.method === "POST" && pathname === "/api/login") {
+      let body = "";
+      req.on("data", c => body += c);
+      req.on("end", () => {
+        try {
+          const payload = JSON.parse(body);
+          if (payload.passphrase === config.PASSPHRASE) {
+            const token = crypto.randomBytes(16).toString("hex");
+            sessions.set(token, Date.now() + 30 * 60 * 1000);
+            res.writeHead(200, HDR_JSON);
+            res.end(JSON.stringify({ token }));
+          } else {
+            res.writeHead(401, HDR_TEXT);
+            res.end("Unauthorized");
+          }
+        } catch {
+          res.writeHead(400, HDR_TEXT);
+          res.end("Bad Request");
+        }
+      });
       return;
     }
 
-    const pathname = parsePathname(raw);
+    const isApi = pathname.startsWith("/api/") || pathname === "/events";
+    if (usePassphrase && isApi && pathname !== "/api/login") {
+      const token = parseToken(raw) || req.headers["authorization"]?.replace("Bearer ", "");
+      const expiresAt = sessions.get(token);
+      if (!expiresAt || Date.now() > expiresAt) {
+        if (token) sessions.delete(token);
+        res.writeHead(401, HDR_TEXT);
+        res.end("Unauthorized");
+        return;
+      }
+    }
 
     if (pathname === "/events") {
       res.writeHead(200, HDR_SSE);
@@ -86,6 +122,27 @@ function createHttpServer({ config, state, sseHub, publicDir }) {
     if (pathname === "/health") {
       res.writeHead(200, HDR_TEXT);
       res.end("ok");
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/miner/start") {
+      minerManager.start();
+      res.writeHead(200, HDR_JSON);
+      res.end('{"status":"ok"}');
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/miner/stop") {
+      minerManager.stop();
+      res.writeHead(200, HDR_JSON);
+      res.end('{"status":"ok"}');
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/miner/restart") {
+      minerManager.restart();
+      res.writeHead(200, HDR_JSON);
+      res.end('{"status":"ok"}');
       return;
     }
 
