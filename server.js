@@ -15,7 +15,13 @@ class Server {
     this.sseHub = new SseHub({
       state: this.state,
       onSubscriberChange: count => {
-        if (this.gpuManager) this.gpuManager.updateSubscribers(count);
+        if (count > 0) {
+          if (this.gpuManager) this.gpuManager.updateSubscribers(count);
+          if (this.minerManager) this.minerManager.enableParsing();
+        } else {
+          if (this.gpuManager) this.gpuManager.updateSubscribers(0);
+          if (this.minerManager) this.minerManager.disableParsing();
+        }
       }
     });
 
@@ -39,6 +45,10 @@ class Server {
     });
 
     this.boundExit = this.stop.bind(this);
+    this.handleSigint = () => {
+      if (this.minerManager && this.minerManager.isStoppingChild) return;
+      this.boundExit();
+    };
   }
 
   start() {
@@ -63,6 +73,7 @@ class Server {
 
     const closeHttpServer = () => new Promise(resolve => {
       if (!this.httpServer.listening) return resolve();
+      this.httpServer.closeAllConnections();
       this.httpServer.close(resolve);
     });
 
@@ -73,12 +84,12 @@ class Server {
   }
 
   _attachSignalHandlers() {
-    process.on("SIGINT", this.boundExit);
+    process.on("SIGINT", this.handleSigint);
     process.on("SIGTERM", this.boundExit);
   }
 
   _detachSignalHandlers() {
-    process.removeListener("SIGINT", this.boundExit);
+    if (this.handleSigint) process.removeListener("SIGINT", this.handleSigint);
     process.removeListener("SIGTERM", this.boundExit);
   }
 }

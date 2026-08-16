@@ -21,15 +21,15 @@ function parseSmiOutput(raw) {
 
     result[i] = {
       index: i,
-      name:            (p[0] || "").trim() || `GPU ${i}`,
-      temperatureC:    Number(p[1]) || null,
-      powerW:          Number(p[2]) || null,
-      utilizationPct:  Number(p[3]) || null,
-      coreMHz:         Number(p[4]) || null,
-      memoryMHz:       Number(p[5]) || null,
-      memoryUsedMB:    Number(p[6]) || null,
-      memoryTotalMB:   Number(p[7]) || null,
-      pstate:          (p[8] || "").trim() || null,
+      name: (p[0] || "").trim() || `GPU ${i}`,
+      temperatureC: Number(p[1]) || null,
+      powerW: Number(p[2]) || null,
+      utilizationPct: Number(p[3]) || null,
+      coreMHz: Number(p[4]) || null,
+      memoryMHz: Number(p[5]) || null,
+      memoryUsedMB: Number(p[6]) || null,
+      memoryTotalMB: Number(p[7]) || null,
+      pstate: (p[8] || "").trim() || null,
       pciBusId
     };
   }
@@ -37,40 +37,51 @@ function parseSmiOutput(raw) {
 }
 
 class GpuManager {
-  constructor({ state, pollMs = 2000, onUpdate }) {
-    this.state    = state;
-    this.pollMs   = pollMs;
+  constructor({ state, pollMs = 5000, onUpdate }) {
+    this.state = state;
+    this.pollMs = pollMs;
     this.onUpdate = onUpdate;
-    this.timer    = null;
-    this.busy     = false;
+    this.timer = null;
+    this.busy = false;
+    this.active = false;
   }
 
   poll() {
-    if (this.busy) return;
+    if (this.busy || !this.active) return;
     this.busy = true;
     execFile("nvidia-smi.exe", SMI_QUERY, { windowsHide: true, timeout: 1500 }, (err, stdout) => {
       this.busy = false;
       if (!err && stdout) {
         this.state.gpu = parseSmiOutput(String(stdout));
-        this.onUpdate();
+        this.state.dirty = true;
+        if (typeof this.onUpdate === "function") this.onUpdate();
+      }
+      if (this.active) {
+        this.timer = setTimeout(() => this.poll(), this.pollMs);
       }
     });
   }
 
   updateSubscribers(n) {
-    if (n > 0 && !this.timer) {
+    if (n > 0 && !this.active) {
+      this.active = true;
       this.poll();
-      this.timer = setInterval(() => this.poll(), this.pollMs);
-      this.timer.unref();
-    } else if (n === 0 && this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
-      this.busy  = false;
+    } else if (n === 0 && this.active) {
+      this.active = false;
+      if (this.timer) {
+        clearTimeout(this.timer);
+        this.timer = null;
+      }
+      this.busy = false;
     }
   }
 
   stop() {
-    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.active = false;
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
     this.busy = false;
   }
 }

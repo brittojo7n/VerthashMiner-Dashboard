@@ -56,40 +56,77 @@ function parsePathname(rawUrl) {
   return q === -1 ? rawUrl : rawUrl.slice(0, q);
 }
 
-function parseToken(rawUrl) {
-  const q = rawUrl.indexOf("token=");
-  if (q === -1) return null;
-  const amp = rawUrl.indexOf("&", q);
-  return amp === -1 ? rawUrl.slice(q + 6) : rawUrl.slice(q + 6, amp);
+function evictSessions(sessions) {
+  const now = Date.now();
+  for (const [t, exp] of sessions) {
+    if (now > exp) sessions.delete(t);
+  }
 }
 
 function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
   const staticFiles = loadStaticCache(publicDir);
   const usePassphrase = config.PASSPHRASE.length > 0;
   const sessions = new Map();
-  setInterval(() => {
-    const now = Date.now();
-    for (const [t, exp] of sessions) {
-      if (now > exp) sessions.delete(t);
-    }
-  }, 10 * 60 * 1000).unref();
+  const loginAttempts = new Map();
 
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     const raw = req.url || "/";
     const pathname = parsePathname(raw);
 
     if (usePassphrase && req.method === "POST" && pathname === "/api/login") {
+      evictSessions(sessions);
+      const ip = req.socket.remoteAddress;
+      const now = Date.now();
+
+      for (const [key, val] of loginAttempts) {
+        val.failures = val.failures.filter(t => now - t < 60000);
+        if (val.failures.length === 0 && val.blockedUntil <= now) {
+          loginAttempts.delete(key);
+        }
+      }
+
+      let attempt = loginAttempts.get(ip);
+      if (!attempt) {
+        attempt = { failures: [], blockedUntil: 0 };
+        loginAttempts.set(ip, attempt);
+      }
+
+      if (attempt.blockedUntil > now) {
+        res.writeHead(429, HDR_TEXT);
+        res.end("Too Many Requests");
+        return;
+      }
+
       let body = "";
-      req.on("data", c => body += c);
+      let bodyLen = 0;
+      req.on("data", c => {
+        bodyLen += c.length;
+        if (bodyLen > 4096) {
+          req.destroy();
+          return;
+        }
+        body += c;
+      });
       req.on("end", () => {
+        if (bodyLen > 4096) return;
         try {
           const payload = JSON.parse(body);
           if (payload.passphrase === config.PASSPHRASE) {
-            const token = crypto.randomBytes(16).toString("hex");
-            sessions.set(token, Date.now() + 30 * 60 * 1000);
-            res.writeHead(200, HDR_JSON);
-            res.end(JSON.stringify({ token }));
+            attempt.failures = [];
+            attempt.blockedUntil = 0;
+
+            const token = crypto.createHmac("sha256", config.SESSION_SECRET).update(crypto.randomBytes(16)).digest("hex");
+            sessions.set(token, Date.now() + 1800 * 1000);
+            res.writeHead(200, {
+              ...HDR_JSON,
+              "Set-Cookie": `vm_session=${token}; HttpOnly; Path=/; Max-Age=1800; SameSite=Strict`
+            });
+            res.end('{"status":"ok"}');
           } else {
+            attempt.failures.push(now);
+            if (attempt.failures.length >= 5) {
+              attempt.blockedUntil = now + 30000;
+            }
             res.writeHead(401, HDR_TEXT);
             res.end("Unauthorized");
           }
@@ -103,7 +140,12 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
 
     const isApi = pathname.startsWith("/api/") || pathname === "/events";
     if (usePassphrase && isApi && pathname !== "/api/login") {
-      const token = parseToken(raw) || req.headers["authorization"]?.replace("Bearer ", "");
+      if (pathname === "/events") evictSessions(sessions);
+      let token = null;
+      if (req.headers.cookie) {
+        const match = req.headers.cookie.match(/vm_session=([0-9a-f]+)/);
+        if (match) token = match[1];
+      }
       const expiresAt = sessions.get(token);
       if (!expiresAt || Date.now() > expiresAt) {
         if (token) sessions.delete(token);
@@ -133,16 +175,16 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     }
 
     if (req.method === "POST" && pathname === "/api/miner/stop") {
-      minerManager.stop();
+      await minerManager.stop();
       res.writeHead(200, HDR_JSON);
       res.end('{"status":"ok"}');
       return;
     }
 
     if (req.method === "POST" && pathname === "/api/miner/restart") {
-      minerManager.restart();
+      await minerManager.restart();
       res.writeHead(200, HDR_JSON);
-      res.end('{"status":"ok"}');
+      res.end('{"status":"ok","state":"RUNNING"}');
       return;
     }
 

@@ -48,9 +48,10 @@ Copy `.env.example` to `.env` and configure your settings:
 ```env
 PORT=3000
 HOST=127.0.0.1
-GPU_POLL_MS=2000
+GPU_POLL_MS=5000
 MAX_LOGS=50
 PASSPHRASE=abc123
+SESSION_SECRET=your_random_64_character_hex_string
 MINER_EXE=VerthashMiner.exe
 MINER_CWD=C:\Mining\VerthashMiner
 MINER_ARGS=-u vtc1qwddxt3rmwx00ev9yg4qcwpxnguw5zm7mwej2xk -p c=VTC -o stratum+tcp://verthash.sea.mine.zpool.ca:6144 --verthash-data ..\Vertcoin\Vertcoin\verthash.dat --all-cu-devices
@@ -61,6 +62,10 @@ MINER_ARGS=-u vtc1qwddxt3rmwx00ev9yg4qcwpxnguw5zm7mwej2xk -p c=VTC -o stratum+tc
 - **`MINER_CWD`**: This is the working directory where `VerthashMiner.exe` is located (e.g. `C:\Mining\VerthashMiner`). It must be set so the dashboard can find the executable and the `verthash.dat` file properly.
 - **`MINER_ARGS`**: This variable determines how the dashboard launches the miner. You must supply your wallet address, pool, and path to the `verthash.dat` file exactly as you would in a normal `.bat` file.
 - **`MAX_LOGS`**: Sets the maximum number of console logs to hold in memory and display on the dashboard (default is 50, minimum is 15, maximum is 500).
+
+#### Security & Authentication
+- **`SESSION_SECRET`**: **(Required)** A cryptographic secret used to sign secure cookies. You must provide a strong, random string (e.g., a 64-character hex string) to prevent the dashboard from crashing on startup.
+- **`PASSPHRASE`**: **(Required if exposed to LAN)** The password used to unlock the dashboard web UI. **Important:** If your `HOST` is configured to `0.0.0.0` or any non-local IP (exposing the dashboard to your local network), you are **strictly required** to set a `PASSPHRASE`. If you fail to do so, the backend will intentionally crash on startup to protect your miner from unauthorized network access.
 
 _Make sure to include `--all-cu-devices` in `MINER_ARGS` since this dashboard tracks NVIDIA GPUs!_
 

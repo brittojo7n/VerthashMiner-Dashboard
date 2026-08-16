@@ -1,7 +1,7 @@
 const os = require("node:os");
 
 class CircularLogBuffer {
-  constructor(capacity = 50) {
+  constructor(capacity = 25) {
     this.capacity = capacity;
     this.buf = new Array(capacity);
     this.head = 0;
@@ -32,12 +32,15 @@ function getServerTz() {
 const SERVER_TZ = getServerTz();
 const HOSTNAME = os.hostname();
 
-function createState(wallet = "", maxLogs = 50) {
+function createState(wallet = "", maxLogs = 25) {
   const logs = new CircularLogBuffer(maxLogs);
   return {
+    dirty: true,
     startedAt: Date.now(),
     miner: {
       running: false,
+      pid: null,
+      startedAt: null,
       exitCode: null,
       signal: null,
       lastLine: "",
@@ -68,12 +71,13 @@ function createState(wallet = "", maxLogs = 50) {
 
 function formatStatsSnapshot(state) {
   const now = Date.now();
+  const minerStart = state.miner.startedAt || state.startedAt;
 
   return {
     now,
-    uptimeSeconds: Math.max(0, Math.floor((now - state.startedAt) / 1000)),
+    uptimeSeconds: state.miner.running && minerStart ? Math.max(0, Math.floor((now - minerStart) / 1000)) : 0,
     acceptedRatio: state.mining.submitted > 0 ? (state.mining.accepted / state.mining.submitted) * 100 : null,
-    startedAt: state.startedAt,
+    startedAt: minerStart,
     miner: state.miner,
     mining: {
       hashrateKHs: state.mining.hashrateKHs,
