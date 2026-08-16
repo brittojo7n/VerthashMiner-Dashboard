@@ -1,17 +1,35 @@
 import * as toast from "./toast.js";
 
-const MIN_REFRESH_GAP_MS = 1500;
+const GAP_MIN_MS = 1500;
+const GAP_MAX_MS = 5000;
+const GAP_STEP_MS = 875;
+const RAPID_WINDOW_MS = 10000;
+const CALM_DECAY_MS = 12000;
 const BACKOFF_START_MS = 2000;
 const BACKOFF_MAX_MS = 30000;
 const RETRY_GRACE_MS = 250;
 const LAST_ATTEMPT_KEY = "vmd:lastConnectAt";
+const RAPID_COUNT_KEY = "vmd:rapidCount";
 
-function lastAttempt() {
-  try { return Number(sessionStorage.getItem(LAST_ATTEMPT_KEY)) || 0; }
+function readStore(key) {
+  try { return Number(sessionStorage.getItem(key)) || 0; }
   catch { return 0; }
 }
-function markAttempt(ts) {
-  try { sessionStorage.setItem(LAST_ATTEMPT_KEY, String(ts)); } catch {  }
+function writeStore(key, value) {
+  try { sessionStorage.setItem(key, String(value)); } catch {  }
+}
+
+function nextGap(now) {
+  const previous = readStore(LAST_ATTEMPT_KEY);
+  const elapsed = previous ? now - previous : Infinity;
+  let rapid = readStore(RAPID_COUNT_KEY);
+
+  if (elapsed < RAPID_WINDOW_MS) rapid++;
+  else rapid = Math.max(0, rapid - Math.floor(elapsed / CALM_DECAY_MS));
+
+  writeStore(RAPID_COUNT_KEY, rapid);
+  const gap = Math.min(GAP_MAX_MS, GAP_MIN_MS + Math.max(0, rapid - 1) * GAP_STEP_MS);
+  return { gap, elapsed };
 }
 
 async function retryDelay(response) {
@@ -29,6 +47,7 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
   let countdownTimer = null;
   let backoff = 0;
   let connected = false;
+  let paceOnce = true;
 
   const clearTimers = () => {
     clearTimeout(retryTimer); retryTimer = null;
@@ -52,13 +71,7 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
   const nextBackoff = () => (backoff = Math.min(BACKOFF_MAX_MS, backoff ? backoff * 2 : BACKOFF_START_MS));
 
   function rateLimited(wait) {
-    const seconds = Math.max(1, Math.ceil(wait / 1000));
-    toast.warn(
-      "Too Many Requests",
-      `You're refreshing too quickly. The dashboard will resume automatically in ${seconds} second${seconds === 1 ? "" : "s"}.`,
-      "rate-limit"
-    );
-    onStatusText?.("RATE LIMITED");
+    onStatusText?.("CONNECTING");
     schedule(wait + RETRY_GRACE_MS, "Resuming");
   }
 
@@ -77,7 +90,6 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
         connected = true;
         backoff = 0;
         clearTimers();
-        toast.dismiss("rate-limit");
         toast.dismiss("offline");
         onLive?.();
       }
@@ -120,13 +132,17 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
     clearTimers();
     if (document.hidden) return;
 
-    const since = Date.now() - lastAttempt();
-    if (since < MIN_REFRESH_GAP_MS) {
-      onStatusText?.("CONNECTING");
-      schedule(MIN_REFRESH_GAP_MS - since);
-      return;
+    if (paceOnce) {
+      paceOnce = false;
+      const now = Date.now();
+      const { gap, elapsed } = nextGap(now);
+      writeStore(LAST_ATTEMPT_KEY, now);
+      if (elapsed < gap) {
+        onStatusText?.("CONNECTING");
+        schedule(gap - elapsed, "Connecting");
+        return;
+      }
     }
-    markAttempt(Date.now());
 
     try {
       const res = await fetch("/api/status", { cache: "no-store" });
