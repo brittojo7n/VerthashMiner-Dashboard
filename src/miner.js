@@ -37,10 +37,16 @@ class MinerManager {
     this._forceKillTimer = null;
     this.parsingEnabled = false;
     this.isStoppingChild = false;
+    this.history = [];
   }
 
   enableParsing() {
-    this.parsingEnabled = true;
+    if (!this.parsingEnabled) {
+      this.parsingEnabled = true;
+      for (const line of this.history) {
+        parseMinerLine(line, this.state, () => {});
+      }
+    }
   }
 
   disableParsing() {
@@ -162,6 +168,8 @@ class MinerManager {
       if (enabled) {
         parseMinerLine(line, this.state, (l, t) => this.pushLog(l, t));
       } else {
+        this.history.push(line);
+        if (this.history.length > 25) this.history.shift();
         const clean = String(line).replace(RX_NORM, "").trim();
         if (clean) {
           this.pushLog(clean, "info");

@@ -14,8 +14,8 @@
 </head>
 
 <body>
-  <div class="modal-backdrop" id="authModal">
-    <div class="auth-modal">
+  <div class="modal-backdrop glass-overlay" id="authModal">
+    <div class="auth-modal glass-modal">
       <h2>Dashboard Secured</h2>
       <p>Please enter your passphrase to continue.</p>
       <input type="password" class="auth-input" id="authInput" placeholder="Passphrase">
@@ -24,38 +24,49 @@
     </div>
   </div>
 
+  <div class="modal-backdrop glass-overlay" id="confirmModal">
+    <div class="auth-modal glass-modal">
+      <h2 id="confirmTitle">Confirm Action</h2>
+      <p id="confirmDesc">Are you sure you want to proceed?</p>
+      <div style="display: flex; gap: 12px; margin-top: 24px;">
+        <button class="auth-btn" id="confirmCancel" style="background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2);">Cancel</button>
+        <button class="auth-btn" id="confirmYes">Yes</button>
+      </div>
+    </div>
+  </div>
+
   <div class="wrap">
-    <div class="top">
+    <div class="top glass-panel">
       <div>
         <h1>VerthashMiner Dashboard</h1>
         <div class="sub" id="host">Initializing connection...</div>
       </div>
       <div style="display: flex; align-items: center; gap: 8px;">
-        <button class="c-btn" id="btnAction" disabled>START</button>
-        <button class="c-btn" id="btnRestart" disabled>RESTART</button>
-        <div class="status"><span class="dot" id="dot"></span><span id="status">CONNECTING</span></div>
+        <button class="c-btn btn-start" id="btnAction" disabled>START</button>
+        <button class="c-btn btn-restart" id="btnRestart" disabled>RESTART</button>
+        <div class="status glass-pill"><span class="dot" id="dot"></span><span id="status">CONNECTING</span></div>
       </div>
     </div>
 
     <div class="grid">
-      <div class="panel">
+      <div class="panel glass-panel">
         <div class="label">Total Hashrate</div>
         <div class="value gradient-text" id="hashrate">—<span class="unit">kH/s</span></div>
       </div>
-      <div class="panel">
+      <div class="panel glass-panel">
         <div class="label">SHARES (ACC / SUB)</div>
         <div class="value green" id="accepted">—</div>
       </div>
-      <div class="panel">
+      <div class="panel glass-panel">
         <div class="label">Acceptance Ratio</div>
         <div class="value" id="ratio">—</div>
       </div>
-      <div class="panel">
+      <div class="panel glass-panel">
         <div class="label">Uptime</div>
         <div class="value" id="uptime">—</div>
       </div>
 
-      <div class="panel wide">
+      <div class="panel wide glass-panel">
         <div class="gpu-head">
           <div>
             <div class="gpu-name">GPU Telemetry</div>
@@ -65,7 +76,7 @@
         <div id="gpus"></div>
       </div>
 
-      <div class="panel wide">
+      <div class="panel wide glass-panel">
         <div class="gpu-head">
           <div style="min-width: 0;">
             <div class="gpu-name">Mining Metrics</div>
@@ -100,7 +111,7 @@
                 <span class="cdot cdot-yellow"></span>
                 <span class="cdot cdot-green"></span>
               </div>
-              <span class="console-title">MINER CONSOLE</span>
+              <span class="console-title">CONSOLE</span>
               <span class="console-live-badge"><span class="pulse-indicator"></span>LIVE</span>
             </div>
             <div class="console-actions">
@@ -303,7 +314,6 @@
       };
 
       const render = s => {
-        if (document.hidden) return;
         serverNowBase = s.now;
         serverNowCapturedAt = Date.now();
         serverStartedAt = s.startedAt;
@@ -322,14 +332,17 @@
 
         if (s.mining.status === "STOPPED" || s.mining.status === "CRASHED" || s.mining.status === "ERROR") {
           btnAction.textContent = "START";
+          btnAction.className = "c-btn btn-start";
           btnAction.disabled = false;
           btnRestart.disabled = true;
         } else if (s.mining.status === "MINING" || s.mining.status === "CONNECTED" || s.mining.status === "WAITING") {
           btnAction.textContent = "STOP";
+          btnAction.className = "c-btn btn-stop";
           btnAction.disabled = false;
           btnRestart.disabled = false;
         } else {
           btnAction.textContent = "STOP";
+          btnAction.className = "c-btn btn-stop";
           btnAction.disabled = true;
           btnRestart.disabled = true;
         }
@@ -500,7 +513,9 @@
           if (res.status === 401) {
             showAuthModal();
           } else if (res.ok) {
-            connectSSE();
+            if (!document.hidden) {
+              connectSSE();
+            }
           }
         } catch {
           setTimeout(init, 5000);
@@ -508,37 +523,82 @@
       };
       init();
 
-      const postAction = async action => {
+      const confirmModal = el("confirmModal");
+      const confirmTitle = el("confirmTitle");
+      const confirmDesc = el("confirmDesc");
+      const confirmYes = el("confirmYes");
+      const confirmCancel = el("confirmCancel");
+      let activeAction = null;
+      let actionTimer = null;
+
+      const hideConfirm = () => {
+        confirmModal.classList.remove("show");
+        activeAction = null;
+      };
+
+      confirmCancel.addEventListener("click", hideConfirm);
+
+      const doActionWithDelay = (action, btn, finalTitle) => {
         btnAction.disabled = true;
         btnRestart.disabled = true;
-        try {
-          const u = `/api/miner/${action}`;
-          const res = await fetch(u, { method: "POST" });
-          if (res.status === 401) showAuthModal();
-        } catch { }
+        
+        let timeLeft = 3;
+        btn.textContent = `${finalTitle} (${timeLeft}s)`;
+        
+        actionTimer = setInterval(async () => {
+          timeLeft--;
+          if (timeLeft > 0) {
+            btn.textContent = `${finalTitle} (${timeLeft}s)`;
+          } else {
+            clearInterval(actionTimer);
+            btn.textContent = `${finalTitle}...`;
+            try {
+              const res = await fetch(`/api/miner/${action}`, { method: "POST" });
+              if (res.status === 401) showAuthModal();
+            } catch { }
+          }
+        }, 1000);
+      };
+
+      confirmYes.addEventListener("click", () => {
+        const action = activeAction;
+        hideConfirm();
+        if (!action) return;
+        
+        if (action === "start") doActionWithDelay("start", btnAction, "STARTING");
+        else if (action === "stop") doActionWithDelay("stop", btnAction, "STOPPING");
+        else if (action === "restart") doActionWithDelay("restart", btnRestart, "RESTARTING");
+      });
+
+      const promptAction = (action, actionName) => {
+        activeAction = action;
+        confirmTitle.textContent = `${actionName}`;
+        confirmDesc.textContent = `Do you want to ${actionName.toLowerCase()} the miner process?`;
+        confirmYes.className = `auth-btn auth-btn-danger`;
+        confirmModal.classList.add("show");
       };
 
       btnAction.addEventListener("click", () => {
-        postAction(btnAction.textContent === "START" ? "start" : "stop");
+        const isStart = btnAction.textContent === "START";
+        promptAction(isStart ? "start" : "stop", isStart ? "START" : "STOP");
       });
 
-      btnRestart.addEventListener("click", async () => {
-        const prev = btnRestart.textContent;
-        btnRestart.textContent = "RESTARTING...";
-        btnRestart.disabled = true;
-        btnAction.disabled = true;
-        try {
-          const res = await fetch("/api/miner/restart", { method: "POST" });
-          if (res.status === 401) showAuthModal();
-        } catch { }
-        btnRestart.textContent = prev;
+      btnRestart.addEventListener("click", () => {
+        promptAction("restart", "RESTART");
       });
 
       document.addEventListener("visibilitychange", () => {
         if (document.hidden) {
           stopTicking();
+          if (es) {
+            es.close();
+            es = null;
+          }
         } else {
           startTicking();
+          if (!es || es.readyState === EventSource.CLOSED) {
+            connectSSE();
+          }
         }
       });
     })();
