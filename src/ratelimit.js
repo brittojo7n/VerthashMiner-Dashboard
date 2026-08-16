@@ -2,21 +2,6 @@
 
 const MAX_BUCKETS = 128;
 
-/**
- * Fixed-window rate limiter.
- *
- * Returns `0` when the request is allowed, otherwise the number of milliseconds
- * the caller must wait. Handing back the exact wait lets clients schedule one
- * precise retry instead of hammering the endpoint.
- *
- * @param {number} max        Requests permitted per window.
- * @param {number} windowMs   Window length in milliseconds.
- * @param {number} [penaltyMs] Flat cooldown applied once on first breach, so an
- *   aggressive refresher gets a predictable pause rather than whatever scrap of
- *   the window remained. Applied a single time, so continued hammering cannot
- *   extend the block indefinitely.
- * @returns {(key: string) => number}
- */
 function createRateLimiter(max, windowMs, penaltyMs = 0) {
   const buckets = new Map();
 
@@ -25,7 +10,6 @@ function createRateLimiter(max, windowMs, penaltyMs = 0) {
     let bucket = buckets.get(key);
 
     if (!bucket || now >= bucket.resetAt) {
-      // Evict the oldest entry rather than growing without bound.
       if (!bucket && buckets.size >= MAX_BUCKETS) {
         buckets.delete(buckets.keys().next().value);
       }

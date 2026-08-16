@@ -31,8 +31,6 @@ const HDR_SSE = Object.freeze({
 const MAX_BODY_BYTES = 4096;
 const MINER_ACTIONS = new Set(["start", "stop", "restart"]);
 
-// Budgets are deliberately generous for the endpoints a normal page load needs
-// and tight for the stream, which is the expensive one to re-establish.
 const limitMiner = createRateLimiter(3, 5000);
 const limitStatus = createRateLimiter(10, 5000);
 const limitEvents = createRateLimiter(4, 5000, 5000);
@@ -44,7 +42,6 @@ const send = (res, status, headers, body) => {
 const sendText = (res, status, body) => send(res, status, HDR_TEXT, body);
 const sendJson = (res, status, payload) => send(res, status, HDR_JSON, JSON.stringify(payload));
 
-/** Every 429 states when to come back, so clients retry once and precisely. */
 function sendRateLimited(res, waitMs) {
   const seconds = Math.max(1, Math.ceil(waitMs / 1000));
   send(res, 429, { ...HDR_JSON, "Retry-After": String(seconds) }, JSON.stringify({
@@ -55,7 +52,6 @@ function sendRateLimited(res, waitMs) {
   }));
 }
 
-/** First non-internal IPv4 address, used only for the startup banner. */
 function getLanIp() {
   for (const addrs of Object.values(os.networkInterfaces())) {
     for (const addr of addrs || []) {
@@ -65,7 +61,6 @@ function getLanIp() {
   return "127.0.0.1";
 }
 
-/** Read a bounded JSON body; resolves null when oversized or malformed. */
 function readJsonBody(req) {
   return new Promise(resolve => {
     let size = 0;
@@ -92,7 +87,6 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
   const requiresAuth = config.PASSPHRASE.length > 0;
   const sessions = new SessionStore({ secret: config.SESSION_SECRET });
 
-  /** Routes keyed by "METHOD pathname"; each returns true once handled. */
   const routes = {
     "POST /api/login": async (req, res, ip) => {
       if (!requiresAuth) return sendText(res, 404, "Not found");
@@ -137,8 +131,6 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     const method = req.method || "GET";
     const ip = req.socket.remoteAddress || "";
 
-    // Static assets are public: the UI shell contains no secrets and must load
-    // so the passphrase prompt can be shown.
     if (method === "GET") {
       const asset = staticFiles[pathname];
       if (asset) return send(res, 200, asset.hdr, asset.buf);

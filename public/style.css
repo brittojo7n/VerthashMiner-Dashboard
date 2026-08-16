@@ -12,8 +12,6 @@
   --red: #ef4444;
   --purple: #8b5cf6;
 
-  /* Same palette as raw RGB triplets so any component can derive its own
-     tints with rgba(var(--x-rgb), a) instead of re-hardcoding the channels. */
   --accent-rgb: 0, 242, 254;
   --accent2-rgb: 79, 172, 254;
   --green-rgb: 16, 185, 129;
@@ -21,7 +19,6 @@
   --red-rgb: 239, 68, 68;
   --purple-rgb: 139, 92, 246;
 
-  /* Shared frosted-glass recipe, so the blur is tuned in exactly one place. */
   --glass-blur: blur(16px) saturate(180%);
   --font: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --mono: 'JetBrains Mono', 'Consolas', monospace;
@@ -85,7 +82,7 @@ button, input, select, textarea {
 
 h1 {
   margin: 0;
-  
+
   font-size: var(--fs-h1);
   font-weight: 800;
   letter-spacing: -0.5px;
@@ -98,7 +95,7 @@ h1 {
 .sub {
   color: var(--muted);
   margin-top: 6px;
-  
+
   font-weight: 400;
   font-size: var(--fs-sub);
 }
@@ -172,12 +169,11 @@ h1 {
 .gpu-empty {
   text-align: center;
   padding: var(--pad);
-  
 }
 
 .label {
   color: var(--muted);
-  
+
   font-size: var(--fs-label);
   font-weight: 500;
   text-transform: uppercase;
@@ -186,7 +182,6 @@ h1 {
 }
 
 .value {
-  
   font-size: var(--fs-value);
   font-weight: 800;
   letter-spacing: -1px;
@@ -194,7 +189,6 @@ h1 {
 }
 
 .unit {
-  
   font-size: var(--fs-unit);
   font-weight: 500;
   opacity: 0.7;
@@ -233,7 +227,6 @@ h1 {
 }
 
 .metric .mvalue {
-  
   font-weight: 700;
   font-size: var(--fs-mvalue);
   margin-top: 4px;
@@ -252,7 +245,6 @@ h1 {
 }
 
 .mvalue-sm {
-  
   font-size: 14px;
 }
 
@@ -266,14 +258,13 @@ h1 {
 }
 
 .gpu-name {
-  
   font-size: var(--fs-section);
   font-weight: 700;
 }
 
 .small {
   color: var(--muted);
-  
+
   font-size: var(--fs-small);
 }
 
@@ -284,7 +275,7 @@ h1 {
   white-space: nowrap;
   max-width: 100%;
   opacity: 0.55;
-  
+
   font-size: var(--fs-small);
   letter-spacing: 0.3px;
 }
@@ -366,7 +357,6 @@ h1 {
 .cdot-green { background: #10b981; }
 
 .console-title {
-  
   font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 1px;
@@ -383,7 +373,7 @@ h1 {
   background: rgba(var(--green-rgb), 0.12);
   border: 1px solid rgba(var(--green-rgb), 0.3);
   color: #34d399;
-  
+
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -411,7 +401,7 @@ h1 {
 
 .console-counter {
   color: #64748b;
-  
+
   font-size: var(--fs-badge);
   font-weight: 600;
   margin-right: 4px;
@@ -423,7 +413,7 @@ h1 {
   color: #94a3b8;
   padding: 4px 10px;
   border-radius: 6px;
-  
+
   font-size: var(--fs-btn);
   font-weight: 600;
   cursor: pointer;
@@ -749,17 +739,17 @@ h1 {
   outline: none; transition: border-color 0.2s;
   text-align: center;
 }
-.auth-input:focus { 
-  border-color: rgba(56, 189, 248, 0.8); 
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2); 
+.auth-input:focus {
+  border-color: rgba(56, 189, 248, 0.8);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
 }
 .auth-btn {
   width: 100%; padding: 12px; margin-top: 16px; border-radius: 8px;
   background: rgba(56, 189, 248, 0.2); color: #fff; font-weight: 700;
-  border: 1px solid rgba(56, 189, 248, 0.5); cursor: pointer; 
+  border: 1px solid rgba(56, 189, 248, 0.5); cursor: pointer;
   font-size: 15px; transition: all 0.2s ease;
 }
-.auth-btn:hover { 
+.auth-btn:hover {
   background: rgba(56, 189, 248, 0.3);
 }
 .auth-btn-start {
@@ -823,14 +813,6 @@ h1 {
   }
 }
 
-/* ── Toast notifications ──────────────────────────────────────────────
-   Anchored bottom-right, stacked above the fixed local-time bar so the two
-   never overlap. The stack is click-through; individual toasts are not.
-
-   Every variant is driven by a single --toast-rgb custom property, so colour
-   changes need one line, not a new rule set. Defaults to the blue accent
-   (info); .toast-warn / .toast-error / .toast-success just re-point the
-   variable at an existing palette token. */
 .toast-stack {
   position: fixed;
   bottom: 46px;
@@ -852,7 +834,7 @@ h1 {
   gap: 11px;
   padding: 13px 16px;
   border-radius: 16px;
-  /* Frosted glass: a neutral dark base lifted by a wash of the variant hue. */
+
   background:
     linear-gradient(135deg, rgba(var(--toast-rgb), 0.16), rgba(var(--toast-rgb), 0.06)),
     rgba(15, 23, 42, 0.72);
@@ -875,7 +857,6 @@ h1 {
 .toast.show { opacity: 1; transform: translateY(0) scale(1); }
 .toast.hide { opacity: 0; transform: translateY(6px) scale(0.97); }
 
-/* Variants: re-point the hue only. */
 .toast-info    { --toast-rgb: var(--accent2-rgb); }
 .toast-warn    { --toast-rgb: var(--yellow-rgb); }
 .toast-error   { --toast-rgb: var(--red-rgb); }

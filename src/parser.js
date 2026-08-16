@@ -1,35 +1,17 @@
 "use strict";
 
-/*
- * Line formats below are taken verbatim from the VerthashMiner sources
- * (github.com/CryptoGraphics/VerthashMiner):
- *
- *   applog()      src/vhCore/Util.cpp   "[%d-%02d-%02d %02d:%02d:%02d] %-5s %s\n"
- *                                       priorities: ERROR / WARN / INFO / DEBUG, written to stderr
- *   cu_device     src/main.cpp          "cu_device(%d):%s%s%s%s hashrate: %.02f kH/s"
- *   cl_device     src/main.cpp          "cl_device(%d):%s%s%s%s hashrate: %.02f kH/s"
- *                                       optional fields: " err:%u," " temp:%dC," " power:%dW," " fan:%d%%,"
- *   share result  src/main.cpp          "accepted: %lu/%lu (%.2f%%), total hashrate: %s"
- *                                       where %s is "%.2f kH/s" or the literal "(pending...)"
- *   difficulty    src/vhCore/Util.cpp   "Stratum difficulty set to %g"
- */
 const { STATUS, LOG } = require("./constants");
 
 const RX_NORM = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 const RX_DEV_HASH = /(cu|cl)_device\((\d+)\).*?hashrate:\s*([\d.]+)/i;
 const RX_DIFF = /difficulty(?:\s*(?:set|is))?\s*(?:to|:)?\s*([\d.]+)/i;
 const RX_ACC = /accepted:\s*(\d+)\s*\/\s*(\d+)(?:.*?total hashrate:\s*([\d.]+|\(pending...\)))?/i;
-// Miner memory-error counter (" err:%u,") is INFO-level telemetry on an otherwise
-// healthy hashrate line, so it must not be matched here. Only treat a standalone
-// "error(s): N" as an error, never the inline " err:N," device field.
+
 const RX_NZERR = /\berrors?:\s*[1-9]\d*\b/i;
-// Non-zero device memory errors still deserve a visible warning.
+
 const RX_DEV_MEMERR = /\berr:\s*[1-9]\d*,/i;
 const RX_FATAL = /\b(?:cuda\s+error|failed\s+to|fatal|exception|enoent)\b/i;
-// Pool/stratum loss: the miner keeps running but is no longer mining, so these
-// must move the dashboard off STATUS.MINING instead of silently leaving it green.
-// Sources: main.cpp "Stratum connection timed out" / "Stratum connection interrupted",
-//          Util.cpp "Stratum connection failed: %s".
+
 const RX_STRATUM_DOWN = /stratum\s+connection\s+(?:failed|timed\s+out|interrupted)/i;
 const RX_REJECT = /"result"\s*:\s*false\s*,\s*"error"\s*:\s*\[\s*\d+\s*,\s*"([^"]+)"/i;
 
@@ -38,8 +20,6 @@ function canSetRunStatus(state) {
 }
 
 function classifyLine(line, lc) {
-  // applog prefix "[YYYY-MM-DD HH:MM:SS] LEVEL " -> ']' sits at index 20 and the
-  // first letter of the space-padded level at index 22 (E)RROR / (W)ARN.
   if (line.length > 27 && line.charCodeAt(0) === 91 && line.charCodeAt(20) === 93) {
     const c = line.charCodeAt(22);
     if (c === 69) return { isFatal: RX_FATAL.test(line) || RX_STRATUM_DOWN.test(line), type: LOG.ERROR };
@@ -49,8 +29,7 @@ function classifyLine(line, lc) {
   if (RX_FATAL.test(line)) return { isFatal: true, type: LOG.ERROR };
   if (RX_STRATUM_DOWN.test(line)) return { isFatal: true, type: LOG.ERROR };
   if (RX_NZERR.test(line)) return { isFatal: false, type: LOG.ERROR };
-  // Device line reporting non-zero memory errors: warn, but keep it out of the
-  // fatal path since the device is still hashing.
+
   if (RX_DEV_MEMERR.test(line)) return { isFatal: false, type: LOG.WARN };
 
   if (lc.includes("accepted:") || lc.includes("share accepted") || lc.includes("loaded succes") || lc.includes("verified succes") || lc.includes("successfully configured")) {
@@ -73,8 +52,7 @@ function parseMinerLine(raw, state, pushLog) {
 
   if (isFatal && canSetRunStatus(state)) {
     state.miner.lastError = line;
-    // Losing the pool is recoverable: the miner stays alive and reconnects, so
-    // report DISCONNECTED rather than CRASHED (which implies a dead process).
+
     state.mining.status = RX_STRATUM_DOWN.test(line) ? STATUS.DISCONNECTED : STATUS.CRASHED;
   }
 

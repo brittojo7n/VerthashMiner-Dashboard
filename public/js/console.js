@@ -1,14 +1,5 @@
 import { make, text } from "./dom.js";
 
-/**
- * Miner console.
- *
- * Lines arrive with a monotonic `id`, so only genuinely new entries are
- * appended; the DOM is trimmed to match the server's ring buffer.
- */
-
-// Applied in order. Escaping happens BEFORE any of these run (see highlight),
-// so the inserted markup can never originate from miner output.
 const RULES = [
   [/(\b[\d.]+\s*(?:kH|MH|GH|TH)\/s\b)/gi, "hl-hash"],
   [/(\baccepted:\s*\d+\s*\/\s*\d+(?:\s*\([\d.]*%\))?)/gi, "hl-acc"],
@@ -26,10 +17,6 @@ const RULES = [
 
 const ESCAPE = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
 
-/**
- * Escape first, then colourise. Order matters: miner and pool output is
- * untrusted, so every `<` becomes `&lt;` before any span is inserted.
- */
 function highlight(raw) {
   let out = String(raw).replace(/[&<>"']/g, ch => ESCAPE[ch]);
   for (const [pattern, cls] of RULES) {
@@ -94,7 +81,7 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
       if (!added) return;
 
       lines.appendChild(frag);
-      // Keep the DOM in step with the server-side ring buffer.
+
       while (lines.children.length > logs.length) lines.removeChild(lines.firstChild);
       if (autoScroll) scrollToBottom();
     }

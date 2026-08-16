@@ -3,7 +3,7 @@
 const { spawn, execFile } = require("node:child_process");
 const { parseMinerLine } = require("./parser");
 const { STATUS, LOG, LIMITS } = require("./constants");
-const { parseCudaDeviceList, createStreamReader, stripAnsi, normalizePci } = require("./devices");
+const { parseCudaDeviceList, createStreamReader, stripAnsi } = require("./devices");
 
 const ACTIONS = Object.freeze({
   start: STATUS.STARTING,
@@ -13,7 +13,6 @@ const ACTIONS = Object.freeze({
 const FORCE_KILL_MS = 2000;
 const RESTART_GAP_MS = 500;
 
-/** Counters that must not survive a miner restart. */
 const CLEAN_STATS = Object.freeze({
   hashrateKHs: null,
   accepted: 0,
@@ -24,13 +23,6 @@ const CLEAN_STATS = Object.freeze({
   hashratesReady: false
 });
 
-/**
- * Supervises the VerthashMiner child process: spawn, stdout/stderr parsing,
- * lifecycle actions and shutdown.
- *
- * Parsing is gated on there being at least one dashboard subscriber, so with
- * every browser tab closed the supervisor performs no per-line work at all.
- */
 class MinerManager {
   constructor({ config, state, onUpdate }) {
     this.config = config;
@@ -49,14 +41,10 @@ class MinerManager {
     this._spawning = false;
   }
 
-  // ── helpers ───────────────────────────────────────────────────────────────
-
-  /** Notify subscribers; suppressed while nobody is watching. */
   _emit() {
     if (this.parsingEnabled) this.onUpdate?.();
   }
 
-  /** Apply a patch to `state.mining` and mark the snapshot dirty. */
   _setMining(patch) {
     Object.assign(this.state.mining, patch);
     this.state.dirty = true;
@@ -66,7 +54,6 @@ class MinerManager {
     this._setMining({ ...CLEAN_STATS, gpuHashrates: {} });
   }
 
-  /** Shared "the child is gone" transition used by error and exit paths. */
   _markDown(status, error) {
     this._spawning = false;
     this.isStoppingChild = false;
@@ -84,13 +71,6 @@ class MinerManager {
     this.state.dirty = true;
   }
 
-  // ── subscriber gating ─────────────────────────────────────────────────────
-
-  /**
-   * Replay buffered lines through the parser so a freshly opened tab shows
-   * current stats. The replay passes a no-op logger because those lines were
-   * already written to the ring buffer when they arrived.
-   */
   enableParsing() {
     if (this.parsingEnabled) return;
     this.parsingEnabled = true;
@@ -103,8 +83,6 @@ class MinerManager {
   disableParsing() {
     this.parsingEnabled = false;
   }
-
-  // ── lifecycle ─────────────────────────────────────────────────────────────
 
   start() {
     if (this._stopPromise) return this._stopPromise.then(() => this.start());
@@ -130,11 +108,6 @@ class MinerManager {
     return Promise.resolve();
   }
 
-  /**
-   * Run `--device-list` first to learn the PCI-to-CUDA index mapping, which is
-   * what lets telemetry be matched to the right card. Failure is non-fatal: the
-   * dashboard falls back to positional indices.
-   */
   _probeDevices(done) {
     const { MINER_EXE, MINER_CWD } = this.config;
     let finished = false;
@@ -191,7 +164,7 @@ class MinerManager {
         parseMinerLine(line, this.state, (text, type) => this.pushLog(text, type));
         return;
       }
-      // No subscribers: keep a short replay window and log the raw line only.
+
       this.history.push(line);
       if (this.history.length > LIMITS.REPLAY_LINES) this.history.shift();
       const clean = stripAnsi(line).trim();
@@ -226,8 +199,6 @@ class MinerManager {
     });
   }
 
-  // ── actions ───────────────────────────────────────────────────────────────
-
   _clearScheduledAction() {
     clearTimeout(this._actionTimer);
     this._actionTimer = null;
@@ -244,10 +215,6 @@ class MinerManager {
     return Boolean(this.state.miner.running || this.proc || this._spawning);
   }
 
-  /**
-   * Queue a control action. Execution is deferred briefly so repeated clicks
-   * collapse into one operation and the UI can show a transitional state.
-   */
   requestAction(action) {
     if (!(action in ACTIONS) || this._pendingAction === action) return;
 
@@ -303,15 +270,14 @@ class MinerManager {
       child.once("exit", finish);
 
       if (process.platform === "win32") {
-        // The miner spawns worker processes; /T terminates the whole tree.
         execFile("taskkill.exe", ["/pid", String(pid), "/T", "/F"]);
         return;
       }
 
-      try { child.kill("SIGINT"); } catch { /* already gone */ }
+      try { child.kill("SIGINT"); } catch {  }
       this._forceKillTimer = setTimeout(() => {
         if (this.proc && !this.proc.killed) {
-          try { this.proc.kill("SIGKILL"); } catch { /* already gone */ }
+          try { this.proc.kill("SIGKILL"); } catch {  }
         }
       }, FORCE_KILL_MS);
       this._forceKillTimer.unref();
@@ -323,10 +289,10 @@ class MinerManager {
   async restart() {
     if (this._spawning || this._stopPromise) return;
     await this.stop();
-    // Brief pause so the OS releases the GPU handles before re-acquiring them.
+
     await new Promise(resolve => setTimeout(resolve, RESTART_GAP_MS));
     await this.start();
   }
 }
 
-module.exports = { MinerManager, parseCudaDeviceList, normalizePci };
+module.exports = { MinerManager, parseCudaDeviceList };

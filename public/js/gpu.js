@@ -1,15 +1,6 @@
 import { make, text, className, style } from "./dom.js";
 import { num, tempClass, DASH } from "./format.js";
 
-/**
- * GPU telemetry cards.
- *
- * Cards are built once and then patched through retained node references, so a
- * refresh costs a handful of string comparisons rather than a DOM rebuild or a
- * `getElementById` per field.
- */
-
-/** Simple metric tiles, in display order: [label, unit]. */
 const FIELDS = [
   ["pstate", "P-State", ""],
   ["temp", "GPU Temp", ""],
@@ -47,7 +38,6 @@ function buildCard(index) {
     metrics.appendChild(metric);
   }
 
-  // VRAM: used / total
   const vram = make("div", "metric");
   vram.appendChild(make("div", "label", "VRAM"));
   const vramValue = make("div", "mvalue mvalue-sm");
@@ -59,7 +49,6 @@ function buildCard(index) {
   vram.appendChild(vramValue);
   metrics.appendChild(vram);
 
-  // Hashrate + efficiency
   for (const [key, label, unit, cls] of [
     ["hashrate", "Hashrate", "kH/s", "mvalue gradient-text"],
     ["eff", "Efficiency", "kH/s/W", "mvalue"]
@@ -73,7 +62,6 @@ function buildCard(index) {
     metrics.appendChild(metric);
   }
 
-  // Utilisation bar
   const util = make("div", "metric metric-util");
   const row = make("div", "flex-between-end");
   row.appendChild(make("div", "label m-0", "Compute Utilization"));
@@ -90,7 +78,6 @@ function buildCard(index) {
   return { panel, refs, index };
 }
 
-/** Show a message in place of the cards (no data yet, or a telemetry failure). */
 function renderNotice(container, gpuError) {
   cards = [];
   container.textContent = "";

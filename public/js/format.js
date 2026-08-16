@@ -1,12 +1,8 @@
-/** Pure formatting helpers. No DOM access, so they stay trivially testable. */
-
 const DASH = "\u2014";
 
-/** Fixed-point number, or an em dash when the value is absent/non-finite. */
 export const num = (value, digits = 1) =>
   value == null || !Number.isFinite(value) ? DASH : Number(value).toFixed(digits);
 
-/** Seconds as `1d 2h 3m` once past a day, otherwise `HH:MM:SS`. */
 export function uptime(totalSeconds) {
   let s = Math.max(0, Math.floor(totalSeconds || 0));
   const d = Math.floor(s / 86400); s %= 86400;
@@ -20,7 +16,6 @@ export function uptime(totalSeconds) {
 
 const pad = n => String(n).padStart(2, "0");
 
-/** `YYYY-MM-DD HH:MM:SS`, optionally suffixed with a timezone label. */
 export function timestamp(ms, tz) {
   const d = new Date(ms);
   const base = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
@@ -28,10 +23,8 @@ export function timestamp(ms, tz) {
   return tz ? `${base} (${tz})` : base;
 }
 
-/** Temperature severity class used by the GPU cards. */
 export const tempClass = t => (t == null ? "" : t >= 80 ? "red" : t >= 72 ? "yellow" : "green");
 
-/** Strip the miner's `[timestamp] LEVEL ` prefix for display in toasts. */
 export const stripLogPrefix = text => String(text).replace(/^\[[^\]]+\]\s*\w+\s*/, "");
 
 export { DASH };

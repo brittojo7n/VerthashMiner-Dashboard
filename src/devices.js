@@ -8,19 +8,11 @@ const RX_SECTION = /(cuda|opencl)\s.*(devices:|device config)/i;
 const RX_INLINE = /index:\s*(\d+).*?pcieid:\s*([0-9a-fA-F:.]+)/i;
 const RX_INDEX = /deviceindex:\s*(\d+)/i;
 const RX_PCI_LINE = /pcieid:\s*([0-9a-fA-F:.]+)/i;
-// The miner really does print "not avilable" (typo is upstream).
+
 const RX_UNAVAILABLE = /not\s*avilable/i;
 
-/** Strip ANSI colour sequences the miner emits when attached to a console. */
 const stripAnsi = line => String(line).replace(RX_ANSI, "");
 
-/**
- * Normalise a PCI id to `bb:dd:f`.
- *
- * nvidia-smi reports `00000000:01:00.0` while VerthashMiner prints `01:00:0`;
- * reducing both to one form is what lets per-GPU hashrates be matched to
- * telemetry when the two enumeration orders disagree.
- */
 function normalizePci(raw) {
   const m = RX_PCI.exec(String(raw));
   return m
@@ -28,16 +20,6 @@ function normalizePci(raw) {
     : String(raw).toLowerCase();
 }
 
-/**
- * Parse `--device-list` output into a `{ pciId: cudaIndex }` map.
- *
- * Only the CUDA section is consumed; the OpenCL block lists the same cards and
- * would otherwise overwrite the indices the miner actually uses. Both the
- * single-line CUDA form and the multi-line OpenCL form are handled.
- *
- * @param {string} output
- * @param {Record<string,string>} pciMap Mutated in place.
- */
 function parseCudaDeviceList(output, pciMap) {
   let inCuda = false;
   let pendingIndex = null;
@@ -73,18 +55,6 @@ function parseCudaDeviceList(output, pciMap) {
   }
 }
 
-/**
- * Split a child process stream into whole lines.
- *
- * Chunks arrive at arbitrary boundaries, so a partial trailing line is carried
- * over. The buffer is capped to bound memory if the child ever emits a very
- * long line with no newline.
- *
- * @param {(line: string, enabled: boolean) => void} onLine
- * @param {() => void} onFlush   Called once per chunk that produced lines.
- * @param {() => boolean} isEnabled
- * @param {((chunk: string) => void)|null} forward Optional console mirror.
- */
 function createStreamReader(onLine, onFlush, isEnabled, forward) {
   let buffer = "";
 

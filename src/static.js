@@ -11,27 +11,18 @@ const MIME = {
   ".ico": "image/x-icon"
 };
 
-/** Only these extensions are published, so nothing unexpected can leak out. */
 const SERVABLE = new Set(Object.keys(MIME));
 
 function headersFor(file, buf) {
   return Object.freeze({
     "Content-Type": MIME[path.extname(file)] || "application/octet-stream",
-    // `no-cache` revalidates rather than storing: keeps a passphrase-protected
-    // UI out of shared caches while still allowing conditional requests.
+
     "Cache-Control": "no-cache",
     "Content-Length": buf.length,
     "X-Content-Type-Options": "nosniff"
   });
 }
 
-/**
- * Read every public asset once at boot so request handling never touches disk.
- * Bodies and headers are precomputed and shared between aliases.
- *
- * @param {string} [publicDir]
- * @returns {Record<string, {buf: Buffer, hdr: object}>}
- */
 function loadStaticCache(publicDir) {
   const root = publicDir || path.resolve(__dirname, "..", "public");
   const cache = Object.create(null);
@@ -56,7 +47,6 @@ function loadStaticCache(publicDir) {
 
   walk(root);
 
-  // Serve the shell at the site root as well.
   if (cache["/index.html"]) cache["/"] = cache["/index.html"];
 
   return cache;

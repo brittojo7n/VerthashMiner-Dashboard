@@ -5,9 +5,8 @@ import * as gpuView from "./gpu.js";
 import { createConsole } from "./console.js";
 import { createConnection } from "./connection.js";
 
-/** Statuses in which the miner is not running. */
 const IDLE = new Set(["STOPPED", "CRASHED", "ERROR"]);
-/** Running states. DISCONNECTED counts as live: the process is up and retrying. */
+
 const LIVE = new Set(["MINING", "CONNECTED", "WAITING", "DISCONNECTED"]);
 const ACTION_STATUS = { start: "STARTING", stop: "STOPPING", restart: "RESTARTING" };
 const ACTION_TOAST = {
@@ -16,7 +15,6 @@ const ACTION_TOAST = {
   restart: ["Restarting Miner", "Stopping and relaunching the VerthashMiner process."]
 };
 
-// ── element handles ─────────────────────────────────────────────────────────
 const dot = el("dot");
 const statusEl = el("status");
 const hostEl = el("host");
@@ -37,9 +35,6 @@ const view = createConsole({
   onAutoScrollChange: paintAutoScroll
 });
 
-// ── local clock ─────────────────────────────────────────────────────────────
-// Server time is extrapolated from the last snapshot, so the clock keeps
-// ticking between SSE frames without polling.
 let serverNow = null, capturedAt = 0, startedAt = null, tz = null;
 let accepted = 0, ticker = null;
 
@@ -55,7 +50,6 @@ function tick() {
 const startClock = () => { ticker ||= setInterval(tick, 1000); };
 const stopClock = () => { clearInterval(ticker); ticker = null; };
 
-// ── chrome ──────────────────────────────────────────────────────────────────
 let pendingStatus = null;
 let lastError = null, lastGpuError = null, lastStatus = null;
 
@@ -75,7 +69,6 @@ function paintAutoScroll(on) {
   text(btnAutoScroll, `Auto-scroll: ${on ? "ON" : "OFF"}`);
 }
 
-/** Toast server-driven lifecycle transitions exactly once each. */
 function announce(status) {
   if (lastStatus !== null && status !== lastStatus) {
     if (status === "CRASHED") {
@@ -149,7 +142,6 @@ function render(snapshot) {
   gpuView.render(gpusBox, snapshot.gpu, snapshot.gpuError);
 }
 
-// ── connection ──────────────────────────────────────────────────────────────
 const connection = createConnection({
   onSnapshot: render,
   onUnauthorized: showAuth,
@@ -166,7 +158,6 @@ const connection = createConnection({
   }
 });
 
-// ── auth ────────────────────────────────────────────────────────────────────
 function showAuth() {
   authModal.classList.add("show");
   authInput.value = "";
@@ -198,7 +189,6 @@ async function login() {
   authError.style.display = "block";
 }
 
-// ── miner actions ───────────────────────────────────────────────────────────
 async function runAction(action) {
   const next = ACTION_STATUS[action];
   if (!next || pendingStatus) return;
@@ -219,7 +209,7 @@ async function runAction(action) {
         try {
           const data = await res.clone().json();
           if (Number.isFinite(data.retryAfterSeconds)) seconds = data.retryAfterSeconds;
-        } catch { /* keep default */ }
+        } catch {  }
         toast.warn("Too Many Requests",
           `Miner controls are rate limited. Please wait ${seconds} second${seconds === 1 ? "" : "s"} before trying again.`,
           "rate-limit-action");
@@ -234,7 +224,6 @@ async function runAction(action) {
   pendingStatus = null;
 }
 
-// ── confirm dialog ──────────────────────────────────────────────────────────
 const confirmModal = el("confirmModal");
 const confirmYes = el("confirmYes");
 let armedAction = null;
@@ -250,7 +239,6 @@ function promptAction(action, label) {
 }
 const closeConfirm = () => { confirmModal.classList.remove("show"); armedAction = null; };
 
-// ── wiring ──────────────────────────────────────────────────────────────────
 el("authSubmit").addEventListener("click", login);
 authInput.addEventListener("keydown", e => { if (e.key === "Enter") login(); });
 el("confirmCancel").addEventListener("click", closeConfirm);
@@ -277,10 +265,9 @@ el("btnCopyLogs").addEventListener("click", async event => {
     const original = button.textContent;
     button.textContent = "Copied!";
     setTimeout(() => { button.textContent = original; }, 1200);
-  } catch { /* clipboard unavailable */ }
+  } catch {  }
 });
 
-// A hidden tab must cost nothing: drop the stream so the server goes idle.
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     stopClock();

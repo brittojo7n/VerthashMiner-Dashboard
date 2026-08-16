@@ -10,10 +10,6 @@ const LOCKOUT_MS = 30000;
 const FAILURE_WINDOW_MS = 60000;
 const TOKEN_RE = /vm_session=([0-9a-f]+)/;
 
-/**
- * Constant-time string comparison. Hashing first equalises buffer lengths, so
- * neither the passphrase contents nor its length leak through timing.
- */
 function safeEqual(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
   const ha = crypto.createHash("sha256").update(a).digest();
@@ -21,13 +17,6 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(ha, hb);
 }
 
-/**
- * Cookie-based session store with brute-force lockout.
- *
- * Both maps are explicitly bounded so a hostile client cannot grow them without
- * limit; expired entries are swept lazily rather than on a timer, keeping the
- * process idle when nobody is connected.
- */
 class SessionStore {
   constructor({ secret, ttlMs = LIMITS.SESSION_TTL_MS } = {}) {
     this.secret = secret;
@@ -36,7 +25,6 @@ class SessionStore {
     this.attempts = new Map();
   }
 
-  /** Drop expired sessions once the map is large enough to be worth sweeping. */
   prune() {
     if (this.sessions.size < MAX_SESSIONS) return;
     const now = Date.now();
@@ -64,10 +52,6 @@ class SessionStore {
     return match ? match[1] : null;
   }
 
-  /**
-   * Validate a request cookie and, on success, slide the expiry forward so an
-   * operator watching the rig is never logged out mid-session.
-   */
   verify(cookieHeader) {
     const token = SessionStore.tokenFrom(cookieHeader);
     if (!token) return false;
@@ -80,7 +64,6 @@ class SessionStore {
     return true;
   }
 
-  /** Milliseconds remaining on a lockout, or 0 when the caller may try. */
   lockoutMs(ip) {
     const now = Date.now();
 

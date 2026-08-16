@@ -1,34 +1,24 @@
 import * as toast from "./toast.js";
 
-/**
- * Dashboard connection manager.
- *
- * Invariant: every response path ends in either a live stream or a scheduled
- * retry. A status that falls through without doing one of those is what
- * previously left the dashboard blank after an aggressive-refresh 429.
- */
-
-const MIN_REFRESH_GAP_MS = 1500; // Pace loads so bursts cannot overload the API.
+const MIN_REFRESH_GAP_MS = 1500;
 const BACKOFF_START_MS = 2000;
 const BACKOFF_MAX_MS = 30000;
-const RETRY_GRACE_MS = 250;      // Land just after the server window rolls over.
+const RETRY_GRACE_MS = 250;
 const LAST_ATTEMPT_KEY = "vmd:lastConnectAt";
 
-/** Persisted across reloads so rapid F5 presses are paced against each other. */
 function lastAttempt() {
   try { return Number(sessionStorage.getItem(LAST_ATTEMPT_KEY)) || 0; }
   catch { return 0; }
 }
 function markAttempt(ts) {
-  try { sessionStorage.setItem(LAST_ATTEMPT_KEY, String(ts)); } catch { /* private mode */ }
+  try { sessionStorage.setItem(LAST_ATTEMPT_KEY, String(ts)); } catch {  }
 }
 
-/** Prefer the JSON body's precise value, fall back to the Retry-After header. */
 async function retryDelay(response) {
   try {
     const data = await response.clone().json();
     if (Number.isFinite(data?.retryAfterMs)) return data.retryAfterMs;
-  } catch { /* not JSON */ }
+  } catch {  }
   const header = Number.parseInt(response.headers.get("Retry-After") || "", 10);
   return Number.isFinite(header) && header > 0 ? header * 1000 : 5000;
 }
@@ -95,8 +85,6 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
       const wasConnected = connected;
       connected = false;
 
-      // EventSource cannot expose the response body, so probe /api/status to
-      // learn why the stream would not open.
       if (source?.readyState !== EventSource.CLOSED) {
         onStatusText?.("RECONNECTING");
         return;
@@ -108,7 +96,7 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
         const res = await fetch("/api/status", { cache: "no-store" });
         if (res.status === 401) return onUnauthorized();
         if (res.status === 429) return handleRateLimit(res);
-      } catch { /* offline; fall through to backoff */ }
+      } catch {  }
 
       onStatusText?.("OFFLINE", !wasConnected);
       toast.error("Connection Lost", "Lost contact with the dashboard host. Retrying automatically.", "offline");
@@ -134,9 +122,6 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
       if (res.status === 429) return handleRateLimit(res);
 
       if (res.ok) {
-        // Paint from the snapshot immediately so values appear before the
-        // first SSE frame arrives. A render fault must not abort the stream,
-        // but it is reported rather than silently swallowed.
         try { onSnapshot(await res.json()); }
         catch (err) { console.error("[dashboard] render failed", err); }
         openStream();
