@@ -6,6 +6,7 @@ class SseHub {
     this.onSubscriberChange = onSubscriberChange;
     this.clients = new Set();
     this.bcastTimer = null;
+    this.cachedPayload = null;
   }
 
   get size() {
@@ -20,9 +21,12 @@ class SseHub {
     this.bcastTimer = setTimeout(() => {
       this.bcastTimer = null;
       if (this.clients.size === 0) return;
-      this.state.dirty = false;
+      if (this.state.dirty || !this.cachedPayload) {
+        this.cachedPayload = `event: stats\ndata: ${JSON.stringify(formatStatsSnapshot(this.state))}\n\n`;
+        this.state.dirty = false;
+      }
 
-      const payload = `event: stats\ndata: ${JSON.stringify(formatStatsSnapshot(this.state))}\n\n`;
+      const payload = this.cachedPayload;
 
       for (const res of this.clients) {
         if (res.blocked) {
@@ -63,8 +67,11 @@ class SseHub {
     this._notifyChange();
 
     try {
-      const payload = `event: stats\ndata: ${JSON.stringify(formatStatsSnapshot(this.state))}\n\n`;
-      res.write(payload);
+      if (this.state.dirty || !this.cachedPayload) {
+        this.cachedPayload = `event: stats\ndata: ${JSON.stringify(formatStatsSnapshot(this.state))}\n\n`;
+        this.state.dirty = false;
+      }
+      res.write(this.cachedPayload);
     } catch {
       this.clients.delete(res);
       this._notifyChange();

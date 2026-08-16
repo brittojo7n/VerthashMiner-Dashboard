@@ -3,16 +3,23 @@ const { parseMinerLine } = require("./parser");
 
 const RX_NORM = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 
+const FORWARD_CONSOLE = process.env.FORWARD_MINER_CONSOLE === "true";
+
 function createStreamReader(onLine, onFlush, isEnabled, isStderr) {
   let buffer = "";
   return function handleChunk(chunk) {
-    if (isStderr) {
-      process.stderr.write(chunk);
-    } else {
-      process.stdout.write(chunk);
+    if (FORWARD_CONSOLE) {
+      if (isStderr) {
+        process.stderr.write(chunk);
+      } else {
+        process.stdout.write(chunk);
+      }
     }
-    buffer += String(chunk);
-    if (buffer.length > 65536) buffer = "";
+    buffer += chunk;
+    if (buffer.length > 65536) {
+      const lastNl = buffer.lastIndexOf("\n");
+      buffer = lastNl !== -1 ? buffer.slice(lastNl + 1) : "";
+    }
     const lastNewlineIdx = buffer.lastIndexOf("\n");
     if (lastNewlineIdx !== -1) {
       const lines = buffer.slice(0, lastNewlineIdx).split(/\r?\n/);
@@ -224,7 +231,10 @@ class MinerManager {
 
     this._stopPromise = new Promise(resolve => {
       const onExit = () => {
-        if (this._forceKillTimer) clearTimeout(this._forceKillTimer);
+        if (this._forceKillTimer) {
+          clearTimeout(this._forceKillTimer);
+          this._forceKillTimer = null;
+        }
         this.proc = null;
         this.state.mining.status = "STOPPED";
         resolve();

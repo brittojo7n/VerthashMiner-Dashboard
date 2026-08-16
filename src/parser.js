@@ -61,6 +61,7 @@ function parseMinerLine(raw, state, pushLog) {
     const hr = Number(devHashMatch[3]);
     const deviceKey = `${prefix}_${id}`;
     
+    const oldHr = state.mining.gpuHashrates[deviceKey] || 0;
     state.mining.gpuHashrates[deviceKey] = hr;
     
     if (!state.mining.hashratesReady) {
@@ -72,11 +73,15 @@ function parseMinerLine(raw, state, pushLog) {
     }
     
     if (state.mining.hashratesReady) {
-      let total = 0;
-      for (const k in state.mining.gpuHashrates) {
-        total += state.mining.gpuHashrates[k];
+      if (state.mining.hashrateKHs == null || Number.isNaN(state.mining.hashrateKHs)) {
+        let total = 0;
+        for (const k in state.mining.gpuHashrates) {
+          total += state.mining.gpuHashrates[k] || 0;
+        }
+        state.mining.hashrateKHs = total;
+      } else {
+        state.mining.hashrateKHs = Math.max(0, state.mining.hashrateKHs - oldHr + hr);
       }
-      state.mining.hashrateKHs = total;
     }
 
     if (hr > 0) {

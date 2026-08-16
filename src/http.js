@@ -5,9 +5,9 @@ const os = require("node:os");
 const crypto = require("node:crypto");
 const { formatStatsSnapshot } = require("./state");
 
-const HDR_JSON = Object.freeze({ "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
-const HDR_TEXT = Object.freeze({ "Content-Type": "text/plain", "Cache-Control": "no-store" });
-const HDR_SSE  = Object.freeze({ "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", "Connection": "keep-alive", "X-Accel-Buffering": "no" });
+const HDR_JSON = Object.freeze({ "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+const HDR_TEXT = Object.freeze({ "Content-Type": "text/plain", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+const HDR_SSE  = Object.freeze({ "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", "Connection": "keep-alive", "X-Accel-Buffering": "no", "X-Content-Type-Options": "nosniff" });
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -29,7 +29,8 @@ function loadStaticCache(publicDir) {
         hdr: Object.freeze({
           "Content-Type": MIME[path.extname(rel)] || "application/octet-stream",
           "Cache-Control": "public, max-age=0",
-          "Content-Length": buf.length
+          "Content-Length": buf.length,
+          "X-Content-Type-Options": "nosniff"
         })
       };
     } catch { }
@@ -38,6 +39,7 @@ function loadStaticCache(publicDir) {
   register("index.html", "/");
   register("index.html", "/index.html");
   register("style.css",  "/style.css");
+  register("script.js",  "/script.js");
   return cache;
 }
 
@@ -57,6 +59,7 @@ function parsePathname(rawUrl) {
 }
 
 function evictSessions(sessions) {
+  if (sessions.size < 50) return;
   const now = Date.now();
   for (const [t, exp] of sessions) {
     if (now > exp) sessions.delete(t);
@@ -87,6 +90,10 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
 
       let attempt = loginAttempts.get(ip);
       if (!attempt) {
+        if (loginAttempts.size >= 100) {
+          const firstKey = loginAttempts.keys().next().value;
+          if (firstKey) loginAttempts.delete(firstKey);
+        }
         attempt = { failures: [], blockedUntil: 0 };
         loginAttempts.set(ip, attempt);
       }
