@@ -29,6 +29,7 @@ const HDR_SSE = Object.freeze({
 });
 
 const MAX_BODY_BYTES = 4096;
+const MAX_STREAM_BLOCKS = 128;
 const MINER_ACTIONS = new Set(["start", "stop", "restart"]);
 
 const limitMiner = createRateLimiter(3, 5000);
@@ -86,6 +87,7 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
   const staticFiles = loadStaticCache(publicDir);
   const requiresAuth = config.PASSPHRASE.length > 0;
   const sessions = new SessionStore({ secret: config.SESSION_SECRET });
+  const streamBlocks = new Map();
 
   const routes = {
     "POST /api/login": async (req, res, ip) => {
@@ -110,7 +112,20 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
 
     "GET /events": (req, res, ip) => {
       const wait = limitEvents(ip);
-      if (wait) return sendRateLimited(res, wait);
+      if (wait) {
+        if (streamBlocks.size >= MAX_STREAM_BLOCKS) {
+          const now = Date.now();
+          for (const [key, expiry] of streamBlocks) {
+            if (expiry <= now) streamBlocks.delete(key);
+          }
+          if (streamBlocks.size >= MAX_STREAM_BLOCKS) {
+            streamBlocks.delete(streamBlocks.keys().next().value);
+          }
+        }
+        streamBlocks.set(ip, Date.now() + wait);
+        return sendRateLimited(res, wait);
+      }
+      streamBlocks.delete(ip);
       res.writeHead(200, HDR_SSE);
       sseHub.handleConnection(req, res);
     },
@@ -118,7 +133,19 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     "GET /api/status": (req, res, ip) => {
       const wait = limitStatus(ip);
       if (wait) return sendRateLimited(res, wait);
-      sendJson(res, 200, formatStatsSnapshot(state));
+
+      const blockedUntil = streamBlocks.get(ip) || 0;
+      const streamRetryMs = blockedUntil - Date.now();
+      if (streamRetryMs <= 0) {
+        if (blockedUntil) streamBlocks.delete(ip);
+        return sendJson(res, 200, formatStatsSnapshot(state));
+      }
+
+      sendJson(res, 200, {
+        ...formatStatsSnapshot(state),
+        streamRetryAfterMs: streamRetryMs,
+        streamRetryAfterSeconds: Math.max(1, Math.ceil(streamRetryMs / 1000))
+      });
     },
 
     "GET /health": (req, res) => sendText(res, 200, "ok")

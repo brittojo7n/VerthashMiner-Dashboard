@@ -51,8 +51,7 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
 
   const nextBackoff = () => (backoff = Math.min(BACKOFF_MAX_MS, backoff ? backoff * 2 : BACKOFF_START_MS));
 
-  async function handleRateLimit(response) {
-    const wait = await retryDelay(response);
+  function rateLimited(wait) {
     const seconds = Math.max(1, Math.ceil(wait / 1000));
     toast.warn(
       "Too Many Requests",
@@ -61,6 +60,10 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
     );
     onStatusText?.("RATE LIMITED");
     schedule(wait + RETRY_GRACE_MS, "Resuming");
+  }
+
+  async function handleRateLimit(response) {
+    rateLimited(await retryDelay(response));
   }
 
   function openStream() {
@@ -96,6 +99,15 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
         const res = await fetch("/api/status", { cache: "no-store" });
         if (res.status === 401) return onUnauthorized();
         if (res.status === 429) return handleRateLimit(res);
+
+        if (res.ok) {
+          const snapshot = await res.json().catch(() => null);
+          const streamWait = Number(snapshot?.streamRetryAfterMs) || 0;
+          if (streamWait > 0) {
+            if (snapshot) onSnapshot(snapshot);
+            return rateLimited(streamWait);
+          }
+        }
       } catch {  }
 
       onStatusText?.("OFFLINE", !wasConnected);
@@ -122,8 +134,15 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
       if (res.status === 429) return handleRateLimit(res);
 
       if (res.ok) {
-        try { onSnapshot(await res.json()); }
-        catch (err) { console.error("[dashboard] render failed", err); }
+        let snapshot = null;
+        try {
+          snapshot = await res.json();
+          onSnapshot(snapshot);
+        } catch (err) { console.error("[dashboard] render failed", err); }
+
+        const streamWait = Number(snapshot?.streamRetryAfterMs) || 0;
+        if (streamWait > 0) return rateLimited(streamWait);
+
         openStream();
         return;
       }
