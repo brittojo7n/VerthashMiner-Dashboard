@@ -66,6 +66,27 @@ function evictSessions(sessions) {
   }
 }
 
+function createRateLimiter(max, windowMs) {
+  const buckets = new Map();
+  return function allow(ip) {
+    const now = Date.now();
+    let b = buckets.get(ip);
+    if (!b || now >= b.resetAt) {
+      if (!b && buckets.size >= 128) buckets.delete(buckets.keys().next().value);
+      b = { n: 0, resetAt: now + windowMs };
+      buckets.set(ip, b);
+    }
+    if (b.n >= max) return false;
+    b.n++;
+    return true;
+  };
+}
+
+const MINER_PREFIX = "/api/miner/";
+const allowMiner = createRateLimiter(3, 5000);
+const allowStatus = createRateLimiter(10, 5000);
+const allowEvents = createRateLimiter(4, 10000);
+
 function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
   const staticFiles = loadStaticCache(publicDir);
   const usePassphrase = config.PASSPHRASE.length > 0;
@@ -163,6 +184,11 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     }
 
     if (pathname === "/events") {
+      if (!allowEvents(req.socket.remoteAddress || "")) {
+        res.writeHead(429, HDR_TEXT);
+        res.end("Too Many Requests");
+        return;
+      }
       res.writeHead(200, HDR_SSE);
       sseHub.handleConnection(req, res);
       return;
@@ -174,9 +200,14 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
       return;
     }
 
-    if (req.method === "POST" && pathname.startsWith("/api/miner/")) {
-      const action = pathname.slice(12);
+    if (req.method === "POST" && pathname.startsWith(MINER_PREFIX)) {
+      const action = pathname.slice(MINER_PREFIX.length);
       if (action === "start" || action === "stop" || action === "restart") {
+        if (!allowMiner(req.socket.remoteAddress || "")) {
+          res.writeHead(429, HDR_TEXT);
+          res.end("Too Many Requests");
+          return;
+        }
         minerManager.requestAction(action);
         res.writeHead(200, HDR_JSON);
         res.end('{"status":"ok"}');
@@ -185,6 +216,11 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     }
 
     if (pathname === "/api/status") {
+      if (!allowStatus(req.socket.remoteAddress || "")) {
+        res.writeHead(429, HDR_TEXT);
+        res.end("Too Many Requests");
+        return;
+      }
       const body = JSON.stringify(formatStatsSnapshot(state));
       res.writeHead(200, HDR_JSON);
       res.end(body);
