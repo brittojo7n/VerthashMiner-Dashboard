@@ -68,9 +68,14 @@ class SseHub {
     try {
       res.write(": stream established\n\n");
 
-      const freshSnapshot = formatStatsSnapshot(this.state);
+      let freshSnapshot;
+      try {
+        freshSnapshot = formatStatsSnapshot(this.state);
+        this.state.dirty = false;
+      } catch {
+        freshSnapshot = { now: Date.now(), miner: this.state.miner, mining: this.state.mining, gpu: this.state.gpu, host: this.state.host };
+      }
       this.cachedPayload = `event: stats\ndata: ${JSON.stringify(freshSnapshot)}\n\n`;
-      this.state.dirty = false;
       
       res.write(this.cachedPayload);
       

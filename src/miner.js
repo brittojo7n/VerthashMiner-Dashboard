@@ -3,14 +3,10 @@ const { parseMinerLine } = require("./parser");
 
 const RX_NORM = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 
-function createStreamReader(onLine, onFlush, isEnabled, isStderr) {
+function createStreamReader(onLine, onFlush, isEnabled, forward) {
   let buffer = "";
   return function handleChunk(chunk) {
-    if (isStderr) {
-      process.stderr.write(chunk);
-    } else {
-      process.stdout.write(chunk);
-    }
+    if (forward) forward(chunk);
     buffer += chunk;
     if (buffer.length > 65536) {
       const lastNl = buffer.lastIndexOf("\n");
@@ -183,8 +179,12 @@ class MinerManager {
       if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
     };
 
-    this.proc.stdout.on("data", createStreamReader(handleLine, handleFlush, () => this.parsingEnabled, false));
-    this.proc.stderr.on("data", createStreamReader(handleLine, handleFlush, () => this.parsingEnabled, true));
+    const { FORWARD_CONSOLE } = this.config;
+    const stdoutForward = FORWARD_CONSOLE ? chunk => process.stdout.write(chunk) : null;
+    const stderrForward = FORWARD_CONSOLE ? chunk => process.stderr.write(chunk) : null;
+
+    this.proc.stdout.on("data", createStreamReader(handleLine, handleFlush, () => this.parsingEnabled, stdoutForward));
+    this.proc.stderr.on("data", createStreamReader(handleLine, handleFlush, () => this.parsingEnabled, stderrForward));
 
     this.proc.on("error", err => {
       this.isStoppingChild = false;

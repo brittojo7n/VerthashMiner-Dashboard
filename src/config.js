@@ -23,6 +23,8 @@ const MINER_CWD = process.env.MINER_CWD || "";
 const PASSPHRASE = process.env.PASSPHRASE || "";
 const SESSION_SECRET = process.env.SESSION_SECRET || "";
 
+const FORWARD_CONSOLE = process.env.FORWARD_CONSOLE === "true";
+
 if (!SESSION_SECRET) {
   console.error("[FATAL] Missing SESSION_SECRET in .env file.");
   console.error("[FATAL] You must provide a random cryptographic string to secure session cookies.");
@@ -63,5 +65,6 @@ module.exports = {
   MINER_CWD,
   PASSPHRASE,
   SESSION_SECRET,
-  WALLET
+  WALLET,
+  FORWARD_CONSOLE
 };

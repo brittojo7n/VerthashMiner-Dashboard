@@ -53,6 +53,11 @@ class GpuManager {
       this.busy = false;
       if (!err && stdout) {
         this.state.gpu = parseSmiOutput(String(stdout));
+        this.state.gpuError = "";
+        this.state.dirty = true;
+        if (typeof this.onUpdate === "function") this.onUpdate();
+      } else if (err) {
+        this.state.gpuError = err.message || String(err);
         this.state.dirty = true;
         if (typeof this.onUpdate === "function") this.onUpdate();
       }

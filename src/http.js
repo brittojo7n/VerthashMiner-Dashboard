@@ -122,7 +122,7 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
             attempt.failures = [];
             attempt.blockedUntil = 0;
 
-            const token = crypto.createHmac("sha256", config.SESSION_SECRET).update(crypto.randomBytes(16)).digest("hex");
+            const token = crypto.createHmac("sha256", config.SESSION_SECRET).update(crypto.randomBytes(32)).digest("hex");
             sessions.set(token, Date.now() + 1800 * 1000);
             res.writeHead(200, {
               ...HDR_JSON,
