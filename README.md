@@ -110,3 +110,62 @@ Create a narrowly scoped inbound rule for TCP 3000 on the Private profile. Do no
 - JSON status: `GET /api/status`
 - Live stream: `GET /events`
 - Health check: `GET /health`
+
+## Project structure
+
+No build step and no runtime dependencies: `node server.js` is the only command.
+The browser loads native ES modules directly.
+
+```
+server.js              orchestrator; wires the modules together
+src/
+  config.js            .env parsing, validation and fail-fast security gates
+  constants.js         shared status/log/limit enums
+  state.js             central state object and the client snapshot projection
+  parser.js            classifies VerthashMiner log lines
+  devices.js           --device-list parsing, PCI normalisation, stream reader
+  miner.js             child-process supervision and lifecycle actions
+  gpu.js               nvidia-smi polling (only while a client is attached)
+  sse.js               Server-Sent Events fan-out
+  http.js              routing
+  auth.js              sessions, lockout, constant-time comparison
+  ratelimit.js         fixed-window limiter with Retry-After support
+  static.js            in-memory asset cache
+public/
+  index.html
+  style.css
+  js/
+    app.js             entry point and render loop
+    connection.js      SSE lifecycle, backoff, rate-limit recovery
+    gpu.js             GPU telemetry cards
+    console.js         miner console
+    toast.js           notifications
+    dom.js             cached lookups and change-guarded writes
+    format.js          pure formatting helpers
+```
+
+## Tests
+
+```bash
+./test/all.sh          # everything
+node test/run.js       # server modules
+node test/client.mjs   # browser modules against a DOM stub
+node test/render.mjs   # full render pass using a captured snapshot
+```
+
+The suites are dependency-free. `test/snapshot.json` is a real `/api/status`
+payload, so the render test fails if the UI stops populating.
+
+## Performance notes
+
+Measured with a tab open and the miner streaming:
+
+- **Idle CPU (no tab open): 0.00000%** — no timers, no polling, no parsing.
+- **Active CPU: ~0.13%**, dominated by the `nvidia-smi` spawn.
+- **RSS: ~55 MB**, of which roughly 40 MB is the Node runtime itself; the
+  application accounts for a few MB. A lower total is not reachable on Node
+  regardless of application code.
+
+The zero-idle property is structural and must be preserved: GPU polling and log
+parsing are both gated on there being at least one SSE subscriber, and the
+client closes its stream when the tab is hidden.

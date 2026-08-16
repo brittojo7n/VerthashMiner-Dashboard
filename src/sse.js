@@ -1,4 +1,7 @@
+"use strict";
+
 const { formatStatsSnapshot } = require("./state");
+const { LIMITS } = require("./constants");
 
 class SseHub {
   constructor({ state, onSubscriberChange }) {
@@ -16,7 +19,12 @@ class SseHub {
   broadcast() {
     if (this.clients.size === 0 || !this.state.dirty) return;
 
-    if (this.bcastTimer) clearTimeout(this.bcastTimer);
+    // Trailing-edge THROTTLE, not a debounce. Re-arming the timer on every
+    // update (the previous behaviour) meant a miner emitting lines faster than
+    // the coalescing window kept pushing the deadline back and the UI never
+    // received a frame. Leaving an already-armed timer alone guarantees a
+    // flush at least every COALESCE_MS while still batching bursts.
+    if (this.bcastTimer) return;
 
     this.bcastTimer = setTimeout(() => {
       this.bcastTimer = null;
@@ -53,12 +61,33 @@ class SseHub {
           this._notifyChange();
         }
       }
-    }, 50);
+    }, LIMITS.BROADCAST_MS);
+  }
+
+  // Drop sockets that are already gone. A laptop that sleeps/wakes can leave
+  // half-open connections behind; without this they occupy the client cap
+  // until a TCP timeout fires and lock the user out of their own dashboard.
+  _reapDeadClients() {
+    for (const res of this.clients) {
+      const dead = res.writableEnded || res.destroyed ||
+        (res.socket && (res.socket.destroyed || !res.socket.writable));
+      if (dead) {
+        this.clients.delete(res);
+        try { res.end(); } catch { }
+      }
+    }
   }
 
   handleConnection(req, res) {
-    if (this.clients.size >= 4) {
-      res.end("event: error\ndata: Too many clients\n\n");
+    if (this.clients.size >= LIMITS.MAX_SSE_CLIENTS) {
+      this._reapDeadClients();
+      this._notifyChange();
+    }
+    if (this.clients.size >= LIMITS.MAX_SSE_CLIENTS) {
+      // Headers are already sent by the route, so signal via the event stream
+      // itself and close; the client surfaces this as a connection error.
+      res.write("event: error\ndata: Too many clients\n\n");
+      res.end();
       return;
     }
 
@@ -94,7 +123,7 @@ class SseHub {
         this.clients.delete(res);
         this._notifyChange();
       }
-    }, 15000);
+    }, LIMITS.HEARTBEAT_MS);
 
     const cleanup = () => {
       clearInterval(heartbeat);

@@ -117,4 +117,4 @@ class GpuManager {
   }
 }
 
-module.exports = { GpuManager };
+module.exports = { GpuManager, parseSmiOutput };
