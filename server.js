@@ -77,10 +77,9 @@ class Server {
       this.httpServer.close(resolve);
     });
 
-    this.minerManager.stop()
-      .then(() => closeHttpServer())
-      .catch(() => closeHttpServer())
-      .finally(() => process.exit(0));
+    this.minerManager.stop().finally(() => {
+      closeHttpServer().finally(() => process.exit(0));
+    });
   }
 
   _attachSignalHandlers() {

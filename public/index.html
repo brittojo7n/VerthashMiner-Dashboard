@@ -28,9 +28,9 @@
     <div class="auth-modal glass-modal">
       <h2 id="confirmTitle">Confirm Action</h2>
       <p id="confirmDesc">Are you sure you want to proceed?</p>
-      <div style="display: flex; gap: 12px; margin-top: 24px;">
-        <button class="auth-btn auth-btn-cancel" id="confirmCancel" style="margin-top: 0;">Cancel</button>
-        <button class="auth-btn auth-btn-start" id="confirmYes" style="margin-top: 0;">START</button>
+      <div class="btn-group">
+        <button class="auth-btn auth-btn-cancel" id="confirmCancel">Cancel</button>
+        <button class="auth-btn auth-btn-start" id="confirmYes">START</button>
       </div>
     </div>
   </div>
@@ -41,7 +41,7 @@
         <h1>VerthashMiner Dashboard</h1>
         <div class="sub" id="host">Initializing connection...</div>
       </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
+      <div class="flex-center">
         <button class="c-btn btn-start" id="btnAction" disabled>START</button>
         <button class="c-btn btn-restart" id="btnRestart" disabled>RESTART</button>
         <div class="status glass-pill"><span class="dot" id="dot"></span><span id="status">CONNECTING</span></div>
@@ -78,7 +78,7 @@
 
       <div class="panel wide glass-panel">
         <div class="gpu-head">
-          <div style="min-width: 0;">
+          <div class="min-w-0">
             <div class="gpu-name">Mining Metrics</div>
             <div class="small wallet-addr" id="walletAddress">—</div>
           </div>
