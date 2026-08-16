@@ -847,12 +847,11 @@ h1 {
   border-radius: 16px;
 
   background:
-    linear-gradient(135deg, rgba(var(--toast-rgb), 0.10), rgba(var(--toast-rgb), 0.03)),
+    linear-gradient(135deg, rgba(var(--toast-rgb), 0.16), rgba(var(--toast-rgb), 0.04) 60%, transparent),
     rgba(var(--glass-tint), 0.55);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid rgba(var(--toast-rgb), 0.22);
-  border-left: 3px solid rgb(var(--toast-rgb));
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.35),
     0 0 0 1px rgba(255, 255, 255, 0.05) inset;
@@ -906,7 +905,7 @@ h1 {
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .toast {
     background:
-      linear-gradient(135deg, rgba(var(--toast-rgb), 0.14), rgba(var(--toast-rgb), 0.06)),
+      linear-gradient(135deg, rgba(var(--toast-rgb), 0.20), rgba(var(--toast-rgb), 0.08) 60%, transparent),
       rgba(var(--glass-tint), 0.97);
   }
 }
