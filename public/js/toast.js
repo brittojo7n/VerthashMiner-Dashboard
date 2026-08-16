@@ -2,7 +2,7 @@ import { el, make } from "./dom.js";
 
 const DEFAULT_MS = 3000;
 const MAX_VISIBLE = 4;
-const ICONS = { info: "i", warn: "!", error: "\u00d7", success: "\u2713" };
+const ICONS = { info: "i", warn: "!", error: "\u00d7", success: "\u2713", neutral: "\u25a0" };
 
 const live = new Map();
 let stack = null;
@@ -71,3 +71,4 @@ export const info = variant("info");
 export const warn = variant("warn");
 export const error = variant("error");
 export const success = variant("success");
+export const neutral = variant("neutral");

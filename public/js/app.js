@@ -71,12 +71,17 @@ function paintAutoScroll(on) {
 
 function announce(status) {
   if (lastStatus !== null && status !== lastStatus) {
+    const wasIdle = IDLE.has(lastStatus);
+    const wasLive = LIVE.has(lastStatus);
+
     if (status === "CRASHED") {
       toast.error("Miner Crashed", "The VerthashMiner process exited unexpectedly.", "miner-state");
-    } else if (status === "MINING" && (lastStatus === "DISCONNECTED" || lastStatus === "CRASHED")) {
+    } else if (status === "STOPPED" && !wasIdle) {
+      toast.neutral("Miner Stopped", "The VerthashMiner process has stopped.", "miner-state");
+    } else if (status === "MINING" && lastStatus === "DISCONNECTED") {
       toast.success("Mining Resumed", "The miner is hashing again.", "miner-state");
-    } else if (status === "STOPPED" && (lastStatus === "MINING" || lastStatus === "CONNECTED")) {
-      toast.info("Miner Stopped", "The VerthashMiner process is no longer running.", "miner-state");
+    } else if (LIVE.has(status) && !wasLive) {
+      toast.success("Miner Started", "The VerthashMiner process is running.", "miner-state");
     }
   }
   lastStatus = status;

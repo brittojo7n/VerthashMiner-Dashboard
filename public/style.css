@@ -10,8 +10,6 @@
   --purple: #8b5cf6;
 
   --bg-rgb: 11, 14, 20;
-  --text-rgb: 240, 244, 248;
-  --muted-rgb: 148, 163, 184;
   --white-rgb: 255, 255, 255;
   --black-rgb: 0, 0, 0;
   --accent-rgb: 0, 242, 254;
@@ -20,13 +18,12 @@
   --yellow-rgb: 245, 158, 11;
   --red-rgb: 239, 68, 68;
   --purple-rgb: 139, 92, 246;
+  --slate-rgb: 148, 163, 184;
 
   --white: #ffffff;
-  --slate-100: #f1f5f9;
   --slate-200: #e2e8f0;
   --slate-300: #cbd5e1;
   --slate-400: #64748b;
-  --slate-500: #94a3b8;
   --green-300: #34d399;
   --red-300: #fca5a5;
   --red-400: #f87171;
@@ -38,7 +35,6 @@
 
   --surface-raised: rgba(var(--bg-rgb), 0.7);
   --surface-sunken: #080c14;
-  --terminal-bg: #05070c;
   --overlay: rgba(var(--black-rgb), 0.6);
 
   --border: rgba(var(--white-rgb), 0.08);
@@ -73,13 +69,20 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at 15% 50px, rgba(var(--accent2-rgb), 0.1), transparent 25%),
-              radial-gradient(circle at 85% 30%, rgba(var(--purple-rgb), 0.1), transparent 25%),
-              var(--bg);
+  background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(circle at 15% 50px, rgba(var(--accent2-rgb), 0.1), transparent 25%),
+              radial-gradient(circle at 85% 30%, rgba(var(--purple-rgb), 0.1), transparent 25%);
 }
 
 button, input, select, textarea {
@@ -99,6 +102,10 @@ button, input, select, textarea {
 
   .glass-panel { background: rgba(var(--glass-tint), 0.55); }
   .glass-modal { background: rgba(var(--glass-tint), 0.62); }
+}
+
+@media (max-width: 700px) {
+  :root { --glass-blur: blur(10px) saturate(140%); }
 }
 
 .wrap {
@@ -158,19 +165,13 @@ h1 {
   display: inline-block;
 }
 
-.dot.ok {
-  background: var(--green);
-  box-shadow: 0 0 10px rgba(var(--green-rgb), 0.5);
-}
+.dot.ok   { --dot-rgb: var(--green-rgb); }
+.dot.err  { --dot-rgb: var(--red-rgb); }
+.dot.warn { --dot-rgb: var(--yellow-rgb); }
 
-.dot.err {
-  background: var(--red);
-  box-shadow: 0 0 10px rgba(var(--red-rgb), 0.5);
-}
-
-.dot.warn {
-  background: var(--yellow);
-  box-shadow: 0 0 10px rgba(var(--yellow-rgb), 0.5);
+.dot.ok, .dot.err, .dot.warn {
+  background: rgb(var(--dot-rgb));
+  box-shadow: 0 0 10px rgba(var(--dot-rgb), 0.5);
 }
 
 .grid {
@@ -474,40 +475,22 @@ h1 {
   color: var(--accent);
 }
 
-.btn-start {
-  background: rgba(var(--green-rgb), 0.15);
-  border-color: rgba(var(--green-rgb), 0.4);
-  color: var(--green);
+.btn-start  { --btn-rgb: var(--green-rgb);  --btn-fg: var(--green);  --btn-fg-hover: var(--green-300); }
+.btn-stop   { --btn-rgb: var(--red-rgb);    --btn-fg: var(--red);    --btn-fg-hover: var(--red-400); }
+.btn-restart{ --btn-rgb: var(--yellow-rgb); --btn-fg: var(--yellow); --btn-fg-hover: var(--yellow-300); }
+
+.btn-start, .btn-stop, .btn-restart {
+  background: rgba(var(--btn-rgb), 0.15);
+  border-color: rgba(var(--btn-rgb), 0.4);
+  color: var(--btn-fg);
 }
 
-.btn-start:hover:not(:disabled) {
-  background: rgba(var(--green-rgb), 0.25);
-  color: var(--green-300);
-  border-color: rgba(var(--green-rgb), 0.6);
-}
-
-.btn-stop {
-  background: rgba(var(--red-rgb), 0.15);
-  border-color: rgba(var(--red-rgb), 0.4);
-  color: var(--red);
-}
-
-.btn-stop:hover:not(:disabled) {
-  background: rgba(var(--red-rgb), 0.25);
-  color: var(--red-400);
-  border-color: rgba(var(--red-rgb), 0.6);
-}
-
-.btn-restart {
-  background: rgba(var(--yellow-rgb), 0.15);
-  border-color: rgba(var(--yellow-rgb), 0.4);
-  color: var(--yellow);
-}
-
+.btn-start:hover:not(:disabled),
+.btn-stop:hover:not(:disabled),
 .btn-restart:hover:not(:disabled) {
-  background: rgba(var(--yellow-rgb), 0.25);
-  color: var(--yellow-300);
-  border-color: rgba(var(--yellow-rgb), 0.6);
+  background: rgba(var(--btn-rgb), 0.25);
+  border-color: rgba(var(--btn-rgb), 0.6);
+  color: var(--btn-fg-hover);
 }
 
 .console-terminal {
@@ -516,7 +499,7 @@ h1 {
   overflow-y: auto;
   overflow-x: auto;
   padding: 14px 18px;
-  background: var(--terminal-bg);
+  background: var(--surface-sunken);
   font-family: var(--mono);
   font-size: 12.5px;
   line-height: 1.6;
@@ -803,50 +786,25 @@ h1 {
 .auth-btn:hover {
   background: rgba(var(--accent2-rgb), 0.3);
 }
-.auth-btn-start {
-  background: rgba(var(--green-rgb), 0.2);
-  border-color: rgba(var(--green-rgb), 0.5);
-  color: var(--green);
-}
-.auth-btn-start:hover {
-  background: rgba(var(--green-rgb), 0.35);
-  border-color: rgba(var(--green-rgb), 0.7);
-  color: var(--green-300);
-}
-
+.auth-btn-start   { --btn-rgb: var(--green-rgb);  --btn-fg: var(--green);  --btn-fg-hover: var(--green-300); }
 .auth-btn-stop,
-.auth-btn-danger {
-  background: rgba(var(--red-rgb), 0.2);
-  border-color: rgba(var(--red-rgb), 0.5);
-  color: var(--red);
-}
-.auth-btn-stop:hover,
-.auth-btn-danger:hover {
-  background: rgba(var(--red-rgb), 0.35);
-  border-color: rgba(var(--red-rgb), 0.7);
-  color: var(--red-400);
+.auth-btn-danger  { --btn-rgb: var(--red-rgb);    --btn-fg: var(--red);    --btn-fg-hover: var(--red-400); }
+.auth-btn-restart { --btn-rgb: var(--yellow-rgb); --btn-fg: var(--yellow); --btn-fg-hover: var(--yellow-300); }
+.auth-btn-cancel  { --btn-rgb: var(--white-rgb);  --btn-fg: var(--muted);  --btn-fg-hover: var(--text);
+                    --btn-a: 0.08; --btn-b: 0.18; --btn-a-hover: 0.15; --btn-b-hover: 0.3; }
+
+.auth-btn-start, .auth-btn-stop, .auth-btn-danger,
+.auth-btn-restart, .auth-btn-cancel {
+  background: rgba(var(--btn-rgb), var(--btn-a, 0.2));
+  border-color: rgba(var(--btn-rgb), var(--btn-b, 0.5));
+  color: var(--btn-fg);
 }
 
-.auth-btn-restart {
-  background: rgba(var(--yellow-rgb), 0.2);
-  border-color: rgba(var(--yellow-rgb), 0.5);
-  color: var(--yellow);
-}
-.auth-btn-restart:hover {
-  background: rgba(var(--yellow-rgb), 0.35);
-  border-color: rgba(var(--yellow-rgb), 0.7);
-  color: var(--yellow-300);
-}
-
-.auth-btn-cancel {
-  background: rgba(var(--white-rgb), 0.08);
-  border-color: rgba(var(--white-rgb), 0.18);
-  color: var(--muted);
-}
-.auth-btn-cancel:hover {
-  background: rgba(var(--white-rgb), 0.15);
-  border-color: rgba(var(--white-rgb), 0.3);
-  color: var(--slate-100);
+.auth-btn-start:hover, .auth-btn-stop:hover, .auth-btn-danger:hover,
+.auth-btn-restart:hover, .auth-btn-cancel:hover {
+  background: rgba(var(--btn-rgb), var(--btn-a-hover, 0.35));
+  border-color: rgba(var(--btn-rgb), var(--btn-b-hover, 0.7));
+  color: var(--btn-fg-hover);
 }
 
 .auth-error {
@@ -909,6 +867,7 @@ h1 {
 .toast-warn    { --toast-rgb: var(--yellow-rgb); }
 .toast-error   { --toast-rgb: var(--red-rgb); }
 .toast-success { --toast-rgb: var(--green-rgb); }
+.toast-neutral { --toast-rgb: var(--slate-rgb); }
 
 .toast-icon {
   flex: 0 0 auto;
