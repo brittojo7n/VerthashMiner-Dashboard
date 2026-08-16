@@ -3,17 +3,13 @@ const { parseMinerLine } = require("./parser");
 
 const RX_NORM = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 
-const FORWARD_CONSOLE = process.env.FORWARD_MINER_CONSOLE === "true";
-
 function createStreamReader(onLine, onFlush, isEnabled, isStderr) {
   let buffer = "";
   return function handleChunk(chunk) {
-    if (FORWARD_CONSOLE) {
-      if (isStderr) {
-        process.stderr.write(chunk);
-      } else {
-        process.stdout.write(chunk);
-      }
+    if (isStderr) {
+      process.stderr.write(chunk);
+    } else {
+      process.stdout.write(chunk);
     }
     buffer += chunk;
     if (buffer.length > 65536) {
@@ -40,7 +36,6 @@ class MinerManager {
     this.onUpdate = onUpdate;
     this.proc = null;
     this._stopPromise = null;
-    this._stopResolve = null;
     this._forceKillTimer = null;
     this.parsingEnabled = false;
     this.isStoppingChild = false;
