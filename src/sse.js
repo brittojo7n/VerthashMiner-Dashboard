@@ -58,8 +58,7 @@ class SseHub {
 
   handleConnection(req, res) {
     if (this.clients.size >= 4) {
-      res.writeHead(503, { "Content-Type": "text/plain" });
-      res.end("Too many clients");
+      res.end("event: error\ndata: Too many clients\n\n");
       return;
     }
 
@@ -67,11 +66,15 @@ class SseHub {
     this._notifyChange();
 
     try {
-      if (this.state.dirty || !this.cachedPayload) {
-        this.cachedPayload = `event: stats\ndata: ${JSON.stringify(formatStatsSnapshot(this.state))}\n\n`;
-        this.state.dirty = false;
-      }
+      res.write(": stream established\n\n");
+
+      const freshSnapshot = formatStatsSnapshot(this.state);
+      this.cachedPayload = `event: stats\ndata: ${JSON.stringify(freshSnapshot)}\n\n`;
+      this.state.dirty = false;
+      
       res.write(this.cachedPayload);
+      
+      if (res.flush) res.flush();
     } catch {
       this.clients.delete(res);
       this._notifyChange();
