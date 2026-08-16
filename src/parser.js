@@ -115,8 +115,6 @@ function parseMinerLine(raw, state, pushLog) {
       state.mining.status = "WAITING";
     }
   }
-
-  state.dirty = true;
 }
 
 module.exports = { parseMinerLine };
