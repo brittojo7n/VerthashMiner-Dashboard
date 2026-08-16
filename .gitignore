@@ -1,161 +1,44 @@
-# Dependencies
-node_modules/
-jspm_packages/
-web_modules/
-
-# Environment Variables, Secrets & Certificates
+# Environment variables & secrets
 .env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
 .env.*.local
-*.env
+.env.local
 *.local
 
-# Keep environment template / example files
+# Keep example env files tracked
 !.env.example
 !.env.sample
 !.env.template
 !.env.defaults
 
-# Private keys, certificates, credentials
-*.pem
-*.key
-*.cert
-*.crt
-*.pfx
-*.p12
-id_rsa
-id_rsa.pub
-credentials.json
-service-account*.json
-
-# Logs & Debugging
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-rush-debug.log*
-node_trace.*.json
-debug.log
-
-# Diagnostic reports (https://nodejs.org/api/report.html)
-report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
-
-# Build & Distribution Outputs
-dist/
-build/
-out/
-bin/
-lib-cov/
-*.tsbuildinfo
-*.js.map
-*.css.map
-
-# Framework-specific build artifacts
-.next/
-.nuxt/
-.output/
-.svelte-kit/
-.astro/
-.docusaurus/
-.vuepress/dist/
-storybook-static/
-.serverless/
-.fusebox/
-.dynamodb/
-
-# Cache & Temporary Directories
-.cache/
-.parcel-cache/
-.turbo/
-.vite/
-.eslintcache
-.stylelintcache
-.prettiercache
-.temp/
-.tmp/
-tmp/
-temp/
-
-# Testing & Code Coverage
-coverage/
-*.lcov
-.nyc_output/
-.coverage/
-junit.xml
-test-results/
-playwright-report/
-playwright/.cache/
-cypress/screenshots/
-cypress/videos/
-
-# Runtime / Process Files
-pids/
-*.pid
-*.seed
-*.pid.lock
-
-# Package Managers (Yarn Berry / Zero-Installs / Corepack)
-.yarn/cache/
-.yarn/unplugged/
-.yarn/build-state.yml
-.yarn/install-state.gz
-.pnp.*
-
-# OS-Generated Files
-# macOS
+# OS-generated files
 .DS_Store
-.AppleDouble
-.LSOverride
-Icon?
+.DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
-
-# Windows
+ehthumbs.db
 Thumbs.db
 Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
 desktop.ini
 $RECYCLE.BIN/
-*.cab
-*.msi
-*.msm
-*.msp
 *.lnk
 
-# Linux
-*~
-.fuse_hidden*
-.directory
-.Trash-*
-
-# IDEs & Code Editors
-# VS Code
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-*.code-workspace
-
-# JetBrains (WebStorm, IntelliJ IDEA, etc.)
+# Editor files
+.vscode/
 .idea/
-*.iws
-*.iml
-*.ipr
-
-# Sublime Text / Atom / Vim / Emacs
-*.sublime-workspace
-*.sublime-project
 *.swp
 *.swo
 *~
 .#*
 \#*#
+
+# Logs
+logs/
+*.log
+debug.log
+
+# Node
+node_modules/
+
+# Kilo
+.kilo/
