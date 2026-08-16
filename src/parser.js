@@ -6,6 +6,10 @@ const RX_NZERR = /\b(?:errors?|err):\s*[1-9]\d*\b/i;
 const RX_FATAL = /\b(?:cuda\s+error|failed\s+to|fatal|exception|enoent)\b/i;
 const RX_REJECT = /"result"\s*:\s*false\s*,\s*"error"\s*:\s*\[\s*\d+\s*,\s*"([^"]+)"/i;
 
+function canSetRunStatus(state) {
+  return !!(state.miner && state.miner.running && state.mining.status !== "STOPPING" && state.mining.status !== "STOPPED");
+}
+
 function classifyLine(line, lc) {
   if (line.length > 27 && line.charCodeAt(0) === 91 && line.charCodeAt(20) === 93) {
     const c = line.charCodeAt(22);
@@ -34,7 +38,7 @@ function parseMinerLine(raw, state, pushLog) {
   const lc = line.toLowerCase();
   const { isFatal, type } = classifyLine(line, lc);
 
-  if (isFatal) {
+  if (isFatal && canSetRunStatus(state)) {
     state.miner.lastError = line;
     state.mining.status = "CRASHED";
   }
@@ -90,7 +94,7 @@ function parseMinerLine(raw, state, pushLog) {
         }
       }
 
-      if (hr > 0) {
+      if (hr > 0 && canSetRunStatus(state)) {
         state.mining.status = "MINING";
         if (!isFatal) state.miner.lastError = "";
       }
@@ -109,9 +113,11 @@ function parseMinerLine(raw, state, pushLog) {
       state.mining.submitted = Number(acc[2]);
       state.mining.rejected = state.mining.submitted - state.mining.accepted;
       if (state.mining.rejected < 0) state.mining.rejected = 0;
-      state.mining.status = "MINING";
+      if (canSetRunStatus(state)) {
+        state.mining.status = "MINING";
+        state.miner.lastError = "";
+      }
       state.mining.lastAcceptedAt = Date.now();
-      state.miner.lastError = "";
 
       if (acc[3] && acc[3] !== "(pending...)") {
         state.mining.hashrateKHs = Number(acc[3]);
@@ -119,7 +125,7 @@ function parseMinerLine(raw, state, pushLog) {
     }
   }
 
-  if (!isFatal && state.mining.status !== "MINING") {
+  if (!isFatal && canSetRunStatus(state) && state.mining.status !== "MINING") {
     if (lc.includes("stratum") && lc.includes("connect")) {
       state.mining.status = "CONNECTED";
     } else if (lc.includes("waiting") || lc.includes("paused") || lc.includes("no work")) {

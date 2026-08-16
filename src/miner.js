@@ -82,12 +82,12 @@ class MinerManager {
   }
 
   enableParsing() {
-    if (!this.parsingEnabled) {
-      this.parsingEnabled = true;
-      for (const line of this.history) {
-        parseMinerLine(line, this.state, () => {});
-      }
+    if (this.parsingEnabled) return;
+    this.parsingEnabled = true;
+    if (this.state.miner.running) {
+      for (const line of this.history) parseMinerLine(line, this.state, () => {});
     }
+    this.history.length = 0;
   }
 
   disableParsing() {
@@ -246,8 +246,18 @@ class MinerManager {
     });
   }
 
+  _markStopped() {
+    this.state.miner.running = false;
+    this.state.mining.status = "STOPPED";
+    this.state.dirty = true;
+    if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
+  }
+
   stop() {
-    if (!this.proc || !this.state.miner.running) return Promise.resolve();
+    if (!this.proc || !this.state.miner.running) {
+      if (this.state.mining.status !== "STOPPED") this._markStopped();
+      return Promise.resolve();
+    }
     if (this._stopPromise) return this._stopPromise;
 
     this.state.mining.status = "STOPPING";
