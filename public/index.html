@@ -10,7 +10,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="/style.css">
 </head>
 
 <body>
@@ -28,9 +28,9 @@
     <div class="auth-modal glass-modal">
       <h2 id="confirmTitle">Confirm Action</h2>
       <p id="confirmDesc">Are you sure you want to proceed?</p>
-      <div style="display: flex; gap: 12px; margin-top: 24px;">
-        <button class="auth-btn auth-btn-cancel" id="confirmCancel" style="margin-top: 0;">Cancel</button>
-        <button class="auth-btn auth-btn-start" id="confirmYes" style="margin-top: 0;">START</button>
+      <div class="btn-group">
+        <button class="auth-btn auth-btn-cancel" id="confirmCancel">Cancel</button>
+        <button class="auth-btn auth-btn-start" id="confirmYes">START</button>
       </div>
     </div>
   </div>
@@ -41,7 +41,7 @@
         <h1>VerthashMiner Dashboard</h1>
         <div class="sub" id="host">Initializing connection...</div>
       </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
+      <div class="flex-center">
         <button class="c-btn btn-start" id="btnAction" disabled>START</button>
         <button class="c-btn btn-restart" id="btnRestart" disabled>RESTART</button>
         <div class="status glass-pill"><span class="dot" id="dot"></span><span id="status">CONNECTING</span></div>
@@ -51,7 +51,7 @@
     <div class="grid">
       <div class="panel glass-panel">
         <div class="label">Total Hashrate</div>
-        <div class="value gradient-text" id="hashrate">—<span class="unit">kH/s</span></div>
+        <div class="value gradient-text"><span id="hashrate">—</span><span class="unit">kH/s</span></div>
       </div>
       <div class="panel glass-panel">
         <div class="label">SHARES (ACC / SUB)</div>
@@ -78,7 +78,7 @@
 
       <div class="panel wide glass-panel">
         <div class="gpu-head">
-          <div style="min-width: 0;">
+          <div class="min-w-0">
             <div class="gpu-name">Mining Metrics</div>
             <div class="small wallet-addr" id="walletAddress">—</div>
           </div>
@@ -139,7 +139,9 @@
     <span class="local-time-value" id="localTime">—</span>
   </div>
 
-  <script src="/script.js"></script>
+  <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="false"></div>
+
+  <script type="module" src="/js/app.js"></script>
 </body>
 
 </html>

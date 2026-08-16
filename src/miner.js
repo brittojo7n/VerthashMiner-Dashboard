@@ -1,87 +1,74 @@
+"use strict";
+
 const { spawn, execFile } = require("node:child_process");
 const { parseMinerLine } = require("./parser");
+const { STATUS, LOG, LIMITS } = require("./constants");
+const { parseCudaDeviceList, createStreamReader, stripAnsi } = require("./devices");
 
-const RX_NORM = /\x1b\[[0-?]*[ -/]*[@-~]/g;
+const ACTIONS = Object.freeze({
+  start: STATUS.STARTING,
+  stop: STATUS.STOPPING,
+  restart: STATUS.RESTARTING
+});
+const FORCE_KILL_MS = 2000;
+const RESTART_GAP_MS = 500;
 
-function normalizePci(raw) {
-  const m = String(raw).match(/([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.?([0-9a-fA-F]?)/);
-  return m ? `${m[1].toLowerCase()}:${m[2].toLowerCase()}:${(m[3] || "0").toLowerCase()}` : String(raw).toLowerCase();
-}
-
-function parseCudaDeviceList(buf, pciMap) {
-  let inCuda = false;
-  let pendingIndex = null;
-  for (const line of buf.split("\n")) {
-    const lower = line.toLowerCase();
-    if (lower.includes("cuda") && (lower.includes("devices:") || lower.includes("device config"))) {
-      inCuda = true;
-      pendingIndex = null;
-      continue;
-    }
-    if (lower.includes("opencl") && (lower.includes("devices:") || lower.includes("device config"))) {
-      inCuda = false;
-      pendingIndex = null;
-      continue;
-    }
-    if (!inCuda) continue;
-
-    const same = line.match(/index:\s*(\d+).*?pcieid:\s*([0-9a-fA-F:.]+)/i);
-    if (same) {
-      pciMap[normalizePci(same[2])] = same[1];
-      pendingIndex = null;
-      continue;
-    }
-
-    const idx = line.match(/deviceindex:\s*(\d+)/i);
-    if (idx) {
-      pendingIndex = idx[1];
-      continue;
-    }
-
-    const pci = line.match(/pcieid:\s*([0-9a-fA-F:.]+)/i);
-    if (pci && pendingIndex != null && !/not\s*avilable/i.test(line)) {
-      pciMap[normalizePci(pci[1])] = pendingIndex;
-      pendingIndex = null;
-    }
-  }
-}
-
-function createStreamReader(onLine, onFlush, isEnabled, forward) {
-  let buffer = "";
-  return function handleChunk(chunk) {
-    if (forward) forward(chunk);
-    buffer += chunk;
-    if (buffer.length > 65536) {
-      const lastNl = buffer.lastIndexOf("\n");
-      buffer = lastNl !== -1 ? buffer.slice(lastNl + 1) : "";
-    }
-    const lastNewlineIdx = buffer.lastIndexOf("\n");
-    if (lastNewlineIdx !== -1) {
-      const lines = buffer.slice(0, lastNewlineIdx).split(/\r?\n/);
-      const enabled = isEnabled();
-      for (const line of lines) {
-        if (line) onLine(line, enabled);
-      }
-      buffer = buffer.slice(lastNewlineIdx + 1);
-      if (enabled && typeof onFlush === "function") onFlush();
-    }
-  };
-}
+const CLEAN_STATS = Object.freeze({
+  hashrateKHs: null,
+  accepted: 0,
+  submitted: 0,
+  rejected: 0,
+  difficulty: null,
+  lastAcceptedAt: null,
+  hashratesReady: false
+});
 
 class MinerManager {
   constructor({ config, state, onUpdate }) {
     this.config = config;
     this.state = state;
     this.onUpdate = onUpdate;
+
     this.proc = null;
+    this.parsingEnabled = false;
+    this.isStoppingChild = false;
+    this.history = [];
+
     this._stopPromise = null;
     this._forceKillTimer = null;
     this._actionTimer = null;
     this._pendingAction = null;
     this._spawning = false;
-    this.parsingEnabled = false;
+  }
+
+  _emit() {
+    if (this.parsingEnabled) this.onUpdate?.();
+  }
+
+  _setMining(patch) {
+    Object.assign(this.state.mining, patch);
+    this.state.dirty = true;
+  }
+
+  _resetStats() {
+    this._setMining({ ...CLEAN_STATS, gpuHashrates: {} });
+  }
+
+  _markDown(status, error) {
+    this._spawning = false;
     this.isStoppingChild = false;
-    this.history = [];
+    this.state.miner.running = false;
+    if (error) this.state.miner.lastError = error;
+    this._setMining({ status });
+    this._resetStats();
+  }
+
+  pushLog(text, type = LOG.INFO) {
+    const logs = this.state.miner.logs;
+    if (!logs) return;
+    logs.push(text, type);
+    this.state.miner.lastLine = text;
+    this.state.dirty = true;
   }
 
   enableParsing() {
@@ -97,83 +84,58 @@ class MinerManager {
     this.parsingEnabled = false;
   }
 
-  pushLog(text, type = "info") {
-    if (this.state?.miner?.logs) {
-      this.state.miner.logs.push(text, type);
-      this.state.miner.lastLine = text;
-      this.state.dirty = true;
-    }
-  }
-
   start() {
-    if (this._stopPromise) {
-      return this._stopPromise.then(() => this.start());
-    }
+    if (this._stopPromise) return this._stopPromise.then(() => this.start());
+    if (this.proc || this.state.miner.running || this._spawning) return Promise.resolve();
 
-    if (this.proc || this.state.miner.running || this._spawning) {
-      return Promise.resolve();
-    }
-
-    this._resetMiningStats();
+    this._resetStats();
 
     const { MINER_EXE, MINER_ARGS, MINER_CWD } = this.config;
-
     if (!MINER_CWD || !MINER_ARGS.length) {
-      const msg = !MINER_CWD
-        ? "MINER_CWD not configured in .env"
-        : "MINER_ARGS not configured in .env";
-      this.state.miner.lastError = msg;
-      this.state.mining.status = "STOPPED";
-      this.pushLog(msg, "warn");
+      const message = `${MINER_CWD ? "MINER_ARGS" : "MINER_CWD"} not configured in .env`;
+      this.state.miner.lastError = message;
+      this._setMining({ status: STATUS.STOPPED });
+      this.pushLog(message, LOG.WARN);
       return Promise.resolve();
     }
 
     this._spawning = true;
-    this.state.mining.status = "STARTING";
-    this.pushLog("Starting miner...", "system");
-    if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
+    this._setMining({ status: STATUS.STARTING });
+    this.pushLog("Starting miner...", LOG.SYSTEM);
+    this._emit();
 
-    try {
-      const listProc = spawn(MINER_EXE, ["--device-list"], {
-        cwd: MINER_CWD,
-        windowsHide: true,
-        shell: false,
-        detached: false
-      });
-
-      let buf = "";
-      const onListData = c => {
-        if (buf.length < 65536) buf += String(c);
-      };
-      listProc.stdout.on("data", onListData);
-      listProc.stderr.on("data", onListData);
-
-      listProc.on("close", () => {
-        parseCudaDeviceList(buf, this.state.mining.pciMap);
-        this._startMiner();
-      });
-
-      listProc.on("error", () => this._startMiner());
-    } catch {
-      this._startMiner();
-    }
-
+    this._probeDevices(() => this._spawnMiner());
     return Promise.resolve();
   }
 
-  _resetMiningStats() {
-    this.state.mining.hashrateKHs = null;
-    this.state.mining.accepted = 0;
-    this.state.mining.submitted = 0;
-    this.state.mining.rejected = 0;
-    this.state.mining.difficulty = null;
-    this.state.mining.lastAcceptedAt = null;
-    this.state.mining.gpuHashrates = {};
-    this.state.mining.hashratesReady = false;
+  _probeDevices(done) {
+    const { MINER_EXE, MINER_CWD } = this.config;
+    let finished = false;
+    const once = () => { if (!finished) { finished = true; done(); } };
+
+    try {
+      const probe = spawn(MINER_EXE, ["--device-list"], {
+        cwd: MINER_CWD, windowsHide: true, shell: false, detached: false
+      });
+
+      let buffer = "";
+      const collect = chunk => {
+        if (buffer.length < LIMITS.STREAM_BUFFER_BYTES) buffer += chunk;
+      };
+      probe.stdout.on("data", collect);
+      probe.stderr.on("data", collect);
+      probe.on("close", () => {
+        parseCudaDeviceList(buffer, this.state.mining.pciMap);
+        once();
+      });
+      probe.on("error", once);
+    } catch {
+      once();
+    }
   }
 
-  _startMiner() {
-    const { MINER_EXE, MINER_ARGS, MINER_CWD } = this.config;
+  _spawnMiner() {
+    const { MINER_EXE, MINER_ARGS, MINER_CWD, FORWARD_CONSOLE } = this.config;
 
     try {
       this.proc = spawn(MINER_EXE, MINER_ARGS, {
@@ -184,12 +146,9 @@ class MinerManager {
         stdio: ["inherit", "pipe", "pipe"]
       });
     } catch (err) {
-      this._spawning = false;
-      this.state.miner.running = false;
-      this.state.miner.lastError = err.message;
-      this.state.mining.status = "CRASHED";
-      this.pushLog(err.message, "error");
-      if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
+      this._markDown(STATUS.CRASHED, err.message);
+      this.pushLog(err.message, LOG.ERROR);
+      this._emit();
       return;
     }
 
@@ -197,153 +156,131 @@ class MinerManager {
     this.state.miner.running = true;
     this.state.miner.pid = this.proc.pid;
     this.state.miner.startedAt = Date.now();
-    this.state.mining.status = "STARTING";
-    if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
+    this._setMining({ status: STATUS.STARTING });
+    this._emit();
 
-    const handleLine = (line, enabled) => {
+    const onLine = (line, enabled) => {
       if (enabled) {
-        parseMinerLine(line, this.state, (l, t) => this.pushLog(l, t));
-      } else {
-        this.history.push(line);
-        if (this.history.length > 25) this.history.shift();
-        const clean = String(line).replace(RX_NORM, "").trim();
-        if (clean) {
-          this.pushLog(clean, "info");
-        }
+        parseMinerLine(line, this.state, (text, type) => this.pushLog(text, type));
+        return;
       }
+
+      this.history.push(line);
+      if (this.history.length > LIMITS.REPLAY_LINES) this.history.shift();
+      const clean = stripAnsi(line).trim();
+      if (clean) this.pushLog(clean, LOG.INFO);
     };
 
-    const handleFlush = () => {
-      if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
-    };
+    const onFlush = () => this._emit();
+    const enabled = () => this.parsingEnabled;
+    const mirror = stream => (FORWARD_CONSOLE ? chunk => stream.write(chunk) : null);
 
-    const { FORWARD_CONSOLE } = this.config;
-    const stdoutForward = FORWARD_CONSOLE ? chunk => process.stdout.write(chunk) : null;
-    const stderrForward = FORWARD_CONSOLE ? chunk => process.stderr.write(chunk) : null;
-
-    this.proc.stdout.on("data", createStreamReader(handleLine, handleFlush, () => this.parsingEnabled, stdoutForward));
-    this.proc.stderr.on("data", createStreamReader(handleLine, handleFlush, () => this.parsingEnabled, stderrForward));
+    this.proc.stdout.on("data", createStreamReader(onLine, onFlush, enabled, mirror(process.stdout)));
+    this.proc.stderr.on("data", createStreamReader(onLine, onFlush, enabled, mirror(process.stderr)));
 
     this.proc.on("error", err => {
-      this._spawning = false;
-      this.isStoppingChild = false;
-      this.state.miner.running = false;
-      this.state.miner.lastError = err.message;
-      this.state.mining.status = "CRASHED";
-      this._resetMiningStats();
-      this.pushLog(err.message, "error");
-      if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
+      this._markDown(STATUS.CRASHED, err.message);
+      this.pushLog(err.message, LOG.ERROR);
+      this._emit();
     });
 
-    this.proc.on("close", (code, sig) => {
-      this._spawning = false;
-      this.isStoppingChild = false;
-      this.state.miner.running = false;
+    this.proc.on("close", (code, signal) => {
+      const { status } = this.state.mining;
+      const deliberate = status === STATUS.STOPPING || status === STATUS.STOPPED;
+      const next = deliberate ? status
+        : (code === 0 || code === null) ? STATUS.STOPPED : STATUS.CRASHED;
+
+      this._markDown(next);
       this.state.miner.exitCode = code;
-      this.state.miner.signal = sig;
-      if (this.state.mining.status !== "STOPPING" && this.state.mining.status !== "STOPPED") {
-        this.state.mining.status = (code === 0 || code === null) ? "STOPPED" : "CRASHED";
-      }
-      this._resetMiningStats();
-      this.pushLog(
-        `Exited (code: ${code}${sig ? `, sig: ${sig}` : ""})`,
-        "system"
-      );
+      this.state.miner.signal = signal;
+      this.pushLog(`Exited (code: ${code}${signal ? `, sig: ${signal}` : ""})`, LOG.SYSTEM);
       this.proc = null;
-      if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
+      this._emit();
     });
+  }
+
+  _clearScheduledAction() {
+    clearTimeout(this._actionTimer);
+    this._actionTimer = null;
+    this._pendingAction = null;
   }
 
   _markStopped() {
     this.state.miner.running = false;
-    this.state.mining.status = "STOPPED";
-    this.state.dirty = true;
-    if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
+    this._setMining({ status: STATUS.STOPPED });
+    this._emit();
   }
 
-  _clearScheduledAction() {
-    if (this._actionTimer) {
-      clearTimeout(this._actionTimer);
-      this._actionTimer = null;
-    }
-    this._pendingAction = null;
+  get _alive() {
+    return Boolean(this.state.miner.running || this.proc || this._spawning);
   }
 
   requestAction(action) {
-    if (action !== "start" && action !== "stop" && action !== "restart") return;
+    if (!(action in ACTIONS) || this._pendingAction === action) return;
 
-    if (this._pendingAction === action) return;
-
-    if (action === "start" && (this.state.miner.running || this._spawning || this.proc)) {
-      this._clearScheduledAction();
+    const idle = !this.state.miner.running && !this.proc && this._pendingAction !== "start";
+    if (action === "start" && this._alive) return this._clearScheduledAction();
+    if (action === "stop" && idle) {
+      if (this.state.mining.status !== STATUS.STOPPED) this._markStopped();
       return;
     }
-    if (action === "stop" && !this.state.miner.running && !this.proc && this._pendingAction !== "start") {
-      if (this.state.mining.status !== "STOPPED") this._markStopped();
-      return;
-    }
-    if (action === "restart" && !this.state.miner.running && !this.proc && this._pendingAction !== "start") {
-      this.requestAction("start");
-      return;
-    }
+    if (action === "restart" && idle) return this.requestAction("start");
 
     this._clearScheduledAction();
     this._pendingAction = action;
-    this.state.mining.status = action === "start" ? "STARTING" : action === "stop" ? "STOPPING" : "RESTARTING";
-    this.state.dirty = true;
-    if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
+    this._setMining({ status: ACTIONS[action] });
+    this._emit();
 
     this._actionTimer = setTimeout(() => {
+      const pending = this._pendingAction;
       this._actionTimer = null;
-      const act = this._pendingAction;
       this._pendingAction = null;
-      if (act === "start") this.start();
-      else if (act === "stop") this.stop();
-      else if (act === "restart") this.restart();
-    }, 2000);
+      this[pending]?.();
+    }, LIMITS.ACTION_DELAY_MS);
   }
 
   stop() {
     this._clearScheduledAction();
+
     if (!this.proc || !this.state.miner.running) {
-      if (this.state.mining.status !== "STOPPED") this._markStopped();
+      if (this.state.mining.status !== STATUS.STOPPED) this._markStopped();
       return Promise.resolve();
     }
     if (this._stopPromise) return this._stopPromise;
 
-    this.state.mining.status = "STOPPING";
-    if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
+    this._setMining({ status: STATUS.STOPPING });
+    this._emit();
 
     const pid = this.proc.pid;
+    const child = this.proc;
     this.isStoppingChild = true;
 
     this._stopPromise = new Promise(resolve => {
-      const onExit = () => {
-        if (this._forceKillTimer) {
-          clearTimeout(this._forceKillTimer);
-          this._forceKillTimer = null;
-        }
+      const finish = () => {
+        clearTimeout(this._forceKillTimer);
+        this._forceKillTimer = null;
         this.proc = null;
-        this.state.mining.status = "STOPPED";
-        resolve();
+        this._setMining({ status: STATUS.STOPPED });
         this._stopPromise = null;
         this.isStoppingChild = false;
+        resolve();
       };
 
-      this.proc.once("close", onExit);
-      this.proc.once("exit", onExit);
+      child.once("close", finish);
+      child.once("exit", finish);
 
       if (process.platform === "win32") {
         execFile("taskkill.exe", ["/pid", String(pid), "/T", "/F"]);
-      } else {
-        try { this.proc.kill("SIGINT"); } catch { }
-        this._forceKillTimer = setTimeout(() => {
-          if (this.proc && !this.proc.killed) {
-            try { this.proc.kill("SIGKILL"); } catch { }
-          }
-        }, 2000);
-        this._forceKillTimer.unref();
+        return;
       }
+
+      try { child.kill("SIGINT"); } catch {  }
+      this._forceKillTimer = setTimeout(() => {
+        if (this.proc && !this.proc.killed) {
+          try { this.proc.kill("SIGKILL"); } catch {  }
+        }
+      }, FORCE_KILL_MS);
+      this._forceKillTimer.unref();
     });
 
     return this._stopPromise;
@@ -352,11 +289,10 @@ class MinerManager {
   async restart() {
     if (this._spawning || this._stopPromise) return;
     await this.stop();
-    await new Promise(r => setTimeout(r, 500));
+
+    await new Promise(resolve => setTimeout(resolve, RESTART_GAP_MS));
     await this.start();
   }
 }
 
-module.exports = {
-  MinerManager
-};
+module.exports = { MinerManager, parseCudaDeviceList };

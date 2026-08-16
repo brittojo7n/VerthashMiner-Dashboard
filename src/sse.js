@@ -1,4 +1,7 @@
+"use strict";
+
 const { formatStatsSnapshot } = require("./state");
+const { LIMITS } = require("./constants");
 
 class SseHub {
   constructor({ state, onSubscriberChange }) {
@@ -16,7 +19,7 @@ class SseHub {
   broadcast() {
     if (this.clients.size === 0 || !this.state.dirty) return;
 
-    if (this.bcastTimer) clearTimeout(this.bcastTimer);
+    if (this.bcastTimer) return;
 
     this.bcastTimer = setTimeout(() => {
       this.bcastTimer = null;
@@ -53,12 +56,28 @@ class SseHub {
           this._notifyChange();
         }
       }
-    }, 50);
+    }, LIMITS.BROADCAST_MS);
+  }
+
+  _reapDeadClients() {
+    for (const res of this.clients) {
+      const dead = res.writableEnded || res.destroyed ||
+        (res.socket && (res.socket.destroyed || !res.socket.writable));
+      if (dead) {
+        this.clients.delete(res);
+        try { res.end(); } catch { }
+      }
+    }
   }
 
   handleConnection(req, res) {
-    if (this.clients.size >= 4) {
-      res.end("event: error\ndata: Too many clients\n\n");
+    if (this.clients.size >= LIMITS.MAX_SSE_CLIENTS) {
+      this._reapDeadClients();
+      this._notifyChange();
+    }
+    if (this.clients.size >= LIMITS.MAX_SSE_CLIENTS) {
+      res.write("event: error\ndata: Too many clients\n\n");
+      res.end();
       return;
     }
 
@@ -76,9 +95,9 @@ class SseHub {
         freshSnapshot = { now: Date.now(), miner: this.state.miner, mining: this.state.mining, gpu: this.state.gpu, host: this.state.host };
       }
       this.cachedPayload = `event: stats\ndata: ${JSON.stringify(freshSnapshot)}\n\n`;
-      
+
       res.write(this.cachedPayload);
-      
+
       if (res.flush) res.flush();
     } catch {
       this.clients.delete(res);
@@ -94,7 +113,7 @@ class SseHub {
         this.clients.delete(res);
         this._notifyChange();
       }
-    }, 15000);
+    }, LIMITS.HEARTBEAT_MS);
 
     const cleanup = () => {
       clearInterval(heartbeat);

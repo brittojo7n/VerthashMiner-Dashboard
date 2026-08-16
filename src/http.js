@@ -1,244 +1,188 @@
+"use strict";
+
 const http = require("node:http");
-const fs = require("node:fs");
-const path = require("node:path");
 const os = require("node:os");
-const crypto = require("node:crypto");
 const { formatStatsSnapshot } = require("./state");
+const { loadStaticCache } = require("./static");
+const { SessionStore, safeEqual } = require("./auth");
+const { createRateLimiter } = require("./ratelimit");
 
-const HDR_JSON = Object.freeze({ "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
-const HDR_TEXT = Object.freeze({ "Content-Type": "text/plain", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
-const HDR_SSE  = Object.freeze({ "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", "Connection": "keep-alive", "X-Accel-Buffering": "no", "X-Content-Type-Options": "nosniff" });
+const NO_STORE = "no-store";
+const NOSNIFF = "nosniff";
 
-const MIME = {
-  ".html": "text/html; charset=utf-8",
-  ".css":  "text/css; charset=utf-8",
-  ".js":   "text/javascript; charset=utf-8"
+const HDR_JSON = Object.freeze({
+  "Content-Type": "application/json; charset=utf-8",
+  "Cache-Control": NO_STORE,
+  "X-Content-Type-Options": NOSNIFF
+});
+const HDR_TEXT = Object.freeze({
+  "Content-Type": "text/plain",
+  "Cache-Control": NO_STORE,
+  "X-Content-Type-Options": NOSNIFF
+});
+const HDR_SSE = Object.freeze({
+  "Content-Type": "text/event-stream; charset=utf-8",
+  "Cache-Control": "no-cache, no-transform",
+  "Connection": "keep-alive",
+  "X-Accel-Buffering": "no",
+  "X-Content-Type-Options": NOSNIFF
+});
+
+const MAX_BODY_BYTES = 4096;
+const MAX_STREAM_BLOCKS = 128;
+const MINER_ACTIONS = new Set(["start", "stop", "restart"]);
+
+const limitMiner = createRateLimiter(2, 2000, 3000);
+const limitStatus = createRateLimiter(3, 2000, 3000);
+const limitEvents = createRateLimiter(3, 2000, 3000);
+
+const send = (res, status, headers, body) => {
+  res.writeHead(status, headers);
+  res.end(body);
 };
+const sendText = (res, status, body) => send(res, status, HDR_TEXT, body);
+const sendJson = (res, status, payload) => send(res, status, HDR_JSON, JSON.stringify(payload));
 
-function loadStaticCache(publicDir) {
-  const dir = publicDir || path.resolve(__dirname, "..", "public");
-  const cache = Object.create(null);
-
-  const register = (rel, uri) => {
-    try {
-      const full = path.join(dir, rel);
-      if (!fs.existsSync(full)) return;
-      const buf = fs.readFileSync(full);
-      cache[uri] = {
-        buf,
-        hdr: Object.freeze({
-          "Content-Type": MIME[path.extname(rel)] || "application/octet-stream",
-          "Cache-Control": "public, max-age=0",
-          "Content-Length": buf.length,
-          "X-Content-Type-Options": "nosniff"
-        })
-      };
-    } catch { }
-  };
-
-  register("index.html", "/");
-  register("index.html", "/index.html");
-  register("style.css",  "/style.css");
-  register("script.js",  "/script.js");
-  return cache;
+function sendRateLimited(res, waitMs) {
+  const seconds = Math.max(1, Math.ceil(waitMs / 1000));
+  send(res, 429, { ...HDR_JSON, "Retry-After": String(seconds) }, JSON.stringify({
+    error: "rate_limited",
+    retryAfterMs: waitMs,
+    retryAfterSeconds: seconds,
+    message: "Too many requests. Please wait before refreshing again."
+  }));
 }
 
 function getLanIp() {
-  let lan = "127.0.0.1";
   for (const addrs of Object.values(os.networkInterfaces())) {
-    for (const a of addrs || []) {
-      if (a.family === "IPv4" && !a.internal) lan = a.address;
+    for (const addr of addrs || []) {
+      if (addr.family === "IPv4" && !addr.internal) return addr.address;
     }
   }
-  return lan;
+  return "127.0.0.1";
 }
 
-function parsePathname(rawUrl) {
-  const q = rawUrl.indexOf("?");
-  return q === -1 ? rawUrl : rawUrl.slice(0, q);
+function readJsonBody(req) {
+  return new Promise(resolve => {
+    let size = 0;
+    const chunks = [];
+    req.on("data", chunk => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        req.destroy();
+        resolve(null);
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => {
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString("utf8"))); }
+      catch { resolve(null); }
+    });
+    req.on("error", () => resolve(null));
+  });
 }
-
-function evictSessions(sessions) {
-  if (sessions.size < 50) return;
-  const now = Date.now();
-  for (const [t, exp] of sessions) {
-    if (now > exp) sessions.delete(t);
-  }
-}
-
-function createRateLimiter(max, windowMs) {
-  const buckets = new Map();
-  return function allow(ip) {
-    const now = Date.now();
-    let b = buckets.get(ip);
-    if (!b || now >= b.resetAt) {
-      if (!b && buckets.size >= 128) buckets.delete(buckets.keys().next().value);
-      b = { n: 0, resetAt: now + windowMs };
-      buckets.set(ip, b);
-    }
-    if (b.n >= max) return false;
-    b.n++;
-    return true;
-  };
-}
-
-const MINER_PREFIX = "/api/miner/";
-const allowMiner = createRateLimiter(3, 5000);
-const allowStatus = createRateLimiter(10, 5000);
-const allowEvents = createRateLimiter(4, 10000);
 
 function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
   const staticFiles = loadStaticCache(publicDir);
-  const usePassphrase = config.PASSPHRASE.length > 0;
-  const sessions = new Map();
-  const loginAttempts = new Map();
+  const requiresAuth = config.PASSPHRASE.length > 0;
+  const sessions = new SessionStore({ secret: config.SESSION_SECRET });
+  const streamBlocks = new Map();
 
-  const server = http.createServer(async (req, res) => {
-    const raw = req.url || "/";
-    const pathname = parsePathname(raw);
+  const routes = {
+    "POST /api/login": async (req, res, ip) => {
+      if (!requiresAuth) return sendText(res, 404, "Not found");
+      sessions.prune();
 
-    if (usePassphrase && req.method === "POST" && pathname === "/api/login") {
-      evictSessions(sessions);
-      const ip = req.socket.remoteAddress;
-      const now = Date.now();
+      const lockout = sessions.lockoutMs(ip);
+      if (lockout) return sendRateLimited(res, lockout);
 
-      for (const [key, val] of loginAttempts) {
-        val.failures = val.failures.filter(t => now - t < 60000);
-        if (val.failures.length === 0 && val.blockedUntil <= now) {
-          loginAttempts.delete(key);
-        }
+      const body = await readJsonBody(req);
+      if (!body) return sendText(res, 400, "Bad Request");
+
+      if (!safeEqual(body.passphrase, config.PASSPHRASE)) {
+        sessions.recordFailure(ip);
+        return sendText(res, 401, "Unauthorized");
       }
 
-      let attempt = loginAttempts.get(ip);
-      if (!attempt) {
-        if (loginAttempts.size >= 100) {
-          const firstKey = loginAttempts.keys().next().value;
-          if (firstKey) loginAttempts.delete(firstKey);
-        }
-        attempt = { failures: [], blockedUntil: 0 };
-        loginAttempts.set(ip, attempt);
-      }
+      sessions.clearFailures(ip);
+      const token = sessions.issue();
+      send(res, 200, { ...HDR_JSON, "Set-Cookie": sessions.cookieFor(token) }, '{"status":"ok"}');
+    },
 
-      if (attempt.blockedUntil > now) {
-        res.writeHead(429, HDR_TEXT);
-        res.end("Too Many Requests");
-        return;
-      }
-
-      let body = "";
-      let bodyLen = 0;
-      req.on("data", c => {
-        bodyLen += c.length;
-        if (bodyLen > 4096) {
-          req.destroy();
-          return;
-        }
-        body += c;
-      });
-      req.on("end", () => {
-        if (bodyLen > 4096) return;
-        try {
-          const payload = JSON.parse(body);
-          if (payload.passphrase === config.PASSPHRASE) {
-            attempt.failures = [];
-            attempt.blockedUntil = 0;
-
-            const token = crypto.createHmac("sha256", config.SESSION_SECRET).update(crypto.randomBytes(32)).digest("hex");
-            sessions.set(token, Date.now() + 1800 * 1000);
-            res.writeHead(200, {
-              ...HDR_JSON,
-              "Set-Cookie": `vm_session=${token}; HttpOnly; Path=/; Max-Age=1800; SameSite=Strict`
-            });
-            res.end('{"status":"ok"}');
-          } else {
-            attempt.failures.push(now);
-            if (attempt.failures.length >= 5) {
-              attempt.blockedUntil = now + 30000;
-            }
-            res.writeHead(401, HDR_TEXT);
-            res.end("Unauthorized");
+    "GET /events": (req, res, ip) => {
+      const wait = limitEvents(ip);
+      if (wait) {
+        if (streamBlocks.size >= MAX_STREAM_BLOCKS) {
+          const now = Date.now();
+          for (const [key, expiry] of streamBlocks) {
+            if (expiry <= now) streamBlocks.delete(key);
           }
-        } catch {
-          res.writeHead(400, HDR_TEXT);
-          res.end("Bad Request");
+          if (streamBlocks.size >= MAX_STREAM_BLOCKS) {
+            streamBlocks.delete(streamBlocks.keys().next().value);
+          }
         }
+        streamBlocks.set(ip, Date.now() + wait);
+        return sendRateLimited(res, wait);
+      }
+      streamBlocks.delete(ip);
+      res.writeHead(200, HDR_SSE);
+      sseHub.handleConnection(req, res);
+    },
+
+    "GET /api/status": (req, res, ip) => {
+      const wait = limitStatus(ip);
+      if (wait) return sendRateLimited(res, wait);
+
+      const blockedUntil = streamBlocks.get(ip) || 0;
+      const streamRetryMs = blockedUntil - Date.now();
+      if (streamRetryMs <= 0) {
+        if (blockedUntil) streamBlocks.delete(ip);
+        return sendJson(res, 200, formatStatsSnapshot(state));
+      }
+
+      sendJson(res, 200, {
+        ...formatStatsSnapshot(state),
+        streamRetryAfterMs: streamRetryMs,
+        streamRetryAfterSeconds: Math.max(1, Math.ceil(streamRetryMs / 1000))
       });
-      return;
+    },
+
+    "GET /health": (req, res) => sendText(res, 200, "ok")
+  };
+
+  return http.createServer((req, res) => {
+    const url = req.url || "/";
+    const queryAt = url.indexOf("?");
+    const pathname = queryAt === -1 ? url : url.slice(0, queryAt);
+    const method = req.method || "GET";
+    const ip = req.socket.remoteAddress || "";
+
+    if (method === "GET") {
+      const asset = staticFiles[pathname];
+      if (asset) return send(res, 200, asset.hdr, asset.buf);
     }
 
     const isApi = pathname.startsWith("/api/") || pathname === "/events";
-    if (usePassphrase && isApi && pathname !== "/api/login") {
-      if (pathname === "/events") evictSessions(sessions);
-      let token = null;
-      if (req.headers.cookie) {
-        const match = req.headers.cookie.match(/vm_session=([0-9a-f]+)/);
-        if (match) token = match[1];
-      }
-      const expiresAt = sessions.get(token);
-      if (!expiresAt || Date.now() > expiresAt) {
-        if (token) sessions.delete(token);
-        res.writeHead(401, HDR_TEXT);
-        res.end("Unauthorized");
-        return;
-      }
+    if (requiresAuth && isApi && pathname !== "/api/login") {
+      if (pathname === "/events") sessions.prune();
+      if (!sessions.verify(req.headers.cookie)) return sendText(res, 401, "Unauthorized");
     }
 
-    if (pathname === "/events") {
-      if (!allowEvents(req.socket.remoteAddress || "")) {
-        res.writeHead(429, HDR_TEXT);
-        res.end("Too Many Requests");
-        return;
-      }
-      res.writeHead(200, HDR_SSE);
-      sseHub.handleConnection(req, res);
-      return;
+    if (method === "POST" && pathname.startsWith("/api/miner/")) {
+      const action = pathname.slice("/api/miner/".length);
+      if (!MINER_ACTIONS.has(action)) return sendText(res, 404, "Not found");
+      const wait = limitMiner(ip);
+      if (wait) return sendRateLimited(res, wait);
+      minerManager.requestAction(action);
+      return sendJson(res, 200, { status: "ok" });
     }
 
-    if (pathname === "/health") {
-      res.writeHead(200, HDR_TEXT);
-      res.end("ok");
-      return;
-    }
+    const handler = routes[`${method} ${pathname}`];
+    if (handler) return handler(req, res, ip);
 
-    if (req.method === "POST" && pathname.startsWith(MINER_PREFIX)) {
-      const action = pathname.slice(MINER_PREFIX.length);
-      if (action === "start" || action === "stop" || action === "restart") {
-        if (!allowMiner(req.socket.remoteAddress || "")) {
-          res.writeHead(429, HDR_TEXT);
-          res.end("Too Many Requests");
-          return;
-        }
-        minerManager.requestAction(action);
-        res.writeHead(200, HDR_JSON);
-        res.end('{"status":"ok"}');
-        return;
-      }
-    }
-
-    if (pathname === "/api/status") {
-      if (!allowStatus(req.socket.remoteAddress || "")) {
-        res.writeHead(429, HDR_TEXT);
-        res.end("Too Many Requests");
-        return;
-      }
-      const body = JSON.stringify(formatStatsSnapshot(state));
-      res.writeHead(200, HDR_JSON);
-      res.end(body);
-      return;
-    }
-
-    const sf = staticFiles[pathname];
-    if (sf) {
-      res.writeHead(200, sf.hdr);
-      res.end(sf.buf);
-      return;
-    }
-
-    res.writeHead(404, HDR_TEXT);
-    res.end("Not found");
+    sendText(res, 404, "Not found");
   });
-
-  return server;
 }
 
 module.exports = { getLanIp, createHttpServer };

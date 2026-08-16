@@ -110,3 +110,119 @@ Create a narrowly scoped inbound rule for TCP 3000 on the Private profile. Do no
 - JSON status: `GET /api/status`
 - Live stream: `GET /events`
 - Health check: `GET /health`
+
+## Project structure
+
+No build step and no runtime dependencies: `node server.js` is the only command.
+The browser loads native ES modules directly.
+
+```
+server.js              orchestrator; wires the modules together
+src/
+  config.js            .env parsing, validation and fail-fast security gates
+  constants.js         shared status/log/limit enums
+  state.js             central state object and the client snapshot projection
+  parser.js            classifies VerthashMiner log lines
+  devices.js           --device-list parsing, PCI normalisation, stream reader
+  miner.js             child-process supervision and lifecycle actions
+  gpu.js               nvidia-smi polling (only while a client is attached)
+  sse.js               Server-Sent Events fan-out
+  http.js              routing
+  auth.js              sessions, lockout, constant-time comparison
+  ratelimit.js         fixed-window limiter with Retry-After support
+  static.js            in-memory asset cache
+public/
+  index.html
+  style.css
+  js/
+    app.js             entry point and render loop
+    connection.js      SSE lifecycle, backoff, rate-limit recovery
+    gpu.js             GPU telemetry cards
+    console.js         miner console
+    toast.js           notifications
+    dom.js             cached lookups and change-guarded writes
+    format.js          pure formatting helpers
+```
+
+## Architecture
+
+Data flows one way. The miner's stdout/stderr and `nvidia-smi` mutate a single
+state object, which is projected into a JSON snapshot and pushed to the browser
+over Server-Sent Events. The only client-to-server traffic is login and three
+miner control verbs.
+
+```
+node server.js
+  |- config.js      parses .env, fails fast on insecure configuration
+  |- MinerManager   spawns VerthashMiner.exe, reads stdout/stderr
+  |     `- probes --device-list first to map PCI id -> CUDA index
+  |- parser.js      classifies each line, updates state
+  |- GpuManager     polls nvidia-smi only while a client is attached
+  |- SseHub         coalesces updates and fans them out
+  `- http.js        routing, sessions, rate limiting, static assets
+        |
+   browser: native ES modules, EventSource, no build step
+```
+
+### Zero-idle design
+
+The project's core constraint is that every watt spent on the dashboard is a
+watt not spent hashing. Idle cost is kept at zero structurally, not by tuning:
+
+| Mechanism | Effect |
+|---|---|
+| GPU polling gated on subscriber count | no `nvidia-smi` spawns when nobody is watching |
+| Log parsing gated on subscriber count | no regex work on miner output while idle |
+| Client closes its stream on `visibilitychange` | a hidden tab drops the server to true idle |
+| Poll interval clamped to 3-10s with a global cooldown | refresh or extra clients cannot amplify spawns |
+| Static assets read into memory once at boot | no disk I/O per request |
+| `FORWARD_CONSOLE=false` by default | no stdout writes while idle |
+
+Any change must preserve this. The browser tab is effectively the on/off switch
+for all server-side work.
+
+### GPU attribution
+
+`nvidia-smi` enumeration order and VerthashMiner's CUDA device indices do not
+necessarily agree, so hashrates cannot be matched to telemetry positionally.
+Both sides report a PCI id in different formats (`00000000:01:00.0` versus
+`01:00:0`); these are normalised to a common `bb:dd:f` form and used as the join
+key, falling back to positional index when unavailable.
+
+### Miner output
+
+All miner logging goes through one `applog()` call in the upstream source and is
+written to **stderr** in the form:
+
+```
+[YYYY-MM-DD HH:MM:SS] LEVEL  message
+```
+
+with `LEVEL` padded to five characters (`ERROR`, `WARN`, `INFO`, `DEBUG`). The
+parser depends on that layout, and on these formats:
+
+| Data | Format |
+|---|---|
+| Per-device hashrate | `cu_device(N):[ err:N,][ temp:NC,][ power:NW,][ fan:N%,] hashrate: N.NN kH/s` |
+| Share result | `accepted: A/B (P%), total hashrate: N.NN kH/s` or `(pending...)` |
+| Difficulty | `Stratum difficulty set to N` |
+| Device list | `\tIndex: N. Name: ... pcieId: bb:dd:f` |
+
+Two details are easy to get wrong: the inline `err:N` field is a memory-error
+counter on an otherwise healthy line and must not be treated as a failure, and
+stratum disconnects carry no fatal keyword, so they need explicit handling or
+the dashboard keeps reporting `MINING` while the pool is gone.
+
+## Performance notes
+
+Measured with a tab open and the miner streaming:
+
+- **Idle CPU (no tab open): 0.00000%** — no timers, no polling, no parsing.
+- **Active CPU: ~0.13%**, dominated by the `nvidia-smi` spawn.
+- **RSS: ~55 MB**, of which roughly 40 MB is the Node runtime itself; the
+  application accounts for a few MB. A lower total is not reachable on Node
+  regardless of application code.
+
+The zero-idle property is structural and must be preserved: GPU polling and log
+parsing are both gated on there being at least one SSE subscriber, and the
+client closes its stream when the tab is hidden.

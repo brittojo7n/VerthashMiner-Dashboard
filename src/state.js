@@ -1,4 +1,7 @@
+"use strict";
+
 const os = require("node:os");
+const { STATUS } = require("./constants");
 
 class CircularLogBuffer {
   constructor(capacity = 25) {
@@ -54,7 +57,7 @@ function createState(wallet = "", maxLogs = 25) {
       submitted: 0,
       rejected: 0,
       difficulty: null,
-      status: "STOPPED",
+      status: STATUS.STOPPED,
       lastAcceptedAt: null,
       gpuHashrates: {},
       seenDevices: [],
@@ -88,14 +91,18 @@ function formatStatsSnapshot(state) {
       status: state.mining.status,
       lastAcceptedAt: state.mining.lastAcceptedAt
     },
+
+    gpuError: state.gpuError || "",
     gpu: state.gpu.map(g => {
-      const cuIndex = state.mining.pciMap[g.pciBusId] !== undefined 
-        ? state.mining.pciMap[g.pciBusId] 
+      const devIndex = state.mining.pciMap[g.pciBusId] !== undefined
+        ? state.mining.pciMap[g.pciBusId]
         : g.index;
-      return {
-        ...g,
-        hashrate: state.mining.gpuHashrates[`cu_${cuIndex}`]
-      };
+
+      const hashrates = state.mining.gpuHashrates;
+      const hashrate = hashrates[`cu_${devIndex}`] !== undefined
+        ? hashrates[`cu_${devIndex}`]
+        : hashrates[`cl_${devIndex}`];
+      return { ...g, hashrate };
     }),
     host: state.host
   };
