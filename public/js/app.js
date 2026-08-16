@@ -174,6 +174,7 @@ async function login() {
     if (res.ok) {
       authModal.classList.remove("show");
       authError.style.display = "none";
+      toast.success("Login Successful", "Welcome to the VerthashMiner Dashboard.", "login-success");
       connection.restart();
       return;
     }

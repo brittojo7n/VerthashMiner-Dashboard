@@ -52,6 +52,7 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
   let countdownTimer = null;
   let backoff = 0;
   let connected = false;
+  let paceOnce = true;
 
   const clearTimers = () => {
     clearTimeout(retryTimer); retryTimer = null;
@@ -76,7 +77,7 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
 
   function rateLimited(wait) {
     onStatusText?.("CONNECTING");
-    schedule(wait + RETRY_GRACE_MS, "Resuming");
+    schedule(wait, "Resuming");
   }
 
   async function handleRateLimit(response) {
@@ -136,12 +137,15 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
     clearTimers();
     if (document.hidden) return;
 
-    const now = Date.now();
-    const paceDelay = getPaceDelay(now);
-    if (paceDelay > 0) {
-      onStatusText?.("CONNECTING");
-      schedule(paceDelay, null);
-      return;
+    if (paceOnce) {
+      paceOnce = false;
+      const now = Date.now();
+      const paceDelay = getPaceDelay(now);
+      if (paceDelay > 0) {
+        onStatusText?.("CONNECTING");
+        schedule(paceDelay, null);
+        return;
+      }
     }
 
     try {
