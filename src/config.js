@@ -4,21 +4,45 @@ const path = require("node:path");
 try {
   const envPath = path.join(path.resolve(__dirname, ".."), ".env");
   if (fs.existsSync(envPath)) {
-    for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
+    for (const raw of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.charCodeAt(0) === 35) continue;
       const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-      if (match) {
-        process.env[match[1]] = (match[2] || "").replace(/^["']|["']$/g, "").trim();
+      if (!match) continue;
+      let val = match[2] || "";
+      const q = val[0];
+      if (q === "\"" || q === "'") {
+        const end = val.lastIndexOf(q);
+        val = end > 0 ? val.slice(1, end) : val.slice(1);
+      } else {
+        const hash = val.indexOf(" #");
+        if (hash !== -1) val = val.slice(0, hash);
       }
+      process.env[match[1]] = val.trim();
     }
   }
 } catch { }
 
+const GPU_POLL_MIN_MS = 3000;
+const GPU_POLL_MAX_MS = 10000;
+const GPU_POLL_DEFAULT_MS = 5000;
+
+function clampGpuPollMs(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return GPU_POLL_DEFAULT_MS;
+  return Math.min(GPU_POLL_MAX_MS, Math.max(GPU_POLL_MIN_MS, Math.round(n)));
+}
+
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "127.0.0.1";
-const GPU_POLL_MS = Number(process.env.GPU_POLL_MS || 5000);
+const rawGpuPoll = process.env.GPU_POLL_MS;
+const GPU_POLL_MS = clampGpuPollMs(rawGpuPoll || GPU_POLL_DEFAULT_MS);
+if (rawGpuPoll != null && rawGpuPoll !== "" && Number(rawGpuPoll) !== GPU_POLL_MS) {
+  console.log(`[dashboard] GPU_POLL_MS clamped to ${GPU_POLL_MS}ms (allowed ${GPU_POLL_MIN_MS}-${GPU_POLL_MAX_MS})`);
+}
 const MAX_LOGS = Math.min(500, Math.max(15, Number(process.env.MAX_LOGS || 50)));
 const MINER_EXE = process.env.MINER_EXE || "VerthashMiner.exe";
-const MINER_ARGS = ((process.env.MINER_ARGS || "").match(/"([^"]*)"|(\S+)/g) || []).map(m => m.replace(/^"|"$/g, ""));
+const MINER_ARGS = ((process.env.MINER_ARGS || "").match(/\"([^\"]*)\"|(\S+)/g) || []).map(m => m.replace(/^\"|\"$/g, ""));
 const MINER_CWD = process.env.MINER_CWD || "";
 const PASSPHRASE = process.env.PASSPHRASE || "";
 const SESSION_SECRET = process.env.SESSION_SECRET || "";
@@ -59,6 +83,10 @@ module.exports = {
   PORT,
   HOST,
   GPU_POLL_MS,
+  GPU_POLL_MIN_MS,
+  GPU_POLL_MAX_MS,
+  GPU_POLL_DEFAULT_MS,
+  clampGpuPollMs,
   MAX_LOGS,
   MINER_EXE,
   MINER_ARGS,

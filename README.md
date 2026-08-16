@@ -23,7 +23,7 @@ A lightweight, zero-overhead Windows dashboard that acts as a wrapper around Ver
 
 - Starts VerthashMiner directly from Node.js.
 - Reads the miner's stdout/stderr without changing its mining arguments.
-- Polls `nvidia-smi` efficiently _only_ when the dashboard is open.
+- Polls `nvidia-smi` efficiently _only_ when the dashboard is open, at a hard-clamped interval of 3–10 seconds (default 5s). Refresh and reconnect cannot spawn extra polls.
 - Serves a premium glassmorphism-based web dashboard over HTTP.
 - Uses Server-Sent Events (SSE) for live updates.
 - 100% zero-overhead background operation (uses virtually 0% CPU/GPU when the browser tab is closed).
@@ -61,6 +61,7 @@ MINER_ARGS=-u vtc1qwddxt3rmwx00ev9yg4qcwpxnguw5zm7mwej2xk -p c=VTC -o stratum+tc
 
 - **`MINER_CWD`**: This is the working directory where `VerthashMiner.exe` is located (e.g. `C:\Mining\VerthashMiner`). It must be set so the dashboard can find the executable and the `verthash.dat` file properly.
 - **`MINER_ARGS`**: This variable determines how the dashboard launches the miner. You must supply your wallet address, pool, and path to the `verthash.dat` file exactly as you would in a normal `.bat` file.
+- **`GPU_POLL_MS`**: How often (in milliseconds) the dashboard queries `nvidia-smi` while a dashboard tab is open. **Default is `5000`**. Allowed range is **`3000`–`10000`** (3–10 seconds). Values outside this range are clamped. Polling is globally rate-limited: page refresh, tab reconnect, or multiple clients cannot trigger `nvidia-smi` more often than this interval. The last cached GPU telemetry is sent immediately on refresh so the UI does not go blank.
 - **`MAX_LOGS`**: Sets the maximum number of console logs to hold in memory and display on the dashboard (default is 50, minimum is 15, maximum is 500).
 - **`FORWARD_CONSOLE`**: When set to `true`, forwards the miner's stdout/stderr directly to the dashboard's terminal for local debugging. **Defaults to `false`** — when disabled, there is zero CPU or memory overhead from console forwarding. Only enable this if you need to watch miner logs locally without using the web UI.
 

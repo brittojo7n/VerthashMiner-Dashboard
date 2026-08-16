@@ -3,6 +3,49 @@ const { parseMinerLine } = require("./parser");
 
 const RX_NORM = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 
+function normalizePci(raw) {
+  const m = String(raw).match(/([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.?([0-9a-fA-F]?)/);
+  return m ? `${m[1].toLowerCase()}:${m[2].toLowerCase()}:${(m[3] || "0").toLowerCase()}` : String(raw).toLowerCase();
+}
+
+function parseCudaDeviceList(buf, pciMap) {
+  let inCuda = false;
+  let pendingIndex = null;
+  for (const line of buf.split("\n")) {
+    const lower = line.toLowerCase();
+    if (lower.includes("cuda") && (lower.includes("devices:") || lower.includes("device config"))) {
+      inCuda = true;
+      pendingIndex = null;
+      continue;
+    }
+    if (lower.includes("opencl") && (lower.includes("devices:") || lower.includes("device config"))) {
+      inCuda = false;
+      pendingIndex = null;
+      continue;
+    }
+    if (!inCuda) continue;
+
+    const same = line.match(/index:\s*(\d+).*?pcieid:\s*([0-9a-fA-F:.]+)/i);
+    if (same) {
+      pciMap[normalizePci(same[2])] = same[1];
+      pendingIndex = null;
+      continue;
+    }
+
+    const idx = line.match(/deviceindex:\s*(\d+)/i);
+    if (idx) {
+      pendingIndex = idx[1];
+      continue;
+    }
+
+    const pci = line.match(/pcieid:\s*([0-9a-fA-F:.]+)/i);
+    if (pci && pendingIndex != null && !/not\s*avilable/i.test(line)) {
+      pciMap[normalizePci(pci[1])] = pendingIndex;
+      pendingIndex = null;
+    }
+  }
+}
+
 function createStreamReader(onLine, onFlush, isEnabled, forward) {
   let buffer = "";
   return function handleChunk(chunk) {
@@ -33,18 +76,21 @@ class MinerManager {
     this.proc = null;
     this._stopPromise = null;
     this._forceKillTimer = null;
+    this._actionTimer = null;
+    this._pendingAction = null;
+    this._spawning = false;
     this.parsingEnabled = false;
     this.isStoppingChild = false;
     this.history = [];
   }
 
   enableParsing() {
-    if (!this.parsingEnabled) {
-      this.parsingEnabled = true;
-      for (const line of this.history) {
-        parseMinerLine(line, this.state, () => {});
-      }
+    if (this.parsingEnabled) return;
+    this.parsingEnabled = true;
+    if (this.state.miner.running) {
+      for (const line of this.history) parseMinerLine(line, this.state, () => {});
     }
+    this.history.length = 0;
   }
 
   disableParsing() {
@@ -64,7 +110,7 @@ class MinerManager {
       return this._stopPromise.then(() => this.start());
     }
 
-    if (this.state.miner.running || this.state.mining.status === "STARTING") {
+    if (this.proc || this.state.miner.running || this._spawning) {
       return Promise.resolve();
     }
 
@@ -82,6 +128,7 @@ class MinerManager {
       return Promise.resolve();
     }
 
+    this._spawning = true;
     this.state.mining.status = "STARTING";
     this.pushLog("Starting miner...", "system");
     if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
@@ -95,25 +142,14 @@ class MinerManager {
       });
 
       let buf = "";
-      listProc.stdout.on("data", c => buf += String(c));
-      listProc.stderr.on("data", c => buf += String(c));
+      const onListData = c => {
+        if (buf.length < 65536) buf += String(c);
+      };
+      listProc.stdout.on("data", onListData);
+      listProc.stderr.on("data", onListData);
 
       listProc.on("close", () => {
-        let inCuda = false;
-        for (const line of buf.split("\n")) {
-          if (line.includes("CUDA devices:")) { inCuda = true; continue; }
-          if (line.includes("OpenCL devices:")) { inCuda = false; continue; }
-          if (inCuda) {
-            const match = line.match(/Index:\s*(\d+).*?pcieId:\s*([0-9a-fA-F:.]+)/i);
-            if (match) {
-              const id = match[1];
-              let pci = match[2];
-              const m = pci.match(/([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.?([0-9a-fA-F]?)/i);
-              if (m) pci = `${m[1].toLowerCase()}:${m[2].toLowerCase()}:${(m[3] || "0").toLowerCase()}`;
-              this.state.mining.pciMap[pci] = id;
-            }
-          }
-        }
+        parseCudaDeviceList(buf, this.state.mining.pciMap);
         this._startMiner();
       });
 
@@ -148,6 +184,7 @@ class MinerManager {
         stdio: ["inherit", "pipe", "pipe"]
       });
     } catch (err) {
+      this._spawning = false;
       this.state.miner.running = false;
       this.state.miner.lastError = err.message;
       this.state.mining.status = "CRASHED";
@@ -156,6 +193,7 @@ class MinerManager {
       return;
     }
 
+    this._spawning = false;
     this.state.miner.running = true;
     this.state.miner.pid = this.proc.pid;
     this.state.miner.startedAt = Date.now();
@@ -187,6 +225,7 @@ class MinerManager {
     this.proc.stderr.on("data", createStreamReader(handleLine, handleFlush, () => this.parsingEnabled, stderrForward));
 
     this.proc.on("error", err => {
+      this._spawning = false;
       this.isStoppingChild = false;
       this.state.miner.running = false;
       this.state.miner.lastError = err.message;
@@ -197,6 +236,7 @@ class MinerManager {
     });
 
     this.proc.on("close", (code, sig) => {
+      this._spawning = false;
       this.isStoppingChild = false;
       this.state.miner.running = false;
       this.state.miner.exitCode = code;
@@ -214,8 +254,61 @@ class MinerManager {
     });
   }
 
+  _markStopped() {
+    this.state.miner.running = false;
+    this.state.mining.status = "STOPPED";
+    this.state.dirty = true;
+    if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
+  }
+
+  _clearScheduledAction() {
+    if (this._actionTimer) {
+      clearTimeout(this._actionTimer);
+      this._actionTimer = null;
+    }
+    this._pendingAction = null;
+  }
+
+  requestAction(action) {
+    if (action !== "start" && action !== "stop" && action !== "restart") return;
+
+    if (this._pendingAction === action) return;
+
+    if (action === "start" && (this.state.miner.running || this._spawning || this.proc)) {
+      this._clearScheduledAction();
+      return;
+    }
+    if (action === "stop" && !this.state.miner.running && !this.proc && this._pendingAction !== "start") {
+      if (this.state.mining.status !== "STOPPED") this._markStopped();
+      return;
+    }
+    if (action === "restart" && !this.state.miner.running && !this.proc && this._pendingAction !== "start") {
+      this.requestAction("start");
+      return;
+    }
+
+    this._clearScheduledAction();
+    this._pendingAction = action;
+    this.state.mining.status = action === "start" ? "STARTING" : action === "stop" ? "STOPPING" : "RESTARTING";
+    this.state.dirty = true;
+    if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
+
+    this._actionTimer = setTimeout(() => {
+      this._actionTimer = null;
+      const act = this._pendingAction;
+      this._pendingAction = null;
+      if (act === "start") this.start();
+      else if (act === "stop") this.stop();
+      else if (act === "restart") this.restart();
+    }, 2000);
+  }
+
   stop() {
-    if (!this.proc || !this.state.miner.running) return Promise.resolve();
+    this._clearScheduledAction();
+    if (!this.proc || !this.state.miner.running) {
+      if (this.state.mining.status !== "STOPPED") this._markStopped();
+      return Promise.resolve();
+    }
     if (this._stopPromise) return this._stopPromise;
 
     this.state.mining.status = "STOPPING";
@@ -257,7 +350,7 @@ class MinerManager {
   }
 
   async restart() {
-    if (this.state.mining.status === "STARTING" || this.state.mining.status === "STOPPING") return;
+    if (this._spawning || this._stopPromise) return;
     await this.stop();
     await new Promise(r => setTimeout(r, 500));
     await this.start();

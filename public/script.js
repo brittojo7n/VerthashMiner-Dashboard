@@ -47,6 +47,31 @@
   let autoScroll = true, logsList = [], lastRenderedLogId = null;
   let serverStartedAt = null, serverNowBase = null, serverNowCapturedAt = null, serverTz = null;
   let tickInterval = null, spmInterval = null, latestAccepted = 0;
+  let pendingStatus = null, activeAction = null;
+
+  const IDLE = { STOPPED: 1, CRASHED: 1, ERROR: 1 };
+  const LIVE = { MINING: 1, CONNECTED: 1, WAITING: 1 };
+  const ACTION_STATUS = { start: "STARTING", stop: "STOPPING", restart: "RESTARTING" };
+
+  const applyChrome = (status, locked) => {
+    setText("status", status);
+    const idle = !!IDLE[status];
+    const live = !!LIVE[status];
+    const busy = locked || (!idle && !live);
+    const dot = idle ? "err" : (status === "MINING" || status === "CONNECTED") ? "ok" : "warn";
+    if (dotEl.className !== "dot " + dot) dotEl.className = "dot " + dot;
+    setText("btnAction", idle ? "START" : "STOP");
+    const cls = "c-btn " + (idle ? "btn-start" : "btn-stop");
+    if (btnAction.className !== cls) btnAction.className = cls;
+    btnAction.disabled = busy;
+    btnRestart.disabled = busy || idle;
+  };
+
+  const resolveStatus = s => {
+    if (pendingStatus) return pendingStatus;
+    const st = s.mining.status;
+    return (!s.miner.running && LIVE[st]) ? "STOPPED" : st;
+  };
 
   btnAutoScroll.onclick = () => {
     autoScroll = !autoScroll;
@@ -208,28 +233,7 @@
     if (sharesPerMinuteEl.textContent === "—" && latestAccepted > 0) tickSpm();
 
     setText("host", `Host: ${s.host.hostname}`);
-    setText("status", s.mining.status);
-    let dotClass = "ok";
-    if (s.mining.status === "CRASHED" || s.mining.status === "STOPPED" || s.mining.status === "ERROR") dotClass = "err";
-    else if (s.mining.status === "CONNECTING" || s.mining.status === "STARTING" || s.mining.status === "WAITING" || s.mining.status === "STOPPING") dotClass = "warn";
-    if (dotEl.className !== "dot " + dotClass) dotEl.className = "dot " + dotClass;
-
-    if (s.mining.status === "STOPPED" || s.mining.status === "CRASHED" || s.mining.status === "ERROR") {
-      setText("btnAction", "START");
-      if (btnAction.className !== "c-btn btn-start") btnAction.className = "c-btn btn-start";
-      btnAction.disabled = false;
-      btnRestart.disabled = true;
-    } else if (s.mining.status === "MINING" || s.mining.status === "CONNECTED" || s.mining.status === "WAITING") {
-      setText("btnAction", "STOP");
-      if (btnAction.className !== "c-btn btn-stop") btnAction.className = "c-btn btn-stop";
-      btnAction.disabled = false;
-      btnRestart.disabled = false;
-    } else {
-      setText("btnAction", "STOP");
-      if (btnAction.className !== "c-btn btn-stop") btnAction.className = "c-btn btn-stop";
-      btnAction.disabled = true;
-      btnRestart.disabled = true;
-    }
+    applyChrome(resolveStatus(s), !!pendingStatus);
 
     setHtml("hashrate", `${fmt(s.mining.hashrateKHs, 2)}<span class="unit">kH/s</span>`);
     setText("accepted", s.mining.submitted === 0 ? "—" : `${s.mining.accepted} / ${s.mining.submitted}`);
@@ -377,6 +381,7 @@
 
     es.onerror = async () => {
       stopTicking();
+      pendingStatus = null;
       if (es && es.readyState === EventSource.CLOSED) {
         try {
           const res = await fetch("/api/status");
@@ -415,8 +420,6 @@
   const confirmDesc = el("confirmDesc");
   const confirmYes = el("confirmYes");
   const confirmCancel = el("confirmCancel");
-  let activeAction = null;
-  let actionTimer = null;
 
   const hideConfirm = () => {
     confirmModal.classList.remove("show");
@@ -425,43 +428,30 @@
 
   confirmCancel.addEventListener("click", hideConfirm);
 
-  const doActionWithDelay = (action, btn, finalTitle) => {
-    btnAction.disabled = true;
-    btnRestart.disabled = true;
-    
-    let timeLeft = 3;
-    btn.textContent = `${finalTitle} (${timeLeft}s)`;
-    
-    actionTimer = setInterval(async () => {
-      timeLeft--;
-      if (timeLeft > 0) {
-        btn.textContent = `${finalTitle} (${timeLeft}s)`;
-      } else {
-        clearInterval(actionTimer);
-        btn.textContent = `${finalTitle}...`;
-        try {
-          const res = await fetch(`/api/miner/${action}`, { method: "POST" });
-          if (res.status === 401) showAuthModal();
-        } catch { }
-      }
-    }, 1000);
+  const runAction = async action => {
+    const next = ACTION_STATUS[action];
+    if (!next || pendingStatus) return;
+    pendingStatus = next;
+    applyChrome(next, true);
+    try {
+      const res = await fetch(`/api/miner/${action}`, { method: "POST" });
+      if (res.status === 401) showAuthModal();
+    } catch { }
+    pendingStatus = null;
   };
 
   confirmYes.addEventListener("click", () => {
     const action = activeAction;
     hideConfirm();
-    if (!action) return;
-    
-    if (action === "start") doActionWithDelay("start", btnAction, "STARTING");
-    else if (action === "stop") doActionWithDelay("stop", btnAction, "STOPPING");
-    else if (action === "restart") doActionWithDelay("restart", btnRestart, "RESTARTING");
+    if (action) runAction(action);
   });
 
   const promptAction = (action, actionName) => {
+    if (pendingStatus) return;
     activeAction = action;
-    confirmTitle.textContent = `${actionName}`;
+    confirmTitle.textContent = actionName;
     confirmDesc.textContent = `Do you want to ${actionName.toLowerCase()} the miner process?`;
-    confirmYes.className = `auth-btn auth-btn-${action.toLowerCase()}`;
+    confirmYes.className = `auth-btn auth-btn-${action}`;
     confirmYes.textContent = actionName;
     confirmModal.classList.add("show");
   };
@@ -484,9 +474,7 @@
       }
     } else {
       startTicking();
-      if (!es || es.readyState === EventSource.CLOSED) {
-        connectSSE();
-      }
+      if (!es || es.readyState === EventSource.CLOSED) connectSSE();
     }
   });
 })();
