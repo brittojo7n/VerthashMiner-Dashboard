@@ -32,9 +32,9 @@ const MAX_BODY_BYTES = 4096;
 const MAX_STREAM_BLOCKS = 128;
 const MINER_ACTIONS = new Set(["start", "stop", "restart"]);
 
-const limitMiner = createRateLimiter(1, 2000, 3000);
-const limitStatus = createRateLimiter(1, 2000, 3000);
-const limitEvents = createRateLimiter(1, 2000, 3000);
+const limitMiner = createRateLimiter(2, 2000, 3000);
+const limitStatus = createRateLimiter(3, 2000, 3000);
+const limitEvents = createRateLimiter(3, 2000, 3000);
 
 const send = (res, status, headers, body) => {
   res.writeHead(status, headers);

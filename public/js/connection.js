@@ -3,6 +3,7 @@ import * as toast from "./toast.js";
 const REFRESH_WINDOW_MS = 2000;
 const BASE_DELAY_MS = 500;
 const PENALTY_DELAY_MS = 3000;
+const PACE_STEP_MS = 850;
 const BACKOFF_START_MS = 2000;
 const BACKOFF_MAX_MS = 30000;
 const LAST_REFRESH_KEY = "vmd:lastRefreshAt";
@@ -20,21 +21,17 @@ function getPaceDelay(now) {
   const previous = readStore(LAST_REFRESH_KEY);
   const elapsed = previous ? now - previous : Infinity;
 
-  if (elapsed >= REFRESH_WINDOW_MS || previous === 0) {
-    writeStore(LAST_REFRESH_KEY, now);
+  writeStore(LAST_REFRESH_KEY, now);
+
+  if (elapsed >= REFRESH_WINDOW_MS) {
     writeStore(RAPID_REFRESH_KEY, 1);
     return BASE_DELAY_MS;
   }
 
-  let rapid = readStore(RAPID_REFRESH_KEY);
-  rapid++;
+  const rapid = readStore(RAPID_REFRESH_KEY) + 1;
   writeStore(RAPID_REFRESH_KEY, rapid);
 
-  if (rapid >= 2) {
-    return PENALTY_DELAY_MS;
-  }
-
-  return BASE_DELAY_MS;
+  return Math.min(PENALTY_DELAY_MS, BASE_DELAY_MS + (rapid - 1) * PACE_STEP_MS);
 }
 
 async function retryDelay(response) {
