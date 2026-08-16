@@ -47,7 +47,7 @@
   let autoScroll = true, logsList = [], lastRenderedLogId = null;
   let serverStartedAt = null, serverNowBase = null, serverNowCapturedAt = null, serverTz = null;
   let tickInterval = null, spmInterval = null, latestAccepted = 0;
-  let pendingStatus = null, actionTimer = null, activeAction = null;
+  let pendingStatus = null, activeAction = null;
 
   const IDLE = { STOPPED: 1, CRASHED: 1, ERROR: 1 };
   const LIVE = { MINING: 1, CONNECTED: 1, WAITING: 1 };
@@ -382,7 +382,6 @@
     es.onerror = async () => {
       stopTicking();
       pendingStatus = null;
-      if (actionTimer) { clearTimeout(actionTimer); actionTimer = null; }
       if (es && es.readyState === EventSource.CLOSED) {
         try {
           const res = await fetch("/api/status");
@@ -429,20 +428,16 @@
 
   confirmCancel.addEventListener("click", hideConfirm);
 
-  const runAction = action => {
+  const runAction = async action => {
     const next = ACTION_STATUS[action];
     if (!next || pendingStatus) return;
-    if (actionTimer) clearTimeout(actionTimer);
     pendingStatus = next;
     applyChrome(next, true);
-    actionTimer = setTimeout(async () => {
-      actionTimer = null;
-      try {
-        const res = await fetch(`/api/miner/${action}`, { method: "POST" });
-        if (res.status === 401) showAuthModal();
-      } catch { }
-      pendingStatus = null;
-    }, 2000);
+    try {
+      const res = await fetch(`/api/miner/${action}`, { method: "POST" });
+      if (res.status === 401) showAuthModal();
+    } catch { }
+    pendingStatus = null;
   };
 
   confirmYes.addEventListener("click", () => {
@@ -452,7 +447,7 @@
   });
 
   const promptAction = (action, actionName) => {
-    if (pendingStatus || actionTimer) return;
+    if (pendingStatus) return;
     activeAction = action;
     confirmTitle.textContent = actionName;
     confirmDesc.textContent = `Do you want to ${actionName.toLowerCase()} the miner process?`;

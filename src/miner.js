@@ -76,6 +76,9 @@ class MinerManager {
     this.proc = null;
     this._stopPromise = null;
     this._forceKillTimer = null;
+    this._actionTimer = null;
+    this._pendingAction = null;
+    this._spawning = false;
     this.parsingEnabled = false;
     this.isStoppingChild = false;
     this.history = [];
@@ -107,7 +110,7 @@ class MinerManager {
       return this._stopPromise.then(() => this.start());
     }
 
-    if (this.state.miner.running || this.state.mining.status === "STARTING") {
+    if (this.proc || this.state.miner.running || this._spawning) {
       return Promise.resolve();
     }
 
@@ -125,6 +128,7 @@ class MinerManager {
       return Promise.resolve();
     }
 
+    this._spawning = true;
     this.state.mining.status = "STARTING";
     this.pushLog("Starting miner...", "system");
     if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
@@ -180,6 +184,7 @@ class MinerManager {
         stdio: ["inherit", "pipe", "pipe"]
       });
     } catch (err) {
+      this._spawning = false;
       this.state.miner.running = false;
       this.state.miner.lastError = err.message;
       this.state.mining.status = "CRASHED";
@@ -188,6 +193,7 @@ class MinerManager {
       return;
     }
 
+    this._spawning = false;
     this.state.miner.running = true;
     this.state.miner.pid = this.proc.pid;
     this.state.miner.startedAt = Date.now();
@@ -219,6 +225,7 @@ class MinerManager {
     this.proc.stderr.on("data", createStreamReader(handleLine, handleFlush, () => this.parsingEnabled, stderrForward));
 
     this.proc.on("error", err => {
+      this._spawning = false;
       this.isStoppingChild = false;
       this.state.miner.running = false;
       this.state.miner.lastError = err.message;
@@ -229,6 +236,7 @@ class MinerManager {
     });
 
     this.proc.on("close", (code, sig) => {
+      this._spawning = false;
       this.isStoppingChild = false;
       this.state.miner.running = false;
       this.state.miner.exitCode = code;
@@ -253,7 +261,50 @@ class MinerManager {
     if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
   }
 
+  _clearScheduledAction() {
+    if (this._actionTimer) {
+      clearTimeout(this._actionTimer);
+      this._actionTimer = null;
+    }
+    this._pendingAction = null;
+  }
+
+  requestAction(action) {
+    if (action !== "start" && action !== "stop" && action !== "restart") return;
+
+    if (this._pendingAction === action) return;
+
+    if (action === "start" && (this.state.miner.running || this._spawning || this.proc)) {
+      this._clearScheduledAction();
+      return;
+    }
+    if (action === "stop" && !this.state.miner.running && !this.proc && this._pendingAction !== "start") {
+      if (this.state.mining.status !== "STOPPED") this._markStopped();
+      return;
+    }
+    if (action === "restart" && !this.state.miner.running && !this.proc && this._pendingAction !== "start") {
+      this.requestAction("start");
+      return;
+    }
+
+    this._clearScheduledAction();
+    this._pendingAction = action;
+    this.state.mining.status = action === "start" ? "STARTING" : action === "stop" ? "STOPPING" : "RESTARTING";
+    this.state.dirty = true;
+    if (typeof this.onUpdate === "function" && this.parsingEnabled) this.onUpdate();
+
+    this._actionTimer = setTimeout(() => {
+      this._actionTimer = null;
+      const act = this._pendingAction;
+      this._pendingAction = null;
+      if (act === "start") this.start();
+      else if (act === "stop") this.stop();
+      else if (act === "restart") this.restart();
+    }, 2000);
+  }
+
   stop() {
+    this._clearScheduledAction();
     if (!this.proc || !this.state.miner.running) {
       if (this.state.mining.status !== "STOPPED") this._markStopped();
       return Promise.resolve();
@@ -299,7 +350,7 @@ class MinerManager {
   }
 
   async restart() {
-    if (this.state.mining.status === "STARTING" || this.state.mining.status === "STOPPING") return;
+    if (this._spawning || this._stopPromise) return;
     await this.stop();
     await new Promise(r => setTimeout(r, 500));
     await this.start();

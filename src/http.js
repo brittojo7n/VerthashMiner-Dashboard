@@ -174,25 +174,14 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
       return;
     }
 
-    if (req.method === "POST" && pathname === "/api/miner/start") {
-      minerManager.start();
-      res.writeHead(200, HDR_JSON);
-      res.end('{"status":"ok"}');
-      return;
-    }
-
-    if (req.method === "POST" && pathname === "/api/miner/stop") {
-      await minerManager.stop();
-      res.writeHead(200, HDR_JSON);
-      res.end('{"status":"ok"}');
-      return;
-    }
-
-    if (req.method === "POST" && pathname === "/api/miner/restart") {
-      await minerManager.restart();
-      res.writeHead(200, HDR_JSON);
-      res.end('{"status":"ok","state":"RUNNING"}');
-      return;
+    if (req.method === "POST" && pathname.startsWith("/api/miner/")) {
+      const action = pathname.slice(12);
+      if (action === "start" || action === "stop" || action === "restart") {
+        minerManager.requestAction(action);
+        res.writeHead(200, HDR_JSON);
+        res.end('{"status":"ok"}');
+        return;
+      }
     }
 
     if (pathname === "/api/status") {
