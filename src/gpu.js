@@ -1,4 +1,5 @@
 const { execFile } = require("node:child_process");
+const { clampGpuPollMs, GPU_POLL_DEFAULT_MS } = require("./config");
 
 const SMI_QUERY = [
   "--query-gpu=name,temperature.gpu,power.draw,utilization.gpu,clocks.gr,clocks.mem,memory.used,memory.total,pstate,pci.bus_id",
@@ -37,18 +38,42 @@ function parseSmiOutput(raw) {
 }
 
 class GpuManager {
-  constructor({ state, pollMs = 5000, onUpdate }) {
+  constructor({ state, pollMs = GPU_POLL_DEFAULT_MS, onUpdate }) {
     this.state = state;
-    this.pollMs = pollMs;
+    this.pollMs = clampGpuPollMs(pollMs);
     this.onUpdate = onUpdate;
     this.timer = null;
     this.busy = false;
     this.active = false;
+    this.lastPollAt = 0;
+  }
+
+  _cooldownLeft() {
+    if (!this.lastPollAt) return 0;
+    const elapsed = Date.now() - this.lastPollAt;
+    return elapsed >= this.pollMs ? 0 : this.pollMs - elapsed;
+  }
+
+  _arm(delay) {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    if (!this.active) return;
+    this.timer = setTimeout(() => this.poll(), delay);
   }
 
   poll() {
-    if (this.busy || !this.active) return;
+    if (!this.active || this.busy) return;
+
+    const wait = this._cooldownLeft();
+    if (wait > 0) {
+      if (!this.timer) this._arm(wait);
+      return;
+    }
+
     this.busy = true;
+    this.lastPollAt = Date.now();
     execFile("nvidia-smi.exe", SMI_QUERY, { windowsHide: true, timeout: 1500 }, (err, stdout) => {
       this.busy = false;
       if (!err && stdout) {
@@ -62,22 +87,24 @@ class GpuManager {
         if (typeof this.onUpdate === "function") this.onUpdate();
       }
       if (this.active) {
-        this.timer = setTimeout(() => this.poll(), this.pollMs);
+        const wait = this._cooldownLeft();
+        this._arm(wait > 0 ? wait : this.pollMs);
       }
     });
   }
 
   updateSubscribers(n) {
-    if (n > 0 && !this.active) {
-      this.active = true;
-      this.poll();
-    } else if (n === 0 && this.active) {
+    if (n > 0) {
+      if (!this.active) {
+        this.active = true;
+        this.poll();
+      }
+    } else if (this.active) {
       this.active = false;
       if (this.timer) {
         clearTimeout(this.timer);
         this.timer = null;
       }
-      this.busy = false;
     }
   }
 
@@ -87,7 +114,6 @@ class GpuManager {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    this.busy = false;
   }
 }
 

@@ -3,6 +3,49 @@ const { parseMinerLine } = require("./parser");
 
 const RX_NORM = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 
+function normalizePci(raw) {
+  const m = String(raw).match(/([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.?([0-9a-fA-F]?)/);
+  return m ? `${m[1].toLowerCase()}:${m[2].toLowerCase()}:${(m[3] || "0").toLowerCase()}` : String(raw).toLowerCase();
+}
+
+function parseCudaDeviceList(buf, pciMap) {
+  let inCuda = false;
+  let pendingIndex = null;
+  for (const line of buf.split("\n")) {
+    const lower = line.toLowerCase();
+    if (lower.includes("cuda") && (lower.includes("devices:") || lower.includes("device config"))) {
+      inCuda = true;
+      pendingIndex = null;
+      continue;
+    }
+    if (lower.includes("opencl") && (lower.includes("devices:") || lower.includes("device config"))) {
+      inCuda = false;
+      pendingIndex = null;
+      continue;
+    }
+    if (!inCuda) continue;
+
+    const same = line.match(/index:\s*(\d+).*?pcieid:\s*([0-9a-fA-F:.]+)/i);
+    if (same) {
+      pciMap[normalizePci(same[2])] = same[1];
+      pendingIndex = null;
+      continue;
+    }
+
+    const idx = line.match(/deviceindex:\s*(\d+)/i);
+    if (idx) {
+      pendingIndex = idx[1];
+      continue;
+    }
+
+    const pci = line.match(/pcieid:\s*([0-9a-fA-F:.]+)/i);
+    if (pci && pendingIndex != null && !/not\s*avilable/i.test(line)) {
+      pciMap[normalizePci(pci[1])] = pendingIndex;
+      pendingIndex = null;
+    }
+  }
+}
+
 function createStreamReader(onLine, onFlush, isEnabled, forward) {
   let buffer = "";
   return function handleChunk(chunk) {
@@ -95,25 +138,14 @@ class MinerManager {
       });
 
       let buf = "";
-      listProc.stdout.on("data", c => buf += String(c));
-      listProc.stderr.on("data", c => buf += String(c));
+      const onListData = c => {
+        if (buf.length < 65536) buf += String(c);
+      };
+      listProc.stdout.on("data", onListData);
+      listProc.stderr.on("data", onListData);
 
       listProc.on("close", () => {
-        let inCuda = false;
-        for (const line of buf.split("\n")) {
-          if (line.includes("CUDA devices:")) { inCuda = true; continue; }
-          if (line.includes("OpenCL devices:")) { inCuda = false; continue; }
-          if (inCuda) {
-            const match = line.match(/Index:\s*(\d+).*?pcieId:\s*([0-9a-fA-F:.]+)/i);
-            if (match) {
-              const id = match[1];
-              let pci = match[2];
-              const m = pci.match(/([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.?([0-9a-fA-F]?)/i);
-              if (m) pci = `${m[1].toLowerCase()}:${m[2].toLowerCase()}:${(m[3] || "0").toLowerCase()}`;
-              this.state.mining.pciMap[pci] = id;
-            }
-          }
-        }
+        parseCudaDeviceList(buf, this.state.mining.pciMap);
         this._startMiner();
       });
 
