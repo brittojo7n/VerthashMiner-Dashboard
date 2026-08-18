@@ -14,13 +14,17 @@ const MIME = {
 const SERVABLE = new Set(Object.keys(MIME));
 
 function headersFor(file, buf) {
-  return Object.freeze({
+  const isHtml = file.endsWith(".html");
+  const headers = {
     "Content-Type": MIME[path.extname(file)] || "application/octet-stream",
-
     "Cache-Control": "no-cache",
     "Content-Length": buf.length,
     "X-Content-Type-Options": "nosniff"
-  });
+  };
+  if (isHtml) {
+    headers["Content-Security-Policy"] = "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; img-src 'self' data:; connect-src 'self'";
+  }
+  return Object.freeze(headers);
 }
 
 function loadStaticCache(publicDir) {

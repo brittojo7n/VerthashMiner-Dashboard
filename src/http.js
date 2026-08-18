@@ -92,6 +92,11 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
   const routes = {
     "POST /api/login": async (req, res, ip) => {
       if (!requiresAuth) return sendText(res, 404, "Not found");
+      
+      if (req.headers["x-requested-with"] !== "XMLHttpRequest") {
+        return sendText(res, 403, "Forbidden: CSRF check failed");
+      }
+
       sessions.prune();
 
       const lockout = sessions.lockoutMs(ip);
@@ -172,6 +177,11 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     if (method === "POST" && pathname.startsWith("/api/miner/")) {
       const action = pathname.slice("/api/miner/".length);
       if (!MINER_ACTIONS.has(action)) return sendText(res, 404, "Not found");
+      
+      if (req.headers["x-requested-with"] !== "XMLHttpRequest") {
+        return sendText(res, 403, "Forbidden: CSRF check failed");
+      }
+
       const wait = limitMiner(ip);
       if (wait) return sendRateLimited(res, wait);
       minerManager.requestAction(action);
