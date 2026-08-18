@@ -79,11 +79,6 @@ function buildCard(index) {
   return { panel, refs, index };
 }
 
-/**
- * Skeleton card shown before the first nvidia-smi sample lands.
- * It occupies exactly the space a real card will, so the arrival of telemetry
- * does not push the rest of the page down (cumulative layout shift).
- */
 function renderSkeleton(container) {
   if (placeholder && cards.length === 1) return;
   cards = [buildCard(0)];

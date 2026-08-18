@@ -43,6 +43,10 @@
   --glass-blur: blur(14px) saturate(150%);
   --glass-tint: 18, 24, 38;
 
+  --shadow-panel: 0 1px 3px rgba(var(--black-rgb), 0.35);
+  --shadow-sunken: 0 1px 4px rgba(var(--black-rgb), 0.45);
+  --shadow-float: 0 4px 12px rgba(var(--black-rgb), 0.5);
+
   --font: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --mono: 'JetBrains Mono', 'Consolas', monospace;
 
@@ -89,19 +93,41 @@ button, input, select, textarea {
   font-family: inherit;
 }
 
-.glass-panel { background: var(--surface-raised); }
-.glass-pill { background: rgba(var(--bg-rgb), 0.4); }
+.glass-panel {
+  background:
+    linear-gradient(160deg, rgba(var(--white-rgb), 0.06), rgba(var(--white-rgb), 0) 45%),
+    linear-gradient(200deg, rgba(var(--accent2-rgb), 0.05), rgba(var(--accent2-rgb), 0) 55%),
+    rgba(var(--glass-tint), 0.78);
+}
+
+.glass-pill {
+  background:
+    linear-gradient(180deg, rgba(var(--white-rgb), 0.05), rgba(var(--white-rgb), 0)),
+    rgba(var(--bg-rgb), 0.55);
+}
+
 .glass-overlay { background: var(--overlay); }
-.glass-modal { background: rgba(var(--glass-tint), 0.72); }
+
+.glass-modal {
+  background:
+    linear-gradient(160deg, rgba(var(--white-rgb), 0.07), rgba(var(--white-rgb), 0) 50%),
+    rgba(var(--glass-tint), 0.92);
+}
+
+.fx {
+  --shadow-panel: 0 12px 32px rgba(var(--black-rgb), 0.25);
+  --shadow-sunken: 0 8px 24px rgba(var(--black-rgb), 0.4);
+  --shadow-float: 0 12px 40px rgba(var(--black-rgb), 0.4);
+}
 
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass-panel, .glass-pill, .glass-overlay {
+  .fx .glass-panel, .fx .glass-pill, .fx .glass-overlay {
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
   }
 
-  .glass-panel { background: rgba(var(--glass-tint), 0.55); }
-  .glass-modal { background: rgba(var(--glass-tint), 0.62); }
+  .fx .glass-panel { background: rgba(var(--glass-tint), 0.55); }
+  .fx .glass-modal { background: rgba(var(--glass-tint), 0.62); }
 }
 
 @media (max-width: 700px) {
@@ -157,34 +183,26 @@ h1 {
   text-transform: uppercase;
 }
 
-/* ---------------------------------------------------------------------------
-   Layout stability (Cumulative Layout Shift)
-
-   Every element below changes its text at runtime. Without a reserved size the
-   surrounding flex rows re-flow on each update, which is what produced the
-   measured CLS of 0.35. Reserving the width of the longest possible label
-   keeps the geometry constant while the text changes.
-   ------------------------------------------------------------------------- */
 #status {
   display: inline-block;
-  min-width: 108px;          /* fits RECONNECTING / DISCONNECTED */
+  min-width: 108px;
   text-align: center;
 }
 
 #btnAction,
 #btnRestart {
-  min-width: 78px;           /* START / STOP / RESTART */
+  min-width: 78px;
   text-align: center;
 }
 
 #btnAutoScroll {
-  min-width: 112px;          /* Auto-scroll: ON / OFF */
+  min-width: 112px;
   text-align: center;
 }
 
 .console-counter {
   display: inline-block;
-  min-width: 58px;           /* "0 logs" ... "500 logs" */
+  min-width: 58px;
   text-align: right;
 }
 
@@ -222,7 +240,7 @@ h1 {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--pad);
-  box-shadow: 0 12px 32px rgba(var(--black-rgb), 0.25);
+  box-shadow: var(--shadow-panel);
   transition: border-color 0.2s;
 }
 
@@ -249,8 +267,7 @@ h1 {
   justify-content: center;
   text-align: center;
   padding: var(--pad);
-  /* Keeps the panel from collapsing when telemetry is unavailable, so the
-     transition between the skeleton card and this notice barely moves. */
+
   min-height: 180px;
 }
 
@@ -381,8 +398,7 @@ h1 {
 
 .errorbox {
   display: none;
-  /* Rendered after the console so that showing it grows the panel downwards
-     instead of displacing the console. */
+
   margin-top: var(--gap);
   padding: var(--pad);
   border: 1px solid rgba(var(--red-rgb), 0.3);
@@ -404,7 +420,7 @@ h1 {
   border: 1px solid rgba(var(--white-rgb), 0.1);
   border-radius: calc(var(--radius) - 2px);
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(var(--black-rgb), 0.4);
+  box-shadow: var(--shadow-sunken);
 }
 
 .console-topbar {
@@ -470,6 +486,17 @@ h1 {
   border-radius: 50%;
   background: var(--green);
   box-shadow: 0 0 6px var(--green);
+}
+
+.fx .toast {
+  background:
+    linear-gradient(135deg, rgba(var(--toast-rgb), 0.16), rgba(var(--toast-rgb), 0.04) 60%, transparent),
+    rgba(var(--glass-tint), 0.55);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.fx .pulse-indicator {
   animation: pulse 2s infinite;
 }
 
@@ -634,6 +661,9 @@ h1 {
   display: inline-block;
   color: var(--accent);
   font-weight: bold;
+}
+
+.fx .term-cursor {
   animation: blink 1s step-end infinite;
 }
 
@@ -803,7 +833,7 @@ h1 {
 .modal-backdrop.show { opacity: 1; pointer-events: all; }
 .auth-modal {
   padding: 32px; border-radius: var(--radius);
-  border: 1px solid rgba(var(--white-rgb), 0.1); box-shadow: 0 12px 40px rgba(var(--black-rgb), 0.4);
+  border: 1px solid rgba(var(--white-rgb), 0.1); box-shadow: var(--shadow-float);
   will-change: transform, opacity;
   width: 100%; max-width: 360px; text-align: center;
 }
@@ -893,12 +923,10 @@ h1 {
 
   background:
     linear-gradient(135deg, rgba(var(--toast-rgb), 0.16), rgba(var(--toast-rgb), 0.04) 60%, transparent),
-    rgba(var(--glass-tint), 0.55);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+    rgba(var(--glass-tint), 0.88);
   border: 1px solid rgba(var(--toast-rgb), 0.22);
   box-shadow:
-    0 8px 24px rgba(var(--black-rgb), 0.35),
+    var(--shadow-sunken),
     0 0 0 1px rgba(var(--white-rgb), 0.05) inset;
   color: var(--text);
   font-family: var(--font);

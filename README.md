@@ -282,11 +282,14 @@ of them regresses by an order of magnitude.
 
 | Metric | Measured |
 |---|---|
-| Console parsing | **5.06 us/line** (50 000 lines in 253 ms) |
+| Console parsing | **1.5-2.4 us/line** (50 000 lines in 77-119 ms) |
 | Idle CPU (miner streaming, no tab open) | **0.02%** — no polling, no fan-out, no timers |
-| Active CPU (tab open, live stream) | **~0.2%**, dominated by the `nvidia-smi` spawn |
-| RSS | **~56 MB**, of which roughly 40 MB is the Node runtime itself |
-| SSE frame (default `MAX_LOGS=50`) | **800 B** incremental vs 6.8 KB full replay (8.5x) |
+| Active CPU (dashboard open, 85 log lines/min) | **0.13%** over a 3 minute soak |
+| RSS | **~56 MB**; application heap is **5.5 MB**, the rest is the Node runtime |
+| Heap drift (1 000 lines, 500+ frames) | **0.03 MB** — flat, no leak |
+| SSE frame (default `MAX_LOGS=50`) | **~800 B** incremental vs 6.8 KB full replay (8.5x) |
+| Cold page load (gzip) | **18.3 KB** for the whole UI, 11 requests |
+| Warm page load | **0 B** — every asset revalidates to `304` |
 | Firehose (32 472 lines in 3 s) | 4.2% CPU, heap growth **+0.1 MB**, server responsive |
 | `nvidia-smi` spawns, 3 clients, 1.5 s | **1** |
 
@@ -294,9 +297,29 @@ The zero-idle property is structural and must be preserved: GPU polling and the
 SSE fan-out are gated on there being at least one subscriber, and the client
 closes its stream when the tab is hidden.
 
+On Windows the dashboard drops itself to **below-normal process priority** and explicitly
+restores the miner to normal, so supervision can never win a CPU contest against hashing.
+
 **GPU usage by the dashboard is zero.** It never links or loads CUDA, OpenCL or
 NVML; the only GPU-adjacent call is a read-only `nvidia-smi --query-gpu` that
 creates no device context and allocates no VRAM.
+
+## Low-end and tablet clients
+
+The UI is designed to stay smooth on hardware like a Samsung Galaxy Tab E (quad-core A7,
+Mali-400, 1.5 GB RAM) without giving up the glassmorphism design:
+
+| Technique | Effect |
+|---|---|
+| Capability gate (`public/js/perf.js`) | The page renders in a cheap mode first and only enables `backdrop-filter`, large shadows and looping animations after the device proves it can hold ~60 fps. A weak device never paints an expensive frame; a desktop is upgraded within ~200 ms. |
+| Layered-gradient glass fallback | Same blue translucent look, zero per-frame GPU cost, no real-time blur |
+| No looping animations in cheap mode | The pulse dot and terminal caret stop repainting continuously |
+| `prefers-reduced-motion` / `update: slow` | Locked to the cheap mode permanently |
+| Console row cap | 60 rendered rows on weak devices, 200 otherwise, regardless of `MAX_LOGS` |
+| Pre-compressed assets + `ETag` | 18.3 KB cold, 0 B warm |
+| Only the used font weights are requested | No wasted font downloads, no synthesised weights |
+
+Nothing about the visual design changes on a capable machine.
 
 ## Testing
 

@@ -236,3 +236,17 @@ test("memory-error counters are warnings, not failures", () => {
   assert.equal(state.mining.status, "MINING");
   assert.equal(state.miner.lastError, "");
 });
+
+test("the summed total is bit-identical to the total the miner prints", () => {
+  const summed = freshState();
+  parseMinerLine(log("INFO", "Configured 0(CL) and 2(CUDA) workers"), summed);
+  parseMinerLine(log("INFO", device("cu", 0, 211.02)), summed);
+  parseMinerLine(log("INFO", device("cu", 1, 210.44)), summed);
+
+  const reported = freshState();
+  parseMinerLine(log("INFO", share(1, 1, 421.46)), reported);
+
+  assert.equal(summed.mining.hashrateKHs, reported.mining.hashrateKHs);
+  assert.equal(summed.mining.hashrateKHs, 421.46);
+  assert.equal(JSON.stringify(summed.mining.hashrateKHs), "421.46");
+});

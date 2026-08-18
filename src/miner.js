@@ -1,6 +1,7 @@
 "use strict";
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { spawn, execFile } = require("node:child_process");
 const { parseMinerLine } = require("./parser");
@@ -13,7 +14,6 @@ const ACTIONS = Object.freeze({
   restart: STATUS.RESTARTING
 });
 
-/** Fields reset on every (re)start so a new run never inherits stale numbers. */
 const CLEAN_STATS = Object.freeze({
   hashrateKHs: null,
   accepted: 0,
@@ -26,16 +26,6 @@ const CLEAN_STATS = Object.freeze({
   lastJsonRejectTime: 0
 });
 
-/**
- * Resolves the miner executable.
- *
- * Windows' CreateProcess searches the working directory, POSIX' execvp does
- * not. Resolving a bare name against MINER_CWD first makes both platforms
- * behave the way the README describes, and still falls back to PATH.
- *
- * @param {string} exe MINER_EXE
- * @param {string} cwd MINER_CWD
- */
 function resolveExe(exe, cwd) {
   if (!exe) return exe;
   const looksLikePath = exe.includes("/") || exe.includes("\\");
@@ -44,23 +34,16 @@ function resolveExe(exe, cwd) {
   try {
     if (fs.statSync(candidate).isFile()) return candidate;
   } catch {
-    /* not next to the miner: fall back to a PATH lookup */
   }
   return exe;
 }
 
-/** setTimeout that never keeps the event loop alive. */
 function timer(fn, ms) {
   const handle = setTimeout(fn, ms);
   if (typeof handle.unref === "function") handle.unref();
   return handle;
 }
 
-/**
- * Supervises the VerthashMiner child process: spawn, stream parsing,
- * lifecycle actions and shutdown, with a watchdog on every asynchronous step
- * so a wedged child can never wedge the dashboard.
- */
 class MinerManager {
   constructor({ config, state, onUpdate, timeouts = {} }) {
     this.config = config;
@@ -84,11 +67,8 @@ class MinerManager {
     this._spawning = false;
     this._probe = null;
 
-    // Worker slot -> device index mapping (only differs for device subsets).
     this.state.mining.workerMap = config.DEVICE_SELECTION || null;
   }
-
-  /* ---------------------------------------------------------------- helpers */
 
   _emit() {
     if (this.parsingEnabled && typeof this.onUpdate === "function") this.onUpdate();
@@ -101,8 +81,7 @@ class MinerManager {
 
   _resetStats() {
     this._setMining({ ...CLEAN_STATS });
-    // Recreate rather than mutate: keeps the hidden class stable and drops any
-    // device that disappeared between runs.
+
     this.state.mining.gpuHashrates = Object.create(null);
     this.state.mining.seenDevices = [];
   }
@@ -137,8 +116,6 @@ class MinerManager {
     return Boolean(this.state.miner.running || this.proc || this._spawning);
   }
 
-  /* ------------------------------------------------------------------ start */
-
   start() {
     if (this._stopPromise) return this._stopPromise.then(() => this.start());
     if (this.proc || this.state.miner.running || this._spawning) return Promise.resolve();
@@ -160,22 +137,14 @@ class MinerManager {
     this.pushLog("Starting miner...", LOG.SYSTEM);
     this._emit();
 
-    // Resolves once the spawn attempt is done, so callers (and tests) have a
-    // deterministic point at which `state.miner` is authoritative.
     return new Promise(resolve => {
       this._probeDevices(() => {
-        // The user may have pressed STOP while the probe was running.
         if (this._spawning) this._spawnMiner();
         resolve();
       });
     });
   }
 
-  /**
-   * Runs `--device-list` to learn the PCI id -> CUDA index mapping.
-   * Always calls `done()` exactly once, even if the probe hangs or the binary
-   * is missing: the miner start must never depend on it succeeding.
-   */
   _probeDevices(done) {
     const { MINER_CWD } = this.config;
     const MINER_EXE = resolveExe(this.config.MINER_EXE, MINER_CWD);
@@ -216,7 +185,6 @@ class MinerManager {
       try {
         parseCudaDeviceList(buffer, this.state.mining.pciMap);
       } catch {
-        /* a malformed device list must not block the miner */
       }
       once();
     });
@@ -228,7 +196,6 @@ class MinerManager {
       try {
         probe.kill("SIGKILL");
       } catch {
-        /* already gone */
       }
       once();
     }, this.timeouts.probe);
@@ -256,6 +223,11 @@ class MinerManager {
     const child = this.proc;
     let settled = false;
 
+    try {
+      os.setPriority(child.pid, os.constants.priority.PRIORITY_NORMAL);
+    } catch {
+    }
+
     this._spawning = false;
     this.state.miner.running = true;
     this.state.miner.pid = child.pid;
@@ -269,7 +241,6 @@ class MinerManager {
       try {
         parseMinerLine(line, this.state, enabled ? this._boundPushLog() : undefined);
       } catch {
-        // A parser fault must never take the supervisor (or the miner) down.
         this.state.dirty = true;
       }
     };
@@ -282,8 +253,6 @@ class MinerManager {
     child.stdout.on("data", createStreamReader(onLine, onFlush, enabled, mirror(process.stdout)));
     child.stderr.on("data", createStreamReader(onLine, onFlush, enabled, mirror(process.stderr)));
 
-    // Broken pipes are expected during shutdown; swallow them explicitly so
-    // they can never become an uncaught 'error' event.
     child.stdout.on("error", () => {});
     child.stderr.on("error", () => {});
 
@@ -301,7 +270,7 @@ class MinerManager {
       settled = true;
       const { status } = this.state.mining;
       const deliberate = status === STATUS.STOPPING || status === STATUS.STOPPED;
-      // An unrequested death by signal is a crash, not a clean stop.
+
       const next = deliberate ? status : code === 0 && !signal ? STATUS.STOPPED : STATUS.CRASHED;
 
       this._markDown(next);
@@ -313,7 +282,6 @@ class MinerManager {
       this._emit();
     };
 
-    // 'exit' fires before 'close'; whichever wins, the transition happens once.
     child.on("exit", onGone);
     child.on("close", onGone);
   }
@@ -321,8 +289,6 @@ class MinerManager {
   _boundPushLog() {
     return (this._pushLogBound ||= (text, type) => this.pushLog(text, type));
   }
-
-  /* ----------------------------------------------------------------- action */
 
   _clearScheduledAction() {
     clearTimeout(this._actionTimer);
@@ -336,11 +302,6 @@ class MinerManager {
     this._emit();
   }
 
-  /**
-   * Debounced UI control entry point. Returns immediately; the actual
-   * lifecycle call happens after ACTION_DELAY_MS so a double click cannot
-   * produce two spawns.
-   */
   requestAction(action) {
     if (!Object.prototype.hasOwnProperty.call(ACTIONS, action)) return;
     if (this._pendingAction === action) return;
@@ -372,8 +333,6 @@ class MinerManager {
       }
     }, LIMITS.ACTION_DELAY_MS);
   }
-
-  /* ------------------------------------------------------------------- stop */
 
   stop() {
     this._clearScheduledAction();
@@ -414,32 +373,24 @@ class MinerManager {
       child.once("exit", finish);
 
       const forceKill = () => {
-        // NOTE: `child.killed` only means "a signal was delivered", so it is
-        // true right after the SIGINT above. Escalation must be driven by
-        // whether the process actually exited.
         if (child.exitCode !== null || child.signalCode !== null) return;
         try {
           child.kill("SIGKILL");
         } catch {
-          /* already gone */
         }
       };
 
       if (process.platform === "win32") {
-        // taskkill /T tears down the whole tree (the miner spawns worker
-        // threads only, but a wrapper .cmd would add a level).
         execFile("taskkill.exe", ["/pid", String(pid), "/T", "/F"], () => {});
         this._forceKillTimer = timer(forceKill, this.timeouts.forceKill);
       } else {
         try {
           child.kill("SIGINT");
         } catch {
-          /* already gone */
         }
         this._forceKillTimer = timer(forceKill, this.timeouts.forceKill);
       }
 
-      // Absolute ceiling: never leave the caller awaiting forever.
       watchdog = timer(() => {
         if (settled) return;
         this.pushLog("Miner did not exit in time; giving up on a clean stop.", LOG.WARN);
@@ -458,7 +409,6 @@ class MinerManager {
     await this.start();
   }
 
-  /** Releases every timer/child this manager owns (used by tests and shutdown). */
   dispose() {
     this._clearScheduledAction();
     clearTimeout(this._forceKillTimer);
@@ -467,7 +417,6 @@ class MinerManager {
       try {
         this._probe.kill("SIGKILL");
       } catch {
-        /* already gone */
       }
       this._probe = null;
     }

@@ -6,24 +6,11 @@ const { LIMITS } = require("./constants");
 const HEARTBEAT_FRAME = ": hb\n\n";
 const OPEN_FRAME = ": stream established\n\n";
 
-/**
- * Server-Sent Events fan-out.
- *
- * Design notes
- *  - One shared heartbeat timer for every subscriber (not one per client), so
- *    a leaked connection can never leave a stray interval behind.
- *  - Stat frames are coalesced into a single serialisation per window and the
- *    resulting string is shared by all clients.
- *  - Console lines are delivered incrementally. Any client that missed a frame
- *    (backpressure, fresh connection) transparently receives a full snapshot
- *    instead of a delta, so the browser can never end up with a hole in the
- *    console.
- */
 class SseHub {
   constructor({ state, onSubscriberChange }) {
     this.state = state;
     this.onSubscriberChange = onSubscriberChange;
-    /** @type {Map<import('node:http').ServerResponse, {lastLogSeq:number, blocked:boolean, blockedCount:number}>} */
+
     this.clients = new Map();
     this.bcastTimer = null;
     this.heartbeatTimer = null;
@@ -33,8 +20,6 @@ class SseHub {
   get size() {
     return this.clients.size;
   }
-
-  /* ------------------------------------------------------------- internals */
 
   _frame(snapshot) {
     return `event: stats\ndata: ${JSON.stringify(snapshot)}\n\n`;
@@ -60,7 +45,6 @@ class SseHub {
     this.heartbeatTimer = null;
   }
 
-  /** @returns {boolean} false when the socket is gone. */
   _write(res, payload) {
     if (res.writableEnded || res.destroyed) return false;
     try {
@@ -88,7 +72,6 @@ class SseHub {
     try {
       res.end();
     } catch {
-      /* socket already torn down */
     }
     if (this.clients.size === 0) this._stopHeartbeat();
     this._notifyChange();
@@ -101,8 +84,6 @@ class SseHub {
     if (typeof this.onSubscriberChange === "function") this.onSubscriberChange(size);
   }
 
-  /* -------------------------------------------------------------- fan-out */
-
   broadcast() {
     if (this.clients.size === 0 || !this.state.dirty || this.bcastTimer) return;
 
@@ -111,7 +92,7 @@ class SseHub {
       if (this.clients.size === 0) return;
 
       const seq = this.state.miner.logs.seq;
-      /** @type {Map<number,string>} lastLogSeq -> serialised frame (≤ 4 entries) */
+
       const frames = new Map();
 
       this.state.dirty = false;
@@ -123,8 +104,6 @@ class SseHub {
           continue;
         }
 
-        // `since()` returns the whole retained buffer when a client has fallen
-        // behind the retention window, so a delta can never leave a hole.
         let payload = frames.get(meta.lastLogSeq);
         if (payload === undefined) {
           payload = this._frame(formatStatsSnapshot(this.state, { logsSince: meta.lastLogSeq }));
@@ -149,10 +128,6 @@ class SseHub {
     }
   }
 
-  /**
-   * Adopts an already-headed SSE response.
-   * @returns {boolean} false when the connection was refused (client cap).
-   */
   handleConnection(req, res) {
     if (this.clients.size >= LIMITS.MAX_SSE_CLIENTS) this._reapDeadClients();
 
@@ -161,7 +136,6 @@ class SseHub {
         res.write("event: error\ndata: Too many clients\n\n");
         res.end();
       } catch {
-        /* nothing to do */
       }
       return false;
     }
@@ -217,7 +191,6 @@ class SseHub {
       try {
         res.end();
       } catch {
-        /* socket already torn down */
       }
     }
     this.clients.clear();

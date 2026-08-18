@@ -10,14 +10,8 @@ const LOCKOUT_MS = 30000;
 const FAILURE_WINDOW_MS = 60000;
 const SWEEP_INTERVAL_MS = 10000;
 
-/** Cookie value, anchored to a cookie boundary so `x=vm_session=..` cannot spoof it. */
 const TOKEN_RE = /(?:^|;\s*)vm_session=([0-9a-f]{16,128})(?:\s*;|\s*$)/;
 
-/**
- * Constant-time string comparison.
- * Both sides are hashed first so the comparison length cannot leak the length
- * of the secret, and `timingSafeEqual` never sees mismatched buffer sizes.
- */
 function safeEqual(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
   const ha = crypto.createHash("sha256").update(a, "utf8").digest();
@@ -25,24 +19,18 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(ha, hb);
 }
 
-/**
- * In-memory session + brute-force store.
- * Bounded in every dimension: at most MAX_SESSIONS tokens and
- * MAX_TRACKED_IPS failure records, both with time-based eviction.
- */
 class SessionStore {
   constructor({ secret, ttlMs = LIMITS.SESSION_TTL_MS, now = Date.now } = {}) {
     this.secret = secret;
     this.ttlMs = ttlMs;
     this.now = now;
-    /** @type {Map<string, number>} token -> expiry */
+
     this.sessions = new Map();
-    /** @type {Map<string, {failures: number[], blockedUntil: number}>} */
+
     this.attempts = new Map();
     this.lastSweep = 0;
   }
 
-  /** Drops expired tokens; O(n) but only runs when the map is non-trivial. */
   prune(force = false) {
     const now = this.now();
     if (!force && this.sessions.size < MAX_SESSIONS && now - this.lastSweep < SWEEP_INTERVAL_MS) {
@@ -61,8 +49,7 @@ class SessionStore {
       .digest("hex");
 
     this.prune(true);
-    // Hard cap: evict the oldest entry so a valid passphrase cannot be used to
-    // grow the map without bound.
+
     while (this.sessions.size >= MAX_SESSIONS) {
       this.sessions.delete(this.sessions.keys().next().value);
     }
@@ -84,7 +71,6 @@ class SessionStore {
     return match ? match[1] : null;
   }
 
-  /** Verifies and slides the expiry of a session cookie. */
   verify(cookieHeader) {
     const token = SessionStore.tokenFrom(cookieHeader);
     if (!token) return false;
@@ -116,7 +102,6 @@ class SessionStore {
     }
   }
 
-  /** @returns {number} milliseconds the caller must wait, 0 when allowed. */
   lockoutMs(ip) {
     const now = this.now();
     if (now - this.lastSweep >= SWEEP_INTERVAL_MS || this.attempts.size >= MAX_TRACKED_IPS) {

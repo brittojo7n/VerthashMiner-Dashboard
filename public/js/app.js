@@ -1,3 +1,4 @@
+import "./perf.js";
 import { el, text, className } from "./dom.js";
 import { timestamp, uptime, stripLogPrefix } from "./format.js";
 import {
@@ -11,6 +12,7 @@ import * as toast from "./toast.js";
 import * as gpuView from "./gpu.js";
 import { createConsole } from "./console.js";
 import { createConnection } from "./connection.js";
+
 const ACTION_STATUS = { start: "STARTING", stop: "STOPPING", restart: "RESTARTING" };
 const ACTION_TOAST = {
   start: ["Starting Miner", "Launching the VerthashMiner process."],
@@ -109,8 +111,6 @@ function render(snapshot) {
 
   announce(snapshot.mining.status);
 
-  // Single projection shared with the test-suite: what is asserted is exactly
-  // what is painted.
   const display = presentSnapshot(snapshot, { now: serverNow, pendingStatus });
 
   text(hostEl, display.host);
@@ -220,7 +220,7 @@ async function runAction(action) {
   toast.info(title, message, `miner-${action}`);
 
   try {
-    const res = await fetch(`/api/miner/${action}`, { 
+    const res = await fetch(`/api/miner/${action}`, {
       method: "POST",
       headers: { "X-Requested-With": "XMLHttpRequest" }
     });

@@ -2,6 +2,8 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const zlib = require("node:zlib");
+const crypto = require("node:crypto");
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -12,21 +14,9 @@ const MIME = {
 };
 
 const SERVABLE = new Set(Object.keys(MIME));
+const COMPRESSIBLE = new Set([".html", ".css", ".js", ".svg"]);
+const MIN_COMPRESS_BYTES = 512;
 
-/**
- * Content Security Policy.
- *
- * - `script-src 'self'` — no inline scripts anywhere in the UI.
- * - `style-src` keeps `'unsafe-inline'` only because the Google Fonts
- *   stylesheet is loaded cross-origin; the app itself ships no inline <style>.
- * - `object-src`/`base-uri`/`form-action 'none'` remove the classic
- *   injection escape hatches.
- *
- * `frame-ancestors` is deliberately omitted: the session cookie is
- * `SameSite=Strict`, so a framed copy of the dashboard is always logged out
- * and cannot be used for clickjacking, while omitting the directive keeps the
- * page embeddable in local monitoring walls.
- */
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
@@ -39,30 +29,38 @@ const CSP = [
   "form-action 'none'"
 ].join("; ");
 
-function headersFor(file, buf) {
+const PERMISSIONS = "camera=(), microphone=(), geolocation=(), interest-cohort=()";
+
+function etagOf(buf) {
+  return `"${crypto.createHash("sha1").update(buf).digest("base64url").slice(0, 22)}"`;
+}
+
+function headersFor(file, length, etag, encoding) {
   const headers = {
     "Content-Type": MIME[path.extname(file)] || "application/octet-stream",
     "Cache-Control": "no-cache",
-    "Content-Length": buf.length,
+    "Content-Length": length,
+    ETag: etag,
+    Vary: "Accept-Encoding",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer"
   };
+  if (encoding) headers["Content-Encoding"] = encoding;
   if (file.endsWith(".html")) {
     headers["Content-Security-Policy"] = CSP;
-    headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), interest-cohort=()";
+    headers["Permissions-Policy"] = PERMISSIONS;
   }
   return Object.freeze(headers);
 }
 
-/**
- * Reads the whole public directory into memory once at boot.
- * The resulting map is the *only* thing the HTTP layer will ever serve from
- * disk, which makes path traversal structurally impossible: no request path is
- * ever concatenated with a filesystem path.
- *
- * @param {string} [publicDir]
- * @returns {Record<string, {buf: Buffer, hdr: object}>}
- */
+function notModifiedHeaders(etag) {
+  return Object.freeze({
+    ETag: etag,
+    "Cache-Control": "no-cache",
+    Vary: "Accept-Encoding"
+  });
+}
+
 function loadStaticCache(publicDir) {
   const root = publicDir || path.resolve(__dirname, "..", "public");
   const cache = Object.create(null);
@@ -81,10 +79,10 @@ function loadStaticCache(publicDir) {
         walk(full);
         continue;
       }
-      // Regular files only: a symlink must never be able to publish something
-      // from outside the public directory.
       if (!entry.isFile()) continue;
-      if (!SERVABLE.has(path.extname(entry.name))) continue;
+
+      const ext = path.extname(entry.name);
+      if (!SERVABLE.has(ext)) continue;
 
       let buf;
       try {
@@ -93,8 +91,28 @@ function loadStaticCache(publicDir) {
         continue;
       }
 
-      const url = "/" + path.relative(root, full).split(path.sep).join("/");
-      cache[url] = { buf, hdr: headersFor(entry.name, buf) };
+      const etag = etagOf(buf);
+      const asset = {
+        buf,
+        etag,
+        hdr: headersFor(entry.name, buf.length, etag),
+        notModified: notModifiedHeaders(etag),
+        gzip: null,
+        gzipHdr: null
+      };
+
+      if (COMPRESSIBLE.has(ext) && buf.length >= MIN_COMPRESS_BYTES) {
+        try {
+          const gzip = zlib.gzipSync(buf, { level: zlib.constants.Z_BEST_COMPRESSION });
+          if (gzip.length < buf.length) {
+            asset.gzip = gzip;
+            asset.gzipHdr = headersFor(entry.name, gzip.length, etag, "gzip");
+          }
+        } catch {
+        }
+      }
+
+      cache["/" + path.relative(root, full).split(path.sep).join("/")] = asset;
     }
   };
 

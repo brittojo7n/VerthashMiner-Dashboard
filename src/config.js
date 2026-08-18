@@ -13,20 +13,13 @@ const WEAK_SECRET_LENGTH = 32;
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
-/**
- * Minimal, allocation-light `.env` parser.
- * Kept dependency-free on purpose: the project ships with zero runtime deps.
- *
- * @param {string} text raw file contents
- * @returns {Record<string,string>} parsed key/value pairs
- */
 function parseEnvFile(text) {
   const out = Object.create(null);
   if (!text) return out;
 
   for (const raw of String(text).split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line || line.charCodeAt(0) === 35 /* # */) continue;
+    if (!line || line.charCodeAt(0) === 35 ) continue;
 
     const match = /^\s*([\w.-]+)\s*=\s*(.*)?\s*$/.exec(line);
     if (!match) continue;
@@ -46,16 +39,7 @@ function parseEnvFile(text) {
   return out;
 }
 
-/**
- * Loads `.env` into `process.env` without overwriting variables that are
- * already present in the real environment (real env wins, as usual).
- *
- * @param {string} [envPath]
- * @param {NodeJS.ProcessEnv} [env]
- */
 function loadEnvFile(envPath, env = process.env) {
-  // ENV_FILE lets an operator (or the test environment) point at an
-  // alternative .env without copying files around.
   const target =
     envPath || env.ENV_FILE || path.join(path.resolve(__dirname, ".."), ".env");
   try {
@@ -65,7 +49,6 @@ function loadEnvFile(envPath, env = process.env) {
       if (env[key] === undefined) env[key] = parsed[key];
     }
   } catch {
-    /* a broken .env must never prevent the dashboard from starting */
   }
   return env;
 }
@@ -82,14 +65,12 @@ function clampInt(value, min, max, fallback) {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-/** Splits a command line honouring double quotes. */
 function splitArgs(raw) {
   return (String(raw || "").match(/"([^"]*)"|(\S+)/g) || []).map(token =>
     token.replace(/^"|"$/g, "")
   );
 }
 
-/** Reads the value of `--flag value` / `--flag=value` from an argv array. */
 function argValue(args, names) {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -110,13 +91,6 @@ function parseIndexList(value) {
   return list.length ? list : null;
 }
 
-/**
- * VerthashMiner labels per-device hashrate lines with the *worker* index, which
- * only equals the device index when every device is selected. When the user
- * selects a subset (`--cu-devices 1,3`) worker 0 is device 1, and so on.
- *
- * @returns {{cu: number[]|null, cl: number[]|null}} worker slot -> device index
- */
 function deviceSelection(args) {
   const all = flag => args.includes(flag);
   return {
@@ -130,19 +104,12 @@ function extractWallet(args) {
   return raw ? String(raw).split(".")[0] : "";
 }
 
-/**
- * Builds the immutable configuration object from an environment bag.
- * Pure: no I/O, no `process.exit`, so it can be unit tested directly.
- *
- * @param {NodeJS.ProcessEnv} [env]
- * @param {{platform?: string}} [opts]
- */
 function buildConfig(env = process.env, opts = {}) {
   const platform = opts.platform || process.platform;
   const warnings = [];
 
   const rawPort = env.PORT;
-  // 0 is legal and means "ask the OS for a free port".
+
   const PORT = clampInt(rawPort, 0, 65535, 3000);
   if (rawPort != null && rawPort !== "" && Number(rawPort) !== PORT) {
     warnings.push(`PORT "${rawPort}" is invalid; using ${PORT}.`);
@@ -168,8 +135,7 @@ function buildConfig(env = process.env, opts = {}) {
     env.MINER_EXE || (platform === "win32" ? "VerthashMiner.exe" : "VerthashMiner");
 
   const MINER_ARGS = splitArgs(env.MINER_ARGS);
-  // `--protocol-dump` is what surfaces stratum difficulty and share reject
-  // reasons. Added once, here, so the spawn path never has to mutate argv.
+
   if (!MINER_ARGS.includes("-P") && !MINER_ARGS.includes("--protocol-dump")) {
     MINER_ARGS.push("--protocol-dump");
   }
@@ -195,13 +161,6 @@ function buildConfig(env = process.env, opts = {}) {
   });
 }
 
-/**
- * Fail-fast security gates. Returns the list of fatal problems instead of
- * exiting so that the caller (and the test suite) decides what to do.
- *
- * @param {ReturnType<typeof buildConfig>} config
- * @returns {string[]} fatal errors, empty when the config is safe to run
- */
 function validateConfig(config) {
   const fatal = [];
 
@@ -222,7 +181,6 @@ function validateConfig(config) {
   return fatal;
 }
 
-/** Non-fatal hardening advice, surfaced once at boot. */
 function advisories(config) {
   const notes = [...config.warnings];
 

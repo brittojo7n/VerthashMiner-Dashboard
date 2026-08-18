@@ -5,17 +5,20 @@ const { createState } = require("./src/state");
 const { GpuManager } = require("./src/gpu");
 const { SseHub } = require("./src/sse");
 const { MinerManager } = require("./src/miner");
+const os = require("node:os");
 const { createHttpServer, getLanIp } = require("./src/http");
 const { LIMITS, LOG } = require("./src/constants");
 
-/**
- * Wires the modules together and owns process lifecycle.
- *
- * Failsafe policy: the dashboard is a *supervisor*. It must never take the
- * miner down because of its own bug, and it must always be able to exit, so
- * every asynchronous shutdown step is bounded by a watchdog and every
- * unexpected throw is contained rather than fatal.
- */
+function yieldCpuToMiner() {
+  if (process.platform !== "win32") return false;
+  try {
+    os.setPriority(process.pid, os.constants.priority.PRIORITY_BELOW_NORMAL);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 class Server {
   constructor(options = {}) {
     this.config = options.config || config;
@@ -50,8 +53,6 @@ class Server {
 
     this.boundExit = () => this.stop();
     this.handleSigint = () => {
-      // Ctrl+C in a shared console also reaches the child; if we are already
-      // stopping it, let that sequence finish instead of racing it.
       if (this.minerManager && this.minerManager.isStoppingChild) return;
       this.boundExit();
     };
@@ -68,10 +69,6 @@ class Server {
     }
   }
 
-  /**
-   * Contained fault handler: log it, surface it in the UI console, keep the
-   * miner running. Crashing here would leave an unsupervised child process.
-   */
   _onFault(scope, err) {
     const message = `[dashboard] ${scope}: ${(err && err.stack) || err}`;
     try {
@@ -82,18 +79,16 @@ class Server {
       );
       this.sseHub.broadcast();
     } catch {
-      /* last resort: never throw from the fault handler */
     }
   }
 
   start() {
     this._attachSignalHandlers();
+    if (yieldCpuToMiner()) console.log("[dashboard] running at below-normal priority");
 
     this._listening = false;
 
     this.httpServer.on("error", err => {
-      // A failure to bind means there is no dashboard at all: fail loudly
-      // instead of lingering as an invisible process.
       if (!this._listening) {
         if (err && err.code === "EADDRINUSE") {
           console.error(
@@ -123,7 +118,6 @@ class Server {
     return this;
   }
 
-  /** Graceful shutdown with a hard ceiling. */
   stop(exitCode = 0) {
     if (this._exiting) return;
     this._exiting = true;
@@ -132,7 +126,6 @@ class Server {
     this.gpuManager.stop();
     this.sseHub.closeAll();
 
-    // Never hang: if the miner or a socket refuses to close, leave anyway.
     this._shutdownWatchdog = setTimeout(() => {
       console.error("[dashboard] shutdown watchdog fired; forcing exit.");
       process.exit(exitCode);
@@ -194,4 +187,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { Server, main };
+module.exports = { Server, main, yieldCpuToMiner };

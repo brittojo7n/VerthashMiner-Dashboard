@@ -5,12 +5,6 @@ const { LIMITS } = require("./constants");
 const { clampGpuPollMs, GPU_POLL_DEFAULT_MS } = require("./config");
 const { normalizePci } = require("./devices");
 
-/**
- * nvidia-smi is a *driver query* utility: it reads counters over NVML and
- * never creates a CUDA/OpenCL context, so polling it costs the GPU nothing
- * beyond a driver IOCTL. This module is the only place the dashboard touches
- * anything GPU related.
- */
 const SMI_QUERY = Object.freeze([
   "--query-gpu=name,temperature.gpu,power.draw,utilization.gpu,clocks.gr,clocks.mem," +
     "memory.used,memory.total,pstate,pci.bus_id",
@@ -25,11 +19,6 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-/**
- * Parses `nvidia-smi --query-gpu` CSV output.
- * Unsupported fields ("[N/A]", "[Not Supported]") become null instead of 0 so
- * the UI can show an em dash rather than a wrong reading.
- */
 function parseSmiOutput(raw) {
   const trimmed = String(raw).trim();
   if (!trimmed) return [];
@@ -42,7 +31,7 @@ function parseSmiOutput(raw) {
     if (!line) continue;
 
     const p = line.split(",");
-    // Same normaliser as the miner-side device list: one join key, one bug class.
+
     const pciBusId = normalizePci((p[9] || "").trim());
 
     result.push({
@@ -62,7 +51,6 @@ function parseSmiOutput(raw) {
   return result;
 }
 
-/** Cheap structural comparison used to skip no-op broadcasts. */
 function sameTelemetry(a, b) {
   if (a === b) return true;
   if (!a || !b || a.length !== b.length) return false;
@@ -86,16 +74,6 @@ function sameTelemetry(a, b) {
   return true;
 }
 
-/**
- * Polls nvidia-smi, but only while at least one dashboard client is attached.
- *
- * Resource guarantees:
- *  - zero timers and zero processes when nobody is watching;
- *  - one in-flight child at a time, hard timeout of 1.5s;
- *  - a global cooldown so reconnects cannot amplify the spawn rate;
- *  - exponential backoff when nvidia-smi keeps failing (missing driver), which
- *    turns a permanent error from a 5s spawn loop into a 2 minute heartbeat.
- */
 class GpuManager {
   constructor({ state, pollMs = GPU_POLL_DEFAULT_MS, onUpdate, exec = execFile } = {}) {
     this.state = state;
@@ -110,7 +88,6 @@ class GpuManager {
     this.failures = 0;
   }
 
-  /** Effective interval, including failure backoff. */
   get intervalMs() {
     if (this.failures < LIMITS.GPU_FAILURE_BACKOFF_AFTER) return this.pollMs;
     const factor = 2 ** Math.min(6, this.failures - LIMITS.GPU_FAILURE_BACKOFF_AFTER + 1);
@@ -170,7 +147,7 @@ class GpuManager {
             const changed = !sameTelemetry(this.state.gpu, parsed) || this.state.gpuError;
             this.state.gpu = parsed;
             this.state.gpuError = "";
-            // Only wake the fan-out when a value actually moved.
+
             if (changed) this._notify();
           }
         } else if (err) {
@@ -190,13 +167,11 @@ class GpuManager {
     );
   }
 
-  /** Called by the SSE hub whenever the subscriber count changes. */
   updateSubscribers(n) {
     if (n > 0) {
       if (!this.active) {
         this.active = true;
-        // A reconnect should not reset the backoff of a permanently broken
-        // nvidia-smi, but it should retry promptly after a real outage.
+
         this.poll();
       }
     } else if (this.active) {

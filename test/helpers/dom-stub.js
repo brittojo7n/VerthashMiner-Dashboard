@@ -168,8 +168,10 @@ function installDom(origin) {
   const nodes = new Map();
   const created = [];
 
+  const documentElement = new StubElement("html", "");
   const document = {
     hidden: false,
+    documentElement,
     listeners: new Map(),
     getElementById(id) {
       if (!nodes.has(id)) nodes.set(id, new StubElement("div", id));
@@ -210,6 +212,7 @@ function installDom(origin) {
 
   return {
     document,
+    documentElement,
     nodes,
     /** Text currently displayed by an element id. */
     textOf: id => (nodes.get(id) ? nodes.get(id).textContent : undefined),

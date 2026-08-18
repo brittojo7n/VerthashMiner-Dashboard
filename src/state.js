@@ -3,13 +3,6 @@
 const os = require("node:os");
 const { STATUS } = require("./constants");
 
-/**
- * Fixed-capacity ring buffer for console lines.
- *
- * Every entry carries a monotonically increasing `id`, which is what makes
- * incremental (delta) delivery to the browser possible without ever losing or
- * duplicating a line.
- */
 class CircularLogBuffer {
   constructor(capacity = 25) {
     this.capacity = Math.max(1, capacity | 0);
@@ -26,7 +19,6 @@ class CircularLogBuffer {
     return this.seq;
   }
 
-  /** Oldest id still retained (0 when empty). */
   get firstId() {
     return this.count === 0 ? 0 : this.seq - this.count + 1;
   }
@@ -35,20 +27,12 @@ class CircularLogBuffer {
     return this.count;
   }
 
-  /** Entries in chronological order. */
   toJSON() {
     return this.count < this.capacity
       ? this.buf.slice(0, this.count)
       : this.buf.slice(this.head).concat(this.buf.slice(0, this.head));
   }
 
-  /**
-   * Entries newer than `sinceId`, chronologically ordered.
-   * Returns everything still buffered when the caller has fallen behind the
-   * retention window, so a slow consumer can never silently skip a line.
-   *
-   * @param {number} sinceId last id the consumer already has
-   */
   since(sinceId) {
     if (!Number.isFinite(sinceId) || sinceId <= 0) return this.toJSON();
     if (sinceId >= this.seq) return [];
@@ -121,10 +105,6 @@ function createState(wallet = "", maxLogs = 25) {
   };
 }
 
-/**
- * Resolves the miner-reported hashrate for one telemetry device.
- * PCI id is the join key; positional index is the documented fallback.
- */
 function hashrateForGpu(state, gpu) {
   const mapped = state.mining.pciMap[gpu.pciBusId];
   const devIndex = mapped !== undefined ? mapped : gpu.index;
@@ -133,15 +113,6 @@ function hashrateForGpu(state, gpu) {
   return cuda !== undefined ? cuda : rates[`cl_${devIndex}`];
 }
 
-/**
- * Projects the mutable server state into the immutable snapshot the browser
- * consumes. This projection is the single source of truth for every number
- * rendered by the UI.
- *
- * @param {object} state
- * @param {{logsSince?: number}} [options] when set, only newer log lines are
- *   included (`logsFrom` tells the client which id the delta starts at).
- */
 function formatStatsSnapshot(state, options) {
   const now = Date.now();
   const { miner, mining } = state;

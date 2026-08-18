@@ -111,3 +111,54 @@ test("the browser bundle stays dependency-free and buildless", () => {
     assert.ok(!/require\(/.test(source), `${file} must stay an ES module`);
   }
 });
+
+test("expensive effects are gated behind the capability class", () => {
+  const blurRules = [...css.matchAll(/([^{}]*)\{[^}]*backdrop-filter[^}]*\}/g)]
+    .map(m => m[1].trim().split("\n").pop().trim())
+    .filter(selector => selector && !selector.startsWith("@"));
+  assert.ok(blurRules.length > 0, "the glass effect must still exist");
+  for (const selector of blurRules) {
+    assert.ok(selector.includes(".fx"), `backdrop-filter must be gated: ${selector}`);
+  }
+
+  for (const [name, pattern] of [
+    ["pulse", /\.fx \.pulse-indicator\s*\{[^}]*animation/],
+    ["cursor", /\.fx \.term-cursor\s*\{[^}]*animation/]
+  ]) {
+    assert.match(css, pattern, `${name} animation must be gated behind .fx`);
+  }
+
+  // The static fallback must still read as glass, not as a flat panel.
+  assert.match(css, /\.glass-panel\s*\{[^}]*linear-gradient/);
+  assert.match(css, /--shadow-panel:/);
+});
+
+test("only the font weights the stylesheet uses are requested", () => {
+  const requested = new Set();
+  for (const match of html.matchAll(/wght@([\d;]+)/g)) {
+    for (const weight of match[1].split(";")) requested.add(weight);
+  }
+  const used = new Set();
+  for (const match of css.matchAll(/font-weight:\s*(\d{3})/g)) used.add(match[1]);
+  used.add("400");
+
+  for (const weight of used) {
+    assert.ok(requested.has(weight), `weight ${weight} is used but never downloaded`);
+  }
+  for (const weight of requested) {
+    assert.ok(used.has(weight), `weight ${weight} is downloaded but never used`);
+  }
+});
+
+test("static assets are pre-compressed and revalidatable", () => {
+  const cache = loadStaticCache(PUBLIC);
+  const css$ = cache["/style.css"];
+
+  assert.ok(css$.gzip, "large text assets must be pre-compressed at boot");
+  assert.ok(css$.gzip.length * 2 < css$.buf.length, "gzip must at least halve the payload");
+  assert.match(css$.etag, /^"[\w-]{22}"$/);
+  assert.equal(css$.gzipHdr["Content-Encoding"], "gzip");
+  assert.equal(css$.gzipHdr["Content-Length"], css$.gzip.length);
+  assert.equal(css$.hdr.Vary, "Accept-Encoding");
+  assert.equal(cache["/"].etag, cache["/index.html"].etag);
+});

@@ -35,10 +35,8 @@ const MAX_BODY_BYTES = 4096;
 const MAX_STREAM_BLOCKS = 128;
 const MINER_ACTIONS = new Set(["start", "stop", "restart"]);
 
-/** Sentinel returned by readJsonBody() when the client exceeded MAX_BODY_BYTES. */
 const TOO_LARGE = Symbol("payload_too_large");
 
-/** Server-level hardening against slow/oversized clients. */
 const SERVER_TIMEOUTS = Object.freeze({
   headersTimeout: 20000,
   requestTimeout: 30000,
@@ -52,7 +50,6 @@ const send = (res, status, headers, body) => {
     res.writeHead(status, headers);
     res.end(body);
   } catch {
-    /* client vanished mid-response */
   }
 };
 const sendText = (res, status, body) => send(res, status, HDR_TEXT, body);
@@ -82,14 +79,9 @@ function getLanIp() {
   return "127.0.0.1";
 }
 
-/**
- * Same-origin guard for state-changing requests.
- * A browser cannot forge `Origin`, and the custom `X-Requested-With` header
- * cannot be sent cross-origin without a CORS preflight that we never answer.
- */
 function isSameOrigin(req) {
   const origin = req.headers.origin;
-  if (!origin) return true; // non-browser client or same-origin GET
+  if (!origin) return true;
   try {
     return new URL(origin).host === req.headers.host;
   } catch {
@@ -129,12 +121,6 @@ function readJsonBody(req) {
   });
 }
 
-/**
- * Builds the dashboard HTTP server.
- * All mutable state (sessions, limiters, stream blocks) lives per instance so
- * multiple servers can coexist in one process — which is what makes the
- * integration test suite possible.
- */
 function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
   const staticFiles = loadStaticCache(publicDir);
   const requiresAuth = config.PASSPHRASE.length > 0;
@@ -164,7 +150,6 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
 
     const body = await readJsonBody(req);
     if (body === TOO_LARGE) {
-      // Answer before hanging up so the client sees a status instead of a reset.
       send(res, 413, { ...HDR_TEXT, Connection: "close" }, "Payload Too Large");
       res.on("finish", () => req.destroy());
       return;
@@ -239,8 +224,14 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     if (method === "GET" || method === "HEAD") {
       const asset = staticFiles[pathname];
       if (asset) {
-        if (method === "HEAD") return send(res, 200, asset.hdr, undefined);
-        return send(res, 200, asset.hdr, asset.buf);
+        if (req.headers["if-none-match"] === asset.etag) {
+          return send(res, 304, asset.notModified, undefined);
+        }
+        const encodings = req.headers["accept-encoding"];
+        const gzip = asset.gzip && typeof encodings === "string" && encodings.includes("gzip");
+        const headers = gzip ? asset.gzipHdr : asset.hdr;
+        if (method === "HEAD") return send(res, 200, headers, undefined);
+        return send(res, 200, headers, gzip ? asset.gzip : asset.buf);
       }
     }
 
@@ -287,7 +278,6 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
 
   Object.assign(server, SERVER_TIMEOUTS);
 
-  // Malformed requests must not surface as uncaught exceptions.
   server.on("clientError", (err, socket) => {
     if (!socket.writable || socket.destroyed) return;
     socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");

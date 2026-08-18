@@ -2,18 +2,6 @@
 
 const MAX_BUCKETS = 128;
 
-/**
- * Fixed-window rate limiter with an optional penalty window.
- *
- * Bounded memory: at most MAX_BUCKETS keys, expired buckets are swept before
- * any eviction happens so an attacker cannot push out a legitimate client's
- * bucket by cycling source addresses.
- *
- * @param {number} max        allowed requests per window
- * @param {number} windowMs   window length
- * @param {number} [penaltyMs] extra cool-off applied once a window overflows
- * @returns {(key: string) => number} milliseconds to wait, 0 when allowed
- */
 function createRateLimiter(max, windowMs, penaltyMs = 0) {
   const buckets = new Map();
 

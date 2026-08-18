@@ -324,3 +324,83 @@ VerthashMiner binary**, and no browser engine. Consequently:
   tests; the real file must come from `VerthashMiner --gen-verthash-data verthash.dat`.
 
 Nothing in this report is inferred from a metric I did not actually run.
+
+---
+
+## 9. Follow-up pass: footprint, tablet rendering, code sanitisation
+
+### 9.1 Runtime sources are now comment-free
+
+`server.js`, `src/**`, `public/js/**` and `public/style.css` carry no comments or JSDoc.
+The stripping was done with a regex-literal- and template-literal-aware tokeniser, then
+verified two ways: every stripped file is a **strict character subsequence** of its original
+(nothing was rewritten, only removed), and the full 171-test suite still passes. The design
+rationale that lived in those comments now lives in `docs/INTERNALS.md`, keyed to the test
+that enforces each invariant. The test suite and `tools/` keep their comments; they are not
+production code and are never loaded by the running dashboard.
+
+### 9.2 Measured effect of this pass
+
+| Metric | Before | After |
+|---|---|---|
+| Console parsing | 5.06 µs/line | **1.5–2.4 µs/line** (ANSI fast path: no regex scan or copy on clean lines) |
+| Cold page load | 60 KB, uncompressed | **18.3 KB** (gzip at boot, 68 % smaller) |
+| Warm page load | 60 KB re-downloaded (`no-cache`, no validator) | **0 B** — every asset answers `304` |
+| Runtime source bytes | 116 KB | **97 KB** |
+| Dashboard CPU, 3-minute live soak | — | **0.128 %** |
+| Application heap | — | **5.5 MB**, drift **0.03 MB** over 557 lines / 535 frames |
+
+`--max-semi-space-size` / `--max-old-space-size` were benchmarked and made **no** difference
+(57.3 MB vs 57.4 MB RSS): the allocation rate is too low for the young generation to ever
+grow, so the flags are deliberately *not* recommended. ~40 MB of RSS is the Node runtime
+floor and cannot be reclaimed by application code.
+
+### 9.3 Live soak methodology
+
+A real server process, a real child emitting the canonical console stream at ~85 lines/min
+(20–40× a real rig), and a persistent SSE subscriber behaving like an open dashboard tab.
+Sampled `/proc/<pid>/stat` and RSS every 5 s for 3 minutes:
+
+* CPU 0.128 %, RSS 55.8 → 56.6 MB (V8 page retention, plateaus; heap itself flat)
+* 232 frames, **790 B/frame average**
+* 227 console lines delivered with **0 duplicates and 0 sequence gaps** — the delta pipeline
+  is lossless in a live run, not just in unit tests
+* Final displayed values identical to the console: `MINING`, 421.46 kH/s, 2/3 shares
+
+An in-process variant with `--expose-gc` isolated heap from RSS and confirmed **no leak**
+(handles constant at 8, `external` constant, heap +0.03 MB/minute — within GC noise). The
+0.5 MB "drift" seen in the first run was the measuring harness retaining its own snapshots.
+
+### 9.4 Rendering on low-end tablets (Galaxy Tab E class)
+
+The expensive parts of the design were **gated, not removed**:
+
+* `public/js/perf.js` starts the page in a cheap mode and adds `class="fx"` only after the
+  device proves itself — `deviceMemory ≥ 4` / `hardwareConcurrency ≥ 8` short-circuit to
+  "capable", otherwise a 12-frame `requestAnimationFrame` probe requires a median frame
+  ≤ 18 ms. `prefers-reduced-motion` and `update: slow` pin the cheap mode permanently.
+  Starting cheap is deliberate: a Tab E never paints a single blurred frame, whereas
+  starting rich and downgrading would cost exactly the frames that hurt most.
+* Cheap mode replaces `backdrop-filter: blur(14px) saturate(150%)` on panels, pills,
+  overlays, modals and toasts with layered `linear-gradient` glass over the same blue tint —
+  identical colour identity, zero per-frame GPU work. Real-time blur over large areas is the
+  single most expensive thing a Mali-400 can be asked to do.
+* Large `box-shadow`s route through `--shadow-panel/-sunken/-float`, which shrink to 1–4 px
+  in cheap mode; the infinite `pulse` and `blink` animations (continuous repaints on a
+  battery-powered device) only run under `.fx`.
+* The console caps rendered rows at 60 on weak devices (200 otherwise) regardless of
+  `MAX_LOGS`, and skips syntax highlighting for lines over 512 characters.
+* `Outfit` weight 600 was used by six rules but never downloaded (silently synthesised),
+  while weight 300 was downloaded and never used — the request list now matches the
+  stylesheet exactly, enforced by a test.
+
+Caveat, stated plainly: **this could not be verified on a physical Tab E.** The reasoning is
+based on the known cost profile of `backdrop-filter` on Mali-400 hardware and on static
+analysis; the capability gate is designed so that even if the heuristic misjudges a device,
+the frame probe corrects it within ~200 ms.
+
+### 9.5 Cleanup
+
+`.testenv/`, the soak/leak scripts, the comment-stripper and all working backups were
+deleted. The repository contains the dashboard, the test suite, `tools/setup-test-env.js`
+and `docs/`. No logs, no scratch files, no generated artifacts are tracked.
