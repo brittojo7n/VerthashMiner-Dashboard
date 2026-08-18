@@ -32,12 +32,29 @@ A lightweight, zero-overhead Windows dashboard that acts as a wrapper around Ver
 
 ### 1. Clone the Repository
 
-Clone this repository directly into your VerthashMiner directory (or any preferred location):
+Clone this repository into the same parent directory as your `VerthashMiner` folder (or any preferred location):
 
 ```bash
 git clone https://github.com/brittojo7n/VerthashMiner-Dashboard.git
 cd VerthashMiner-Dashboard
 ```
+
+Your final structure should look like this:
+
+```
+<parent_directory>/
+  VerthashMiner/
+    VerthashMiner.exe
+    ...
+  VerthashMiner-Dashboard/
+    Launch.bat
+    server.js
+    src/
+    public/
+    .env.example
+```
+
+> `Launch.bat` can live anywhere you want. The example below assumes you place it inside `VerthashMiner-Dashboard/`, but you can also keep it in the parent directory or elsewhere — just adjust the `cd` path accordingly.
 
 ### 2. Create your `.env`
 
@@ -50,16 +67,17 @@ PORT=3000
 HOST=127.0.0.1
 GPU_POLL_MS=5000
 MAX_LOGS=50
+FORWARD_CONSOLE=false
 PASSPHRASE=abc123
 SESSION_SECRET=your_random_64_character_hex_string
 MINER_EXE=VerthashMiner.exe
-MINER_CWD=C:\Mining\VerthashMiner
-MINER_ARGS=-u vtc1qwddxt3rmwx00ev9yg4qcwpxnguw5zm7mwej2xk -p c=VTC -o stratum+tcp://verthash.sea.mine.zpool.ca:6144 --verthash-data ..\Vertcoin\Vertcoin\verthash.dat --all-cu-devices
+MINER_CWD=miner
+MINER_ARGS=-u your_wallet_address -p c=VTC -o stratum+tcp://your_pool_address:port --verthash-data path\to\verthash.dat --all-cu-devices
 ```
 
 ### 3. Configure Paths and Arguments
 
-- **`MINER_CWD`**: This is the working directory where `VerthashMiner.exe` is located (e.g. `C:\Mining\VerthashMiner`). It must be set so the dashboard can find the executable and the `verthash.dat` file properly.
+- **`MINER_CWD`**: This is the working directory where `VerthashMiner.exe` is located (e.g. `miner` if your structure is `<parent_directory>/miner/`). Relative paths are resolved from the current working directory of the `node` process, not from the dashboard folder. It must be set so the dashboard can find the executable and the `verthash.dat` file properly.
 - **`MINER_ARGS`**: This variable determines how the dashboard launches the miner. You must supply your wallet address, pool, and path to the `verthash.dat` file exactly as you would in a normal `.bat` file.
 - **`GPU_POLL_MS`**: How often (in milliseconds) the dashboard queries `nvidia-smi` while a dashboard tab is open. **Default is `5000`**. Allowed range is **`3000`–`10000`** (3–10 seconds). Values outside this range are clamped. Polling is globally rate-limited: page refresh, tab reconnect, or multiple clients cannot trigger `nvidia-smi` more often than this interval. The last cached GPU telemetry is sent immediately on refresh so the UI does not go blank.
 - **`MAX_LOGS`**: Sets the maximum number of console logs to hold in memory and display on the dashboard (default is 50, minimum is 15, maximum is 500).
@@ -73,7 +91,9 @@ _Make sure to include `--all-cu-devices` in `MINER_ARGS` since this dashboard tr
 
 ### 4. Running the Dashboard
 
-Put the entire folder (`VerthashMiner-Dashboard`) right where the folder for `VerthashMiner` is situated, and then create the following batch file outside both folders (name it anything you like, such as `launch.bat` or `start.bat`):
+Create a batch file anywhere you like (for example, in the parent directory next to `VerthashMiner/` and `VerthashMiner-Dashboard/`, or inside `VerthashMiner-Dashboard/` itself).
+
+**If `Launch.bat` is in the parent directory:**
 
 ```bat
 @echo off
@@ -91,19 +111,36 @@ node ".\VerthashMiner-Dashboard\server.js"
 pause
 ```
 
+**If `Launch.bat` is inside `VerthashMiner-Dashboard/`:**
+
+```bat
+@echo off
+setlocal
+
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    powershell -NoProfile -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b
+)
+
+cd /d "%~dp0"
+
+node ".\server.js"
+pause
+```
+
 Now you can just double click your batch file to spin up both the miner and dashboard simultaneously!
 
-_(Alternatively, you can open CMD directly inside the dashboard folder and run `node server.js`)_
+_(Alternatively, you can open CMD directly inside the `VerthashMiner-Dashboard` folder and run `node server.js`)_
 
 ### 5. Access the Dashboard
 
 - Local access (default): `http://127.0.0.1:3000`
-- **Remote access**: To access the dashboard from another device on your LAN (e.g. `http://HOST:PORT`), you must edit your `.env` file and change `HOST=127.0.0.1` to `HOST=0.0.0.0` and restart the dashboard.
+- **Remote access**: To access the dashboard from another device on your LAN (e.g. `http://HOST:PORT`), you must edit your `.env` file and change `HOST=127.0.0.1` to `HOST=0.0.0.0` and restart the dashboard. Make sure your `PORT` matches what you have configured in `.env`.
 
 ## Windows Firewall
 
-If another device cannot connect, Windows Firewall may be blocking TCP 3000.
-Create a narrowly scoped inbound rule for TCP 3000 on the Private profile. Do not expose this port directly to the public internet.
+If another device cannot connect, Windows Firewall may be blocking the TCP port configured in your `.env` (`PORT`, default `3000`). Create a narrowly scoped inbound rule for that port on the Private profile. Do not expose this port directly to the public internet.
 
 ## API
 
@@ -152,7 +189,7 @@ over Server-Sent Events. The only client-to-server traffic is login and three
 miner control verbs.
 
 ```
-node server.js
+server.js
   |- config.js      parses .env, fails fast on insecure configuration
   |- MinerManager   spawns VerthashMiner.exe, reads stdout/stderr
   |     `- probes --device-list first to map PCI id -> CUDA index
