@@ -32,7 +32,6 @@ class MinerManager {
     this.proc = null;
     this.parsingEnabled = false;
     this.isStoppingChild = false;
-    this.history = [];
 
     this._stopPromise = null;
     this._forceKillTimer = null;
@@ -72,12 +71,8 @@ class MinerManager {
   }
 
   enableParsing() {
-    if (this.parsingEnabled) return;
     this.parsingEnabled = true;
-    if (this.state.miner.running) {
-      for (const line of this.history) parseMinerLine(line, this.state, () => {});
-    }
-    this.history.length = 0;
+    this._emit();
   }
 
   disableParsing() {
@@ -137,8 +132,13 @@ class MinerManager {
   _spawnMiner() {
     const { MINER_EXE, MINER_ARGS, MINER_CWD, FORWARD_CONSOLE } = this.config;
 
+    const args = [...MINER_ARGS];
+    if (!args.includes("-P") && !args.includes("--protocol-dump")) {
+      args.push("--protocol-dump");
+    }
+
     try {
-      this.proc = spawn(MINER_EXE, MINER_ARGS, {
+      this.proc = spawn(MINER_EXE, args, {
         cwd: MINER_CWD,
         windowsHide: false,
         shell: false,
@@ -160,15 +160,7 @@ class MinerManager {
     this._emit();
 
     const onLine = (line, enabled) => {
-      if (enabled) {
-        parseMinerLine(line, this.state, (text, type) => this.pushLog(text, type));
-        return;
-      }
-
-      this.history.push(line);
-      if (this.history.length > LIMITS.REPLAY_LINES) this.history.shift();
-      const clean = stripAnsi(line).trim();
-      if (clean) this.pushLog(clean, LOG.INFO);
+      parseMinerLine(line, this.state, enabled ? (text, type) => this.pushLog(text, type) : undefined);
     };
 
     const onFlush = () => this._emit();

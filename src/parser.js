@@ -4,7 +4,8 @@ const { STATUS, LOG } = require("./constants");
 
 const RX_NORM = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 const RX_DEV_HASH = /(cu|cl)_device\((\d+)\).*?hashrate:\s*([\d.]+)/i;
-const RX_DIFF = /difficulty(?:\s*(?:set|is))?\s*(?:to|:)?\s*([\d.]+)/i;
+const RX_DIFF = /difficulty(?:\s*(?:set|is))?\s*(?:to|:)?\s*([+-]?[\d.]+([eE][+-]?\d+)?)/i;
+const RX_JSON_DIFF = /"mining\.set_difficulty".*?"params"\s*:\s*\[\s*([+-]?[\d.]+([eE][+-]?\d+)?)\s*\]/i;
 const RX_ACC = /accepted:\s*(\d+)\s*\/\s*(\d+)(?:.*?total hashrate:\s*([\d.]+|\(pending...\)))?/i;
 
 const RX_NZERR = /\berrors?:\s*[1-9]\d*\b/i;
@@ -13,7 +14,7 @@ const RX_DEV_MEMERR = /\berr:\s*[1-9]\d*,/i;
 const RX_FATAL = /\b(?:cuda\s+error|failed\s+to|fatal|exception|enoent)\b/i;
 
 const RX_STRATUM_DOWN = /stratum\s+connection\s+(?:failed|timed\s+out|interrupted)/i;
-const RX_REJECT = /"result"\s*:\s*false\s*,\s*"error"\s*:\s*\[\s*\d+\s*,\s*"([^"]+)"/i;
+const RX_REJECT = /"result"\s*:\s*(?:false|null)\s*,\s*"error"\s*:\s*\[\s*\d+\s*,\s*"([^"]+)"/i;
 
 function canSetRunStatus(state) {
   return !!(state.miner && state.miner.running && state.mining.status !== STATUS.STOPPING && state.mining.status !== STATUS.STOPPED);
@@ -36,7 +37,7 @@ function classifyLine(line, lc) {
     return { isFatal: false, type: LOG.SUCCESS };
   }
 
-  if (lc.includes("stratum") || lc.includes("difficulty") || lc.includes("hashrate:") || lc.includes("device")) {
+  if (lc.includes("stratum") || lc.includes("difficulty") || lc.includes("hashrate:") || lc.includes("device") || lc.includes("mining.set_difficulty")) {
     return { isFatal: false, type: LOG.ACCENT };
   }
 
@@ -56,11 +57,12 @@ function parseMinerLine(raw, state, pushLog) {
     state.mining.status = RX_STRATUM_DOWN.test(line) ? STATUS.DISCONNECTED : STATUS.CRASHED;
   }
 
-  if (lc.includes("result") && lc.includes("false") && lc.includes("error")) {
+  if (lc.includes("result") && lc.includes("error") && !lc.includes('"error":null') && !lc.includes('"error": null')) {
     const rejectMatch = line.match(RX_REJECT);
     if (rejectMatch) {
       const reason = rejectMatch[1];
       state.mining.lastRejectReason = reason;
+      state.mining.lastJsonRejectTime = Date.now();
       if (typeof pushLog === "function") {
         pushLog(`[Stratum] Share Rejected: ${reason}`, LOG.ERROR);
       } else if (state.miner.logs) {
@@ -69,11 +71,15 @@ function parseMinerLine(raw, state, pushLog) {
     }
   }
 
-  if (typeof pushLog === "function") {
-    pushLog(line, type);
-  } else if (state.miner.logs) {
-    state.miner.logs.push(line, type);
-    state.miner.lastLine = line;
+  // Prevent spamming UI with raw JSON debug logs unless it's a critical error
+  const isJsonProtocol = lc.includes('"id":') || lc.includes('"method":');
+  if (!isJsonProtocol) {
+    if (typeof pushLog === "function") {
+      pushLog(line, type);
+    } else if (state.miner.logs) {
+      state.miner.logs.push(line, type);
+      state.miner.lastLine = line;
+    }
   }
 
   if (lc.includes("hashrate:") || lc.includes("_device(")) {
@@ -114,9 +120,17 @@ function parseMinerLine(raw, state, pushLog) {
     }
   }
 
-  if (lc.includes("difficulty")) {
+  let diffValue = null;
+  if (lc.includes("mining.set_difficulty")) {
+    const jsonDiffMatch = line.match(RX_JSON_DIFF);
+    if (jsonDiffMatch) diffValue = Number(jsonDiffMatch[1]);
+  } else if (lc.includes("difficulty")) {
     const diffMatch = line.match(RX_DIFF);
-    if (diffMatch) state.mining.difficulty = Number(diffMatch[1]);
+    if (diffMatch) diffValue = Number(diffMatch[1]);
+  }
+
+  if (diffValue !== null && !Number.isNaN(diffValue)) {
+    state.mining.difficulty = diffValue;
   }
 
   if (lc.includes("accepted:")) {
@@ -124,8 +138,26 @@ function parseMinerLine(raw, state, pushLog) {
     if (acc) {
       state.mining.accepted = Number(acc[1]);
       state.mining.submitted = Number(acc[2]);
-      state.mining.rejected = state.mining.submitted - state.mining.accepted;
-      if (state.mining.rejected < 0) state.mining.rejected = 0;
+      
+      let newRejected = state.mining.submitted - state.mining.accepted;
+      if (newRejected < 0) newRejected = 0;
+      
+      if (newRejected > state.mining.rejected && state.mining.rejected >= 0) {
+        const diff = newRejected - state.mining.rejected;
+        const msSinceJsonReject = Date.now() - (state.mining.lastJsonRejectTime || 0);
+        
+        // Failsafe: Log missing rejections if JSON didn't catch them
+        if (msSinceJsonReject > 2000) {
+          const msg = `[Stratum] ${diff} Share(s) Rejected (Failsafe)`;
+          if (typeof pushLog === "function") {
+            pushLog(msg, LOG.ERROR);
+          } else if (state.miner.logs) {
+            state.miner.logs.push(msg, LOG.ERROR);
+          }
+        }
+      }
+      state.mining.rejected = newRejected;
+      
       if (canSetRunStatus(state)) {
         state.mining.status = STATUS.MINING;
         state.miner.lastError = "";

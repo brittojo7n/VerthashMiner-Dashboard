@@ -173,7 +173,7 @@ async function login() {
   try {
     const res = await fetch("/api/login", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
       body: JSON.stringify({ passphrase: authInput.value })
     });
     if (res.ok) {
@@ -205,7 +205,10 @@ async function runAction(action) {
   toast.info(title, message, `miner-${action}`);
 
   try {
-    const res = await fetch(`/api/miner/${action}`, { method: "POST" });
+    const res = await fetch(`/api/miner/${action}`, { 
+      method: "POST",
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    });
     if (res.status === 401) {
       showAuth();
     } else if (!res.ok) {
