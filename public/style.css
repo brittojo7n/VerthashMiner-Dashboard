@@ -157,6 +157,44 @@ h1 {
   text-transform: uppercase;
 }
 
+/* ---------------------------------------------------------------------------
+   Layout stability (Cumulative Layout Shift)
+
+   Every element below changes its text at runtime. Without a reserved size the
+   surrounding flex rows re-flow on each update, which is what produced the
+   measured CLS of 0.35. Reserving the width of the longest possible label
+   keeps the geometry constant while the text changes.
+   ------------------------------------------------------------------------- */
+#status {
+  display: inline-block;
+  min-width: 108px;          /* fits RECONNECTING / DISCONNECTED */
+  text-align: center;
+}
+
+#btnAction,
+#btnRestart {
+  min-width: 78px;           /* START / STOP / RESTART */
+  text-align: center;
+}
+
+#btnAutoScroll {
+  min-width: 112px;          /* Auto-scroll: ON / OFF */
+  text-align: center;
+}
+
+.console-counter {
+  display: inline-block;
+  min-width: 58px;           /* "0 logs" ... "500 logs" */
+  text-align: right;
+}
+
+#hashrate,
+#uptime,
+#lastAccepted,
+#localTime {
+  font-variant-numeric: tabular-nums;
+}
+
 .dot {
   width: 10px;
   height: 10px;
@@ -205,8 +243,15 @@ h1 {
 }
 
 .gpu-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   padding: var(--pad);
+  /* Keeps the panel from collapsing when telemetry is unavailable, so the
+     transition between the skeleton card and this notice barely moves. */
+  min-height: 180px;
 }
 
 .label {
@@ -336,6 +381,8 @@ h1 {
 
 .errorbox {
   display: none;
+  /* Rendered after the console so that showing it grows the panel downwards
+     instead of displacing the console. */
   margin-top: var(--gap);
   padding: var(--pad);
   border: 1px solid rgba(var(--red-rgb), 0.3);

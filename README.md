@@ -81,6 +81,7 @@ MINER_ARGS=-u your_wallet_address -p c=VTC -o stratum+tcp://your_pool_address:po
 - **`MINER_ARGS`**: This variable determines how the dashboard launches the miner. You must supply your wallet address, pool, and path to the `verthash.dat` file exactly as you would in a normal `.bat` file.
 - **`GPU_POLL_MS`**: How often (in milliseconds) the dashboard queries `nvidia-smi` while a dashboard tab is open. **Default is `5000`**. Allowed range is **`3000`–`10000`** (3–10 seconds). Values outside this range are clamped. Polling is globally rate-limited: page refresh, tab reconnect, or multiple clients cannot trigger `nvidia-smi` more often than this interval. The last cached GPU telemetry is sent immediately on refresh so the UI does not go blank.
 - **`MAX_LOGS`**: Sets the maximum number of console logs to hold in memory and display on the dashboard (default is 50, minimum is 15, maximum is 500).
+- **`ENV_FILE`**: Optional. Absolute or relative path to an alternative `.env` file (real environment variables always win over file values).
 - **`FORWARD_CONSOLE`**: When set to `true`, forwards the miner's stdout/stderr directly to the dashboard's terminal for local debugging. **Defaults to `false`** — when disabled, there is zero CPU or memory overhead from console forwarding. Only enable this if you need to watch miner logs locally without using the web UI.
 
 #### Security & Authentication
@@ -144,9 +145,14 @@ If another device cannot connect, Windows Firewall may be blocking the TCP port 
 
 ## API
 
-- JSON status: `GET /api/status`
-- Live stream: `GET /events`
+- JSON status: `GET /api/status` — full snapshot (used as the polling fallback)
+- Live stream: `GET /events` — SSE; each frame carries only *new* console lines
+  (`logsFrom`, `logSeq`, `logCount`, `logCapacity`), and any client that misses a
+  frame is transparently resynchronised
 - Health check: `GET /health`
+- Login: `POST /api/login` — requires `X-Requested-With: XMLHttpRequest` and a
+  same-origin `Origin` when one is sent
+- Controls: `POST /api/miner/{start|stop|restart}` — same CSRF requirements
 
 ## Project structure
 
@@ -177,8 +183,18 @@ public/
     gpu.js             GPU telemetry cards
     console.js         miner console
     toast.js           notifications
+    present.js         pure snapshot -> display-string projection (shared with the tests)
     dom.js             cached lookups and change-guarded writes
     format.js          pure formatting helpers
+test/
+  helpers/             fixtures (canonical console corpus), independent oracle, harness
+  mocks/               executable VerthashMiner stand-in with failure modes
+  unit/ integration/ failure/ stress/
+tools/
+  setup-test-env.js    generates .testenv/ (mock miner + placeholder verthash.dat)
+docs/
+  TESTING.md           how the suite is structured and why
+  AUDIT.md             security / performance / accuracy audit
 ```
 
 ## Architecture
@@ -209,11 +225,20 @@ watt not spent hashing. Idle cost is kept at zero structurally, not by tuning:
 | Mechanism | Effect |
 |---|---|
 | GPU polling gated on subscriber count | no `nvidia-smi` spawns when nobody is watching |
-| Log parsing gated on subscriber count | no regex work on miner output while idle |
+| Log fan-out gated on subscriber count | no DOM payloads, no SSE frames, no timers while idle |
 | Client closes its stream on `visibilitychange` | a hidden tab drops the server to true idle |
 | Poll interval clamped to 3-10s with a global cooldown | refresh or extra clients cannot amplify spawns |
+| Failure backoff on `nvidia-smi` | a missing driver stops costing a spawn every 5s |
+| Incremental console frames | each update ships new lines only, not the whole buffer |
+| One shared SSE heartbeat | timer count does not scale with clients |
 | Static assets read into memory once at boot | no disk I/O per request |
 | `FORWARD_CONSOLE=false` by default | no stdout writes while idle |
+
+Miner output *is* still parsed while idle - that is deliberate. Skipping it would
+leave a client that attaches later looking at stale counters, and the measured
+cost is 5 us per console line (see below), i.e. far below the noise floor at real
+log rates. What is gated is everything that scales: telemetry polling, snapshot
+serialisation, and network fan-out.
 
 Any change must preserve this. The browser tab is effectively the on/off switch
 for all server-side work.
@@ -252,14 +277,55 @@ the dashboard keeps reporting `MINING` while the pool is gone.
 
 ## Performance notes
 
-Measured with a tab open and the miner streaming:
+Numbers below are produced by `npm run test:stress`, which fails the run if any
+of them regresses by an order of magnitude.
 
-- **Idle CPU (no tab open): 0.00000%** — no timers, no polling, no parsing.
-- **Active CPU: ~0.13%**, dominated by the `nvidia-smi` spawn.
-- **RSS: ~55 MB**, of which roughly 40 MB is the Node runtime itself; the
-  application accounts for a few MB. A lower total is not reachable on Node
-  regardless of application code.
+| Metric | Measured |
+|---|---|
+| Console parsing | **5.06 us/line** (50 000 lines in 253 ms) |
+| Idle CPU (miner streaming, no tab open) | **0.02%** — no polling, no fan-out, no timers |
+| Active CPU (tab open, live stream) | **~0.2%**, dominated by the `nvidia-smi` spawn |
+| RSS | **~56 MB**, of which roughly 40 MB is the Node runtime itself |
+| SSE frame (default `MAX_LOGS=50`) | **800 B** incremental vs 6.8 KB full replay (8.5x) |
+| Firehose (32 472 lines in 3 s) | 4.2% CPU, heap growth **+0.1 MB**, server responsive |
+| `nvidia-smi` spawns, 3 clients, 1.5 s | **1** |
 
-The zero-idle property is structural and must be preserved: GPU polling and log
-parsing are both gated on there being at least one SSE subscriber, and the
-client closes its stream when the tab is hidden.
+The zero-idle property is structural and must be preserved: GPU polling and the
+SSE fan-out are gated on there being at least one subscriber, and the client
+closes its stream when the tab is hidden.
+
+**GPU usage by the dashboard is zero.** It never links or loads CUDA, OpenCL or
+NVML; the only GPU-adjacent call is a read-only `nvidia-smi --query-gpu` that
+creates no device context and allocates no VRAM.
+
+## Testing
+
+The repository ships a dependency-free test suite (168 tests) built on
+`node --test`:
+
+```bash
+npm test              # unit + integration + failure modes
+npm run test:stress   # throughput, memory and CPU budgets
+npm run test:all      # everything
+```
+
+Dashboard values are verified *differentially*: a canonical VerthashMiner console
+corpus is pushed through the real parser, state, SSE and browser projection, and
+compared against an independent re-derivation of the same log lines. See
+[docs/TESTING.md](docs/TESTING.md), and [docs/AUDIT.md](docs/AUDIT.md) for the
+security/performance audit behind the current implementation.
+
+### Trying it without a miner
+
+```bash
+npm run setup:testenv           # builds .testenv/ with a mock miner
+ENV_FILE=.testenv/.env node server.js
+```
+
+`tools/setup-test-env.js` also writes a **placeholder** `verthash.dat`. It is not a
+valid data file - the real ~1.2 GB one is derived from the Vertcoin blockchain and
+must be generated by the miner itself:
+
+```bat
+VerthashMiner --gen-verthash-data verthash.dat
+```

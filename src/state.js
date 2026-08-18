@@ -3,10 +3,17 @@
 const os = require("node:os");
 const { STATUS } = require("./constants");
 
+/**
+ * Fixed-capacity ring buffer for console lines.
+ *
+ * Every entry carries a monotonically increasing `id`, which is what makes
+ * incremental (delta) delivery to the browser possible without ever losing or
+ * duplicating a line.
+ */
 class CircularLogBuffer {
   constructor(capacity = 25) {
-    this.capacity = capacity;
-    this.buf = new Array(capacity);
+    this.capacity = Math.max(1, capacity | 0);
+    this.buf = new Array(this.capacity);
     this.head = 0;
     this.count = 0;
     this.seq = 0;
@@ -16,17 +23,56 @@ class CircularLogBuffer {
     this.buf[this.head] = { id: ++this.seq, text, type };
     this.head = (this.head + 1) % this.capacity;
     if (this.count < this.capacity) this.count++;
+    return this.seq;
   }
 
+  /** Oldest id still retained (0 when empty). */
+  get firstId() {
+    return this.count === 0 ? 0 : this.seq - this.count + 1;
+  }
+
+  get length() {
+    return this.count;
+  }
+
+  /** Entries in chronological order. */
   toJSON() {
     return this.count < this.capacity
       ? this.buf.slice(0, this.count)
       : this.buf.slice(this.head).concat(this.buf.slice(0, this.head));
   }
+
+  /**
+   * Entries newer than `sinceId`, chronologically ordered.
+   * Returns everything still buffered when the caller has fallen behind the
+   * retention window, so a slow consumer can never silently skip a line.
+   *
+   * @param {number} sinceId last id the consumer already has
+   */
+  since(sinceId) {
+    if (!Number.isFinite(sinceId) || sinceId <= 0) return this.toJSON();
+    if (sinceId >= this.seq) return [];
+
+    const missing = this.seq - sinceId;
+    if (missing >= this.count) return this.toJSON();
+
+    const out = new Array(missing);
+    for (let i = 0; i < missing; i++) {
+      const idx = (this.head - missing + i + this.capacity) % this.capacity;
+      out[i] = this.buf[idx];
+    }
+    return out;
+  }
+
+  clear() {
+    this.buf.fill(undefined);
+    this.head = 0;
+    this.count = 0;
+  }
 }
 
 function getServerTz() {
-  const off = -(new Date().getTimezoneOffset());
+  const off = -new Date().getTimezoneOffset();
   const sign = off >= 0 ? "+" : "-";
   const abs = Math.abs(off);
   return `UTC${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
@@ -36,10 +82,10 @@ const SERVER_TZ = getServerTz();
 const HOSTNAME = os.hostname();
 
 function createState(wallet = "", maxLogs = 25) {
-  const logs = new CircularLogBuffer(maxLogs);
   return {
     dirty: true,
     startedAt: Date.now(),
+    gpuError: "",
     miner: {
       running: false,
       pid: null,
@@ -48,7 +94,7 @@ function createState(wallet = "", maxLogs = 25) {
       signal: null,
       lastLine: "",
       lastError: "",
-      logs,
+      logs: new CircularLogBuffer(maxLogs),
       wallet
     },
     mining: {
@@ -59,10 +105,13 @@ function createState(wallet = "", maxLogs = 25) {
       difficulty: null,
       status: STATUS.STOPPED,
       lastAcceptedAt: null,
-      gpuHashrates: {},
+      gpuHashrates: Object.create(null),
       seenDevices: [],
       hashratesReady: false,
-      pciMap: {}
+      expectedWorkers: 0,
+      workerMap: null,
+      lastJsonRejectTime: 0,
+      pciMap: Object.create(null)
     },
     gpu: [],
     host: {
@@ -72,43 +121,95 @@ function createState(wallet = "", maxLogs = 25) {
   };
 }
 
-function formatStatsSnapshot(state) {
+/**
+ * Resolves the miner-reported hashrate for one telemetry device.
+ * PCI id is the join key; positional index is the documented fallback.
+ */
+function hashrateForGpu(state, gpu) {
+  const mapped = state.mining.pciMap[gpu.pciBusId];
+  const devIndex = mapped !== undefined ? mapped : gpu.index;
+  const rates = state.mining.gpuHashrates;
+  const cuda = rates[`cu_${devIndex}`];
+  return cuda !== undefined ? cuda : rates[`cl_${devIndex}`];
+}
+
+/**
+ * Projects the mutable server state into the immutable snapshot the browser
+ * consumes. This projection is the single source of truth for every number
+ * rendered by the UI.
+ *
+ * @param {object} state
+ * @param {{logsSince?: number}} [options] when set, only newer log lines are
+ *   included (`logsFrom` tells the client which id the delta starts at).
+ */
+function formatStatsSnapshot(state, options) {
   const now = Date.now();
-  const minerStart = state.miner.startedAt || state.startedAt;
+  const { miner, mining } = state;
+  const minerStart = miner.startedAt || state.startedAt;
+  const logs = miner.logs;
+
+  const sinceId = options && Number.isFinite(options.logsSince) ? options.logsSince : 0;
+  const entries = sinceId > 0 ? logs.since(sinceId) : logs.toJSON();
+  const logsFrom = entries.length ? entries[0].id : logs.seq + 1;
+
+  const gpu = new Array(state.gpu.length);
+  for (let i = 0; i < state.gpu.length; i++) {
+    const g = state.gpu[i];
+    gpu[i] = {
+      index: g.index,
+      name: g.name,
+      temperatureC: g.temperatureC,
+      powerW: g.powerW,
+      utilizationPct: g.utilizationPct,
+      coreMHz: g.coreMHz,
+      memoryMHz: g.memoryMHz,
+      memoryUsedMB: g.memoryUsedMB,
+      memoryTotalMB: g.memoryTotalMB,
+      pstate: g.pstate,
+      pciBusId: g.pciBusId,
+      hashrate: hashrateForGpu(state, g)
+    };
+  }
 
   return {
     now,
-    uptimeSeconds: state.miner.running && minerStart ? Math.max(0, Math.floor((now - minerStart) / 1000)) : 0,
-    acceptedRatio: state.mining.submitted > 0 ? (state.mining.accepted / state.mining.submitted) * 100 : null,
+    uptimeSeconds:
+      miner.running && minerStart ? Math.max(0, Math.floor((now - minerStart) / 1000)) : 0,
+    acceptedRatio: mining.submitted > 0 ? (mining.accepted / mining.submitted) * 100 : null,
     startedAt: minerStart,
-    miner: state.miner,
-    mining: {
-      hashrateKHs: state.mining.hashrateKHs,
-      accepted: state.mining.accepted,
-      submitted: state.mining.submitted,
-      rejected: state.mining.rejected,
-      difficulty: state.mining.difficulty,
-      status: state.mining.status,
-      lastAcceptedAt: state.mining.lastAcceptedAt
+    miner: {
+      running: miner.running,
+      pid: miner.pid,
+      startedAt: miner.startedAt,
+      exitCode: miner.exitCode,
+      signal: miner.signal,
+      lastLine: miner.lastLine,
+      lastError: miner.lastError,
+      wallet: miner.wallet,
+      logs: entries
     },
-
+    logsFrom,
+    logSeq: logs.seq,
+    logCount: logs.length,
+    logCapacity: logs.capacity,
+    mining: {
+      hashrateKHs: mining.hashrateKHs,
+      accepted: mining.accepted,
+      submitted: mining.submitted,
+      rejected: mining.rejected,
+      difficulty: mining.difficulty,
+      status: mining.status,
+      lastAcceptedAt: mining.lastAcceptedAt
+    },
     gpuError: state.gpuError || "",
-    gpu: state.gpu.map(g => {
-      const devIndex = state.mining.pciMap[g.pciBusId] !== undefined
-        ? state.mining.pciMap[g.pciBusId]
-        : g.index;
-
-      const hashrates = state.mining.gpuHashrates;
-      const hashrate = hashrates[`cu_${devIndex}`] !== undefined
-        ? hashrates[`cu_${devIndex}`]
-        : hashrates[`cl_${devIndex}`];
-      return { ...g, hashrate };
-    }),
+    gpu,
     host: state.host
   };
 }
 
 module.exports = {
+  CircularLogBuffer,
   createState,
-  formatStatsSnapshot
+  formatStatsSnapshot,
+  hashrateForGpu
 };

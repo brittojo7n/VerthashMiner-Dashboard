@@ -1,5 +1,6 @@
 import { make, text, className, style } from "./dom.js";
-import { num, tempClass, DASH } from "./format.js";
+import { DASH } from "./format.js";
+import { presentGpu } from "./present.js";
 
 const FIELDS = [
   ["pstate", "P-State", ""],
@@ -10,7 +11,7 @@ const FIELDS = [
 ];
 
 let cards = [];
-let host = null;
+let placeholder = false;
 
 function buildCard(index) {
   const panel = make("div", "gpu-panel");
@@ -78,11 +79,30 @@ function buildCard(index) {
   return { panel, refs, index };
 }
 
+/**
+ * Skeleton card shown before the first nvidia-smi sample lands.
+ * It occupies exactly the space a real card will, so the arrival of telemetry
+ * does not push the rest of the page down (cumulative layout shift).
+ */
+function renderSkeleton(container) {
+  if (placeholder && cards.length === 1) return;
+  cards = [buildCard(0)];
+  placeholder = true;
+  container.textContent = "";
+  const { refs, panel } = cards[0];
+  text(refs.name, "Detecting GPUs\u2026");
+  for (const key of ["pstate", "temp", "power", "core", "mem", "vramUsed", "vramTotal", "util"]) {
+    text(refs[key], DASH);
+  }
+  container.appendChild(panel);
+}
+
 function renderNotice(container, gpuError) {
   cards = [];
+  placeholder = false;
   container.textContent = "";
   if (!gpuError) {
-    container.appendChild(make("div", "small gpu-empty", "Waiting for GPU telemetry data..."));
+    renderSkeleton(container);
     return;
   }
   const box = make("div", "small gpu-empty");
@@ -98,14 +118,14 @@ function renderNotice(container, gpuError) {
 }
 
 export function render(container, gpus, gpuError) {
-  host = container;
-
   if (!gpus || gpus.length === 0) {
-    renderNotice(container, gpuError);
+    if (!gpuError) renderSkeleton(container);
+    else renderNotice(container, gpuError);
     return;
   }
 
-  if (cards.length !== gpus.length) {
+  if (placeholder || cards.length !== gpus.length) {
+    placeholder = false;
     cards = gpus.map((_, i) => buildCard(i));
     container.textContent = "";
     const frag = document.createDocumentFragment();
@@ -114,25 +134,21 @@ export function render(container, gpus, gpuError) {
   }
 
   for (let i = 0; i < gpus.length; i++) {
-    const gpu = gpus[i];
+    const v = presentGpu(gpus[i]);
     const r = cards[i].refs;
 
-    text(r.name, `GPU ${gpu.index} \u2022 ${gpu.name || "Unknown"}`);
-    text(r.pstate, gpu.pstate || DASH);
-    text(r.temp, gpu.temperatureC != null ? `${num(gpu.temperatureC, 0)}\u00b0C` : DASH);
-    className(r.tempBox, `mvalue ${tempClass(gpu.temperatureC)}`);
-    text(r.power, num(gpu.powerW, 1));
-    text(r.core, num(gpu.coreMHz, 0));
-    text(r.mem, num(gpu.memoryMHz, 0));
-    text(r.vramUsed, num(gpu.memoryUsedMB, 0));
-    text(r.vramTotal, num(gpu.memoryTotalMB, 0));
-    text(r.hashrate, gpu.hashrate != null ? num(gpu.hashrate, 2) : DASH);
-
-    const eff = gpu.hashrate > 0 && gpu.powerW > 0 ? gpu.hashrate / gpu.powerW : null;
-    text(r.eff, eff != null ? num(eff, 2) : DASH);
-
-    const util = gpu.utilizationPct == null ? 0 : Math.max(0, Math.min(100, gpu.utilizationPct));
-    text(r.util, num(gpu.utilizationPct, 1));
-    style(r.bar, "width", `${util}%`);
+    text(r.name, v.name);
+    text(r.pstate, v.pstate);
+    text(r.temp, v.temp);
+    className(r.tempBox, `mvalue ${v.tempClass}`);
+    text(r.power, v.power);
+    text(r.core, v.core);
+    text(r.mem, v.mem);
+    text(r.vramUsed, v.vramUsed);
+    text(r.vramTotal, v.vramTotal);
+    text(r.hashrate, v.hashrate);
+    text(r.eff, v.eff);
+    text(r.util, v.util);
+    style(r.bar, "width", v.barWidth);
   }
 }

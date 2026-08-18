@@ -1,0 +1,24 @@
+{
+  "name": "verthashminer-dashboard",
+  "version": "1.1.0",
+  "description": "Zero-overhead real-time web monitor & GPU telemetry for VerthashMiner (Vertcoin / VTC)",
+  "license": "MIT",
+  "private": true,
+  "type": "commonjs",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.2.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test --test-reporter=spec \"test/unit/*.test.js\" \"test/integration/*.test.js\" \"test/failure/*.test.js\"",
+    "test:unit": "node --test --test-reporter=spec \"test/unit/*.test.js\"",
+    "test:integration": "node --test --test-reporter=spec \"test/integration/*.test.js\"",
+    "test:failure": "node --test --test-reporter=spec \"test/failure/*.test.js\"",
+    "test:stress": "node --expose-gc --test --test-reporter=spec \"test/stress/*.test.js\"",
+    "test:all": "node --expose-gc --test --test-reporter=spec \"test/**/*.test.js\"",
+    "setup:testenv": "node tools/setup-test-env.js"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
