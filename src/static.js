@@ -14,7 +14,6 @@ const MIME = {
 };
 
 const SERVABLE = new Set(Object.keys(MIME));
-const COMPRESSIBLE = new Set([".html", ".css", ".js", ".svg"]);
 const MIN_COMPRESS_BYTES = 512;
 
 const CSP = [
@@ -46,19 +45,12 @@ function headersFor(file, length, etag, encoding) {
     "Referrer-Policy": "no-referrer"
   };
   if (encoding) headers["Content-Encoding"] = encoding;
-  if (file.endsWith(".html")) {
-    headers["Content-Security-Policy"] = CSP;
-    headers["Permissions-Policy"] = PERMISSIONS;
-  }
+  if (file.endsWith(".html")) { headers["Content-Security-Policy"] = CSP; headers["Permissions-Policy"] = PERMISSIONS; }
   return Object.freeze(headers);
 }
 
 function notModifiedHeaders(etag) {
-  return Object.freeze({
-    ETag: etag,
-    "Cache-Control": "no-cache",
-    Vary: "Accept-Encoding"
-  });
+  return Object.freeze({ ETag: etag, "Cache-Control": "no-cache", Vary: "Accept-Encoding" });
 }
 
 function loadStaticCache(publicDir) {
@@ -67,30 +59,15 @@ function loadStaticCache(publicDir) {
 
   const walk = dir => {
     let entries;
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(full);
-        continue;
-      }
+      if (entry.isDirectory()) { walk(full); continue; }
       if (!entry.isFile()) continue;
-
       const ext = path.extname(entry.name);
       if (!SERVABLE.has(ext)) continue;
-
       let buf;
-      try {
-        buf = fs.readFileSync(full);
-      } catch {
-        continue;
-      }
-
+      try { buf = fs.readFileSync(full); } catch { continue; }
       const etag = etagOf(buf);
       const asset = {
         buf,
@@ -100,26 +77,12 @@ function loadStaticCache(publicDir) {
         gzip: null,
         gzipHdr: null
       };
-
-      if (COMPRESSIBLE.has(ext) && buf.length >= MIN_COMPRESS_BYTES) {
-        try {
-          const gzip = zlib.gzipSync(buf, { level: zlib.constants.Z_BEST_COMPRESSION });
-          if (gzip.length < buf.length) {
-            asset.gzip = gzip;
-            asset.gzipHdr = headersFor(entry.name, gzip.length, etag, "gzip");
-          }
-        } catch {
-        }
-      }
-
       cache["/" + path.relative(root, full).split(path.sep).join("/")] = asset;
     }
   };
 
   walk(root);
-
   if (cache["/index.html"]) cache["/"] = cache["/index.html"];
-
   return cache;
 }
 

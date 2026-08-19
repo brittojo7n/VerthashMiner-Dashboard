@@ -66,7 +66,6 @@ Copy `.env.example` to `.env` and configure your settings:
 PORT=3000
 HOST=127.0.0.1
 GPU_POLL_MS=5000
-MAX_LOGS=50
 FORWARD_CONSOLE=false
 PASSPHRASE=abc123
 SESSION_SECRET=your_random_64_character_hex_string
@@ -80,9 +79,14 @@ MINER_ARGS=-u your_wallet_address -p c=VTC -o stratum+tcp://your_pool_address:po
 - **`MINER_CWD`**: This is the working directory where `VerthashMiner.exe` is located (e.g. `miner` if your structure is `<parent_directory>/miner/`). Relative paths are resolved from the current working directory of the `node` process, not from the dashboard folder. It must be set so the dashboard can find the executable and the `verthash.dat` file properly.
 - **`MINER_ARGS`**: This variable determines how the dashboard launches the miner. You must supply your wallet address, pool, and path to the `verthash.dat` file exactly as you would in a normal `.bat` file.
 - **`GPU_POLL_MS`**: How often (in milliseconds) the dashboard queries `nvidia-smi` while a dashboard tab is open. **Default is `5000`**. Allowed range is **`3000`–`10000`** (3–10 seconds). Values outside this range are clamped. Polling is globally rate-limited: page refresh, tab reconnect, or multiple clients cannot trigger `nvidia-smi` more often than this interval. The last cached GPU telemetry is sent immediately on refresh so the UI does not go blank.
-- **`MAX_LOGS`**: Sets the maximum number of console logs to hold in memory and display on the dashboard (default is 50, minimum is 15, maximum is 500).
 - **`ENV_FILE`**: Optional. Absolute or relative path to an alternative `.env` file (real environment variables always win over file values).
 - **`FORWARD_CONSOLE`**: When set to `true`, forwards the miner's stdout/stderr directly to the dashboard's terminal for local debugging. **Defaults to `false`** — when disabled, there is zero CPU or memory overhead from console forwarding. Only enable this if you need to watch miner logs locally without using the web UI.
+
+#### Console logging behaviour (fixed, not configurable)
+
+- The server always keeps the **50 most recent** miner log lines in memory and replays them to every client that connects, so a fresh tab immediately has context.
+- The browser console then behaves like a standard devtools console: it **accumulates a per-tab session history up to 1,000 lines**, pruning the oldest rows past that cap so a tab left open for days never bloats the DOM or memory.
+- The session history is cached per tab (`sessionStorage`) and survives in-tab navigation away and back. A **full page refresh starts a clean session**: the console re-seeds from the server's 50 most recent lines and grows again from there.
 
 #### Security & Authentication
 - **`SESSION_SECRET`**: **(Required)** A cryptographic secret used to sign secure cookies. You must provide a strong, random string (e.g., a 64-character hex string) to prevent the dashboard from crashing on startup.
@@ -296,7 +300,7 @@ Measured on the reference setup: a dashboard tab open, the miner streaming, and
 | Active CPU (dashboard open, 85 log lines/min) | **0.13%** over a 3 minute soak |
 | RSS | **~56 MB**; application heap is **5.5 MB**, the rest is the Node runtime |
 | Heap drift (1 000 lines, 500+ frames) | **0.03 MB** — flat, no leak |
-| SSE frame (default `MAX_LOGS=50`) | **~800 B** incremental vs 6.8 KB full replay (8.5x) |
+| SSE frame (50-line server buffer) | **~800 B** incremental vs 6.8 KB full replay (8.5x) |
 | Cold page load (gzip) | **18.3 KB** for the whole UI, 11 requests |
 | Warm page load | **0 B** — every asset revalidates to `304` |
 | `nvidia-smi` spawns, 3 clients, 1.5 s | **1** |
@@ -323,7 +327,7 @@ Mali-400, 1.5 GB RAM) without giving up the glassmorphism design:
 | Layered-gradient glass fallback | Same blue translucent look, zero per-frame GPU cost, no real-time blur |
 | No looping animations in cheap mode | The pulse dot and terminal caret stop repainting continuously |
 | `prefers-reduced-motion` / `update: slow` | Locked to the cheap mode permanently |
-| Console row cap | 60 rendered rows on weak devices, 200 otherwise, regardless of `MAX_LOGS` |
+| Console history cap | Per-tab session history tops out at 1,000 rendered rows; the oldest rows are pruned first, so long-lived tabs stay flat on memory |
 | Pre-compressed assets + `ETag` | 18.3 KB on a cold load, 0 B on a reload |
 | Only the used font weights are requested | No wasted font downloads, no synthesised weights |
 
