@@ -2,6 +2,7 @@
 
 const http = require("node:http");
 const os = require("node:os");
+const zlib = require("node:zlib");
 const { formatStatsSnapshot } = require("./state");
 const { loadStaticCache } = require("./static");
 const { SessionStore, safeEqual } = require("./auth");
@@ -34,8 +35,8 @@ const HDR_SSE = Object.freeze({
 const MAX_BODY_BYTES = 4096;
 const MAX_STREAM_BLOCKS = 128;
 const MINER_ACTIONS = new Set(["start", "stop", "restart"]);
-
 const TOO_LARGE = Symbol("payload_too_large");
+const COMPRESSIBLE = /\.(html|css|js|svg)$/;
 
 const SERVER_TIMEOUTS = Object.freeze({
   headersTimeout: 20000,
@@ -44,30 +45,21 @@ const SERVER_TIMEOUTS = Object.freeze({
   maxHeadersCount: 64
 });
 
-const send = (res, status, headers, body) => {
+function send(res, status, headers, body) {
   if (res.writableEnded || res.destroyed) return;
-  try {
-    res.writeHead(status, headers);
-    res.end(body);
-  } catch {
-  }
-};
-const sendText = (res, status, body) => send(res, status, HDR_TEXT, body);
-const sendJson = (res, status, payload) => send(res, status, HDR_JSON, JSON.stringify(payload));
+  try { res.writeHead(status, headers); res.end(body); } catch { }
+}
+function sendText(res, status, body) { send(res, status, HDR_TEXT, body); }
+function sendJson(res, status, payload) { send(res, status, HDR_JSON, JSON.stringify(payload)); }
 
 function sendRateLimited(res, waitMs) {
   const seconds = Math.max(1, Math.ceil(waitMs / 1000));
-  send(
-    res,
-    429,
-    { ...HDR_JSON, "Retry-After": String(seconds) },
-    JSON.stringify({
-      error: "rate_limited",
-      retryAfterMs: waitMs,
-      retryAfterSeconds: seconds,
-      message: "Too many requests. Please wait before refreshing again."
-    })
-  );
+  send(res, 429, { ...HDR_JSON, "Retry-After": String(seconds) }, JSON.stringify({
+    error: "rate_limited",
+    retryAfterMs: waitMs,
+    retryAfterSeconds: seconds,
+    message: "Too many requests. Please wait before refreshing again."
+  }));
 }
 
 function getLanIp() {
@@ -82,11 +74,7 @@ function getLanIp() {
 function isSameOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return true;
-  try {
-    return new URL(origin).host === req.headers.host;
-  } catch {
-    return false;
-  }
+  try { return new URL(origin).host === req.headers.host; } catch { return false; }
 }
 
 function readJsonBody(req) {
@@ -94,27 +82,14 @@ function readJsonBody(req) {
     let size = 0;
     const chunks = [];
     let done = false;
-    const finish = value => {
-      if (done) return;
-      done = true;
-      resolve(value);
-    };
-
+    const finish = value => { if (done) return; done = true; resolve(value); };
     req.on("data", chunk => {
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
-        chunks.length = 0;
-        finish(TOO_LARGE);
-        return;
-      }
+      if (size > MAX_BODY_BYTES) { chunks.length = 0; finish(TOO_LARGE); return; }
       chunks.push(chunk);
     });
     req.on("end", () => {
-      try {
-        finish(JSON.parse(Buffer.concat(chunks).toString("utf8")));
-      } catch {
-        finish(null);
-      }
+      try { finish(JSON.parse(Buffer.concat(chunks).toString("utf8"))); } catch { finish(null); }
     });
     req.on("error", () => finish(null));
     req.on("aborted", () => finish(null));
@@ -126,6 +101,7 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
   const requiresAuth = config.PASSPHRASE.length > 0;
   const sessions = new SessionStore({ secret: config.SESSION_SECRET });
   const streamBlocks = new Map();
+  const gzipCache = new Map();
 
   const limitMiner = createRateLimiter(2, 2000, 3000);
   const limitStatus = createRateLimiter(3, 2000, 3000);
@@ -139,15 +115,11 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     if (req.headers["x-requested-with"] !== "XMLHttpRequest" || !isSameOrigin(req)) {
       return sendText(res, 403, "Forbidden: CSRF check failed");
     }
-
     const flood = limitLogin(ip);
     if (flood) return sendRateLimited(res, flood);
-
     sessions.prune();
-
     const lockout = sessions.lockoutMs(ip);
     if (lockout) return sendRateLimited(res, lockout);
-
     const body = await readJsonBody(req);
     if (body === TOO_LARGE) {
       send(res, 413, { ...HDR_TEXT, Connection: "close" }, "Payload Too Large");
@@ -155,20 +127,13 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
       return;
     }
     if (!body || typeof body.passphrase !== "string") return sendText(res, 400, "Bad Request");
-
     if (!safeEqual(body.passphrase, config.PASSPHRASE)) {
       sessions.recordFailure(ip);
       return sendText(res, 401, "Unauthorized");
     }
-
     sessions.clearFailures(ip);
     const token = sessions.issue();
-    send(
-      res,
-      200,
-      { ...HDR_JSON, "Set-Cookie": sessions.cookieFor(token) },
-      '{"status":"ok"}'
-    );
+    send(res, 200, { ...HDR_JSON, "Set-Cookie": sessions.cookieFor(token) }, '{"status":"ok"}');
   });
 
   routes.set("GET /events", (req, res, ip) => {
@@ -176,18 +141,13 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     if (wait) {
       if (streamBlocks.size >= MAX_STREAM_BLOCKS) {
         const now = Date.now();
-        for (const [key, expiry] of streamBlocks) {
-          if (expiry <= now) streamBlocks.delete(key);
-        }
-        if (streamBlocks.size >= MAX_STREAM_BLOCKS) {
-          streamBlocks.delete(streamBlocks.keys().next().value);
-        }
+        for (const [key, expiry] of streamBlocks) { if (expiry <= now) streamBlocks.delete(key); }
+        if (streamBlocks.size >= MAX_STREAM_BLOCKS) streamBlocks.delete(streamBlocks.keys().next().value);
       }
       streamBlocks.set(ip, Date.now() + wait);
       return sendRateLimited(res, wait);
     }
     streamBlocks.delete(ip);
-
     if (res.writableEnded || res.destroyed) return;
     req.socket.setTimeout(0);
     res.writeHead(200, HDR_SSE);
@@ -197,14 +157,12 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
   routes.set("GET /api/status", (req, res, ip) => {
     const wait = limitStatus(ip);
     if (wait) return sendRateLimited(res, wait);
-
     const blockedUntil = streamBlocks.get(ip) || 0;
     const streamRetryMs = blockedUntil - Date.now();
     if (streamRetryMs <= 0) {
       if (blockedUntil) streamBlocks.delete(ip);
       return sendJson(res, 200, formatStatsSnapshot(state));
     }
-
     sendJson(res, 200, {
       ...formatStatsSnapshot(state),
       streamRetryAfterMs: streamRetryMs,
@@ -224,14 +182,24 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     if (method === "GET" || method === "HEAD") {
       const asset = staticFiles[pathname];
       if (asset) {
-        if (req.headers["if-none-match"] === asset.etag) {
-          return send(res, 304, asset.notModified, undefined);
-        }
+        if (req.headers["if-none-match"] === asset.etag) return send(res, 304, asset.notModified, undefined);
         const encodings = req.headers["accept-encoding"];
-        const gzip = asset.gzip && typeof encodings === "string" && encodings.includes("gzip");
-        const headers = gzip ? asset.gzipHdr : asset.hdr;
-        if (method === "HEAD") return send(res, 200, headers, undefined);
-        return send(res, 200, headers, gzip ? asset.gzip : asset.buf);
+        const wantsGzip = typeof encodings === "string" && encodings.includes("gzip") && COMPRESSIBLE.test(pathname);
+        let body = asset.buf;
+        let hdr = asset.hdr;
+        if (wantsGzip) {
+          let gzip = gzipCache.get(pathname);
+          if (!gzip) {
+            try { gzip = zlib.gzipSync(body, { level: zlib.constants.Z_BEST_COMPRESSION }); } catch { gzip = body; }
+            if (gzip.length < body.length) gzipCache.set(pathname, gzip);
+          }
+          if (gzip.length < body.length) {
+            body = gzip;
+            hdr = { ...hdr, "Content-Encoding": "gzip", "Content-Length": gzip.length };
+          }
+        }
+        if (method === "HEAD") return send(res, 200, hdr, undefined);
+        return send(res, 200, hdr, body);
       }
     }
 
@@ -247,42 +215,27 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
       if (req.headers["x-requested-with"] !== "XMLHttpRequest" || !isSameOrigin(req)) {
         return sendText(res, 403, "Forbidden: CSRF check failed");
       }
-
       const wait = limitMiner(ip);
       if (wait) return sendRateLimited(res, wait);
-
-      try {
-        minerManager.requestAction(action);
-      } catch {
-        return sendJson(res, 500, { status: "error" });
-      }
+      try { minerManager.requestAction(action); } catch { return sendJson(res, 500, { status: "error" }); }
       return sendJson(res, 200, { status: "ok" });
     }
 
     const handler = routes.get(`${method} ${pathname}`);
     if (handler) {
       let result;
-      try {
-        result = handler(req, res, ip);
-      } catch {
-        return sendText(res, 500, "Internal Server Error");
-      }
-      if (result && typeof result.catch === "function") {
-        result.catch(() => sendText(res, 500, "Internal Server Error"));
-      }
+      try { result = handler(req, res, ip); } catch { return sendText(res, 500, "Internal Server Error"); }
+      if (result && typeof result.catch === "function") result.catch(() => sendText(res, 500, "Internal Server Error"));
       return;
     }
-
     sendText(res, 404, "Not found");
   });
 
   Object.assign(server, SERVER_TIMEOUTS);
-
   server.on("clientError", (err, socket) => {
     if (!socket.writable || socket.destroyed) return;
     socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
   });
-
   server.sessions = sessions;
   return server;
 }

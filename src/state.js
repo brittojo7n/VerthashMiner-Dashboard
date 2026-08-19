@@ -3,6 +3,8 @@
 const os = require("node:os");
 const { STATUS } = require("./constants");
 
+const MAX_ID = 0x7fffffff;
+
 class CircularLogBuffer {
   constructor(capacity = 50) {
     this.capacity = Math.max(1, capacity | 0);
@@ -36,10 +38,8 @@ class CircularLogBuffer {
   since(sinceId) {
     if (!Number.isFinite(sinceId) || sinceId <= 0) return this.toJSON();
     if (sinceId >= this.seq) return [];
-
     const missing = this.seq - sinceId;
     if (missing >= this.count) return this.toJSON();
-
     const out = new Array(missing);
     for (let i = 0; i < missing; i++) {
       const idx = (this.head - missing + i + this.capacity) % this.capacity;
@@ -65,6 +65,9 @@ function getServerTz() {
 const SERVER_TZ = getServerTz();
 const HOSTNAME = os.hostname();
 
+const EMPTY_HASH = Object.create(null);
+const EMPTY_WORKER = null;
+
 function createState(wallet = "", maxLogs = 50) {
   return {
     dirty: true,
@@ -89,11 +92,11 @@ function createState(wallet = "", maxLogs = 50) {
       difficulty: null,
       status: STATUS.STOPPED,
       lastAcceptedAt: null,
-      gpuHashrates: Object.create(null),
+      gpuHashrates: EMPTY_HASH,
       seenDevices: [],
       hashratesReady: false,
       expectedWorkers: 0,
-      workerMap: null,
+      workerMap: EMPTY_WORKER,
       jsonRejects: 0,
       pciMap: Object.create(null)
     },
@@ -144,8 +147,7 @@ function formatStatsSnapshot(state, options) {
 
   return {
     now,
-    uptimeSeconds:
-      miner.running && minerStart ? Math.max(0, Math.floor((now - minerStart) / 1000)) : 0,
+    uptimeSeconds: miner.running && minerStart ? Math.max(0, Math.floor((now - minerStart) / 1000)) : 0,
     acceptedRatio: mining.submitted > 0 ? (mining.accepted / mining.submitted) * 100 : null,
     startedAt: minerStart,
     miner: {

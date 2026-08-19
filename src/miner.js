@@ -31,10 +31,7 @@ function resolveExe(exe, cwd) {
   const looksLikePath = exe.includes("/") || exe.includes("\\");
   const candidate = path.resolve(cwd || ".", exe);
   if (looksLikePath) return candidate;
-  try {
-    if (fs.statSync(candidate).isFile()) return candidate;
-  } catch {
-  }
+  try { if (fs.statSync(candidate).isFile()) return candidate; } catch { }
   return exe;
 }
 
@@ -55,11 +52,9 @@ class MinerManager {
       stop: timeouts.stop ?? LIMITS.STOP_TIMEOUT_MS,
       restartGap: timeouts.restartGap ?? LIMITS.RESTART_GAP_MS
     };
-
     this.proc = null;
     this.parsingEnabled = false;
     this.isStoppingChild = false;
-
     this._stopPromise = null;
     this._forceKillTimer = null;
     this._actionTimer = null;
@@ -67,7 +62,6 @@ class MinerManager {
     this._statusRollback = null;
     this._spawning = false;
     this._probe = null;
-
     this.state.mining.workerMap = config.DEVICE_SELECTION || null;
   }
 
@@ -82,7 +76,6 @@ class MinerManager {
 
   _resetStats() {
     this._setMining({ ...CLEAN_STATS });
-
     this.state.mining.gpuHashrates = Object.create(null);
     this.state.mining.seenDevices = [];
   }
@@ -104,14 +97,8 @@ class MinerManager {
     this.state.dirty = true;
   }
 
-  enableParsing() {
-    this.parsingEnabled = true;
-    this._emit();
-  }
-
-  disableParsing() {
-    this.parsingEnabled = false;
-  }
+  enableParsing() { this.parsingEnabled = true; this._emit(); }
+  disableParsing() { this.parsingEnabled = false; }
 
   get _alive() {
     return Boolean(this.state.miner.running || this.proc || this._spawning);
@@ -170,13 +157,9 @@ class MinerManager {
         detached: false,
         stdio: ["ignore", "pipe", "pipe"]
       });
-    } catch {
-      once();
-      return;
-    }
+    } catch { once(); return; }
 
     this._probe = probe;
-
     let buffer = "";
     const collect = chunk => {
       if (buffer.length < LIMITS.STREAM_BUFFER_BYTES) buffer += chunk;
@@ -184,10 +167,7 @@ class MinerManager {
     probe.stdout.on("data", collect);
     probe.stderr.on("data", collect);
     probe.on("close", () => {
-      try {
-        parseCudaDeviceList(buffer, this.state.mining.pciMap);
-      } catch {
-      }
+      try { parseCudaDeviceList(buffer, this.state.mining.pciMap); } catch { }
       once();
     });
     probe.on("error", once);
@@ -195,10 +175,7 @@ class MinerManager {
     watchdog = timer(() => {
       if (finished) return;
       this.pushLog("Device probe timed out; continuing without PCI mapping.", LOG.WARN);
-      try {
-        probe.kill("SIGKILL");
-      } catch {
-      }
+      try { probe.kill("SIGKILL"); } catch { }
       once();
     }, this.timeouts.probe);
   }
@@ -225,10 +202,7 @@ class MinerManager {
     const child = this.proc;
     let settled = false;
 
-    try {
-      os.setPriority(child.pid, os.constants.priority.PRIORITY_NORMAL);
-    } catch {
-    }
+    try { os.setPriority(child.pid, os.constants.priority.PRIORITY_NORMAL); } catch { }
 
     this._spawning = false;
     this.state.miner.running = true;
@@ -240,11 +214,7 @@ class MinerManager {
     this._emit();
 
     const onLine = (line, enabled) => {
-      try {
-        parseMinerLine(line, this.state, enabled ? this._boundPushLog() : undefined);
-      } catch {
-        this.state.dirty = true;
-      }
+      try { parseMinerLine(line, this.state, enabled ? this._boundPushLog() : undefined); } catch { this.state.dirty = true; }
     };
     const onFlush = () => this._emit();
     const enabled = () => this.parsingEnabled;
@@ -254,7 +224,6 @@ class MinerManager {
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", createStreamReader(onLine, onFlush, enabled, mirror(process.stdout)));
     child.stderr.on("data", createStreamReader(onLine, onFlush, enabled, mirror(process.stderr)));
-
     child.stdout.on("error", () => {});
     child.stderr.on("error", () => {});
 
@@ -272,9 +241,7 @@ class MinerManager {
       settled = true;
       const { status } = this.state.mining;
       const deliberate = status === STATUS.STOPPING || status === STATUS.STOPPED;
-
       const next = deliberate ? status : code === 0 && !signal ? STATUS.STOPPED : STATUS.CRASHED;
-
       this._markDown(next);
       this.state.miner.exitCode = code;
       this.state.miner.signal = signal;
@@ -312,7 +279,6 @@ class MinerManager {
   requestAction(action) {
     if (!Object.prototype.hasOwnProperty.call(ACTIONS, action)) return;
     if (this._pendingAction === action) return;
-
     const idle = !this.state.miner.running && !this.proc && this._pendingAction !== "start";
     if (action === "start" && this._alive) return this._clearScheduledAction();
     if (action === "stop" && idle) {
@@ -346,7 +312,6 @@ class MinerManager {
   stop() {
     this._clearScheduledAction();
     this._spawning = false;
-
     if (!this.proc || !this.state.miner.running) {
       if (this.state.mining.status !== STATUS.STOPPED) this._markStopped();
       return Promise.resolve();
@@ -383,20 +348,14 @@ class MinerManager {
 
       const forceKill = () => {
         if (child.exitCode !== null || child.signalCode !== null) return;
-        try {
-          child.kill("SIGKILL");
-        } catch {
-        }
+        try { child.kill("SIGKILL"); } catch { }
       };
 
       if (process.platform === "win32") {
         execFile("taskkill.exe", ["/pid", String(pid), "/T", "/F"], () => {});
         this._forceKillTimer = timer(forceKill, this.timeouts.forceKill);
       } else {
-        try {
-          child.kill("SIGINT");
-        } catch {
-        }
+        try { child.kill("SIGINT"); } catch { }
         this._forceKillTimer = timer(forceKill, this.timeouts.forceKill);
       }
 
@@ -423,10 +382,7 @@ class MinerManager {
     clearTimeout(this._forceKillTimer);
     this._forceKillTimer = null;
     if (this._probe) {
-      try {
-        this._probe.kill("SIGKILL");
-      } catch {
-      }
+      try { this._probe.kill("SIGKILL"); } catch { }
       this._probe = null;
     }
   }
