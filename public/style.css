@@ -120,7 +120,7 @@ button, input, select, textarea {
 }
 
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .fx .glass-panel, .fx .glass-pill, .fx .glass-overlay {
+  .fx .glass-panel, .fx .glass-pill, .fx .glass-overlay, .fx .refresh-btn {
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
   }
@@ -147,6 +147,63 @@ button, input, select, textarea {
   padding: var(--pad) calc(var(--pad) + 4px);
   border-radius: var(--radius);
   border: 1px solid var(--border);
+}
+
+.top-left {
+  min-width: 0;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.refresh-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--white-rgb), 0.14);
+  background: rgba(var(--white-rgb), 0.08);
+  color: var(--slate-200);
+  cursor: pointer;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.refresh-btn:hover {
+  background: rgba(var(--white-rgb), 0.16);
+  border-color: rgba(var(--white-rgb), 0.28);
+  color: var(--white);
+}
+
+.refresh-btn:active {
+  transform: scale(0.9);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.refresh-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.refresh-btn.spinning svg {
+  animation: refresh-spin 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 h1 {
@@ -749,6 +806,20 @@ h1 {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
+  }
+
+  .top-left {
+    width: 100%;
+  }
+
+  .refresh-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .refresh-btn svg {
+    width: 14px;
+    height: 14px;
   }
 
   .grid {

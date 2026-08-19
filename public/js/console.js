@@ -104,6 +104,10 @@ window.addEventListener("pagehide", persistNow);
   };
 
   const reset = clearStorage => {
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
     lines.innerHTML = EMPTY_HTML;
     maxId = 0;
     history = [];
@@ -130,6 +134,10 @@ const restored = cache.load();
     set autoScroll(value) {
       autoScroll = value;
       if (value) scrollToBottom();
+    },
+
+    clearSession() {
+      reset(true);
     },
 
     render(entries, meta = {}) {

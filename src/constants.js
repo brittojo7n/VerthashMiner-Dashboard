@@ -30,9 +30,6 @@ const LIMITS = Object.freeze({
 
   SESSION_TTL_MS: 1800 * 1000,
 
-  // Server-side console retention: the 50 most recent miner lines are kept
-  // in memory and replayed to every client on connect. Fixed by design —
-  // the browser console accumulates its own longer session history.
   MAX_LOGS: 50,
 
   REPLAY_LINES: 25,

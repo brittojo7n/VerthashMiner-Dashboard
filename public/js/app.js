@@ -35,7 +35,8 @@ function initDashboard() {
     uptime: el("uptime"), spm: el("sharesPerMinute"),
     hashrate: el("hashrate"), accepted: el("accepted"), ratio: el("ratio"),
     rejected: el("rejected"), difficulty: el("difficulty"),
-    lastAccepted: el("lastAccepted"), wallet: el("walletAddress")
+    lastAccepted: el("lastAccepted"), wallet: el("walletAddress"),
+    refresh: el("btnRefresh")
   };
 
   const consoleView = createConsole({
@@ -275,6 +276,27 @@ function initDashboard() {
     consoleView.autoScroll = !consoleView.autoScroll;
     onAutoScroll(consoleView.autoScroll);
   });
+
+  let refreshing = false;
+  function softRefresh() {
+    if (refreshing) return;
+    refreshing = true;
+    els.refresh.disabled = true;
+    els.refresh.classList.add("spinning");
+    try {
+      consoleView.clearSession();
+      connection.restart();
+      toast.info("Session Refreshed", "Console cleared and re-synced from the server.", "soft-refresh");
+    } catch {
+      toast.error("Refresh Failed", "Could not refresh the session. Please try again.", "soft-refresh");
+    }
+    setTimeout(() => {
+      refreshing = false;
+      els.refresh.disabled = false;
+      els.refresh.classList.remove("spinning");
+    }, 900);
+  }
+  els.refresh.addEventListener("click", softRefresh);
   el("btnCopyLogs").addEventListener("click", async event => {
     const rows = el("logLines").querySelectorAll(".log-msg");
     if (!rows.length) return;
