@@ -297,18 +297,6 @@ function initDashboard() {
     }, 900);
   }
   els.refresh.addEventListener("click", softRefresh);
-  el("btnCopyLogs").addEventListener("click", async event => {
-    const rows = el("logLines").querySelectorAll(".log-msg");
-    if (!rows.length) return;
-    const body = Array.from(rows, node => `> ${node.textContent}`).join("\n");
-    try {
-      await navigator.clipboard.writeText(body);
-      const button = event.currentTarget;
-      const original = button.textContent;
-      button.textContent = "Copied!";
-      setTimeout(() => { button.textContent = original; }, 1200);
-    } catch { }
-  });
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
@@ -320,6 +308,7 @@ function initDashboard() {
     }
   });
 
+  gpuView.render(els.gpus, [], "");
   connection.connect();
 }
 

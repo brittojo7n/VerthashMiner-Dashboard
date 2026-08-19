@@ -70,6 +70,10 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-y: scroll;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -262,8 +266,9 @@ h1 {
 
 .console-counter {
   display: inline-block;
-  min-width: 58px;
+  min-width: 64px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 #hashrate,
@@ -323,7 +328,7 @@ h1 {
 }
 
 #gpus {
-  min-height: 380px;
+  min-height: var(--gpus-min, 380px);
   contain: layout;
 }
 
@@ -848,6 +853,10 @@ h1 {
   .console-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .console-counter {
+    text-align: left;
   }
 
   .console-terminal {

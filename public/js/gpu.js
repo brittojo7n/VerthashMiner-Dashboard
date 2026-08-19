@@ -13,6 +13,24 @@ const FIELDS = [
 let cards = [];
 let hasPlaceholder = false;
 
+const COUNT_KEY = "vmd:gpuCount";
+
+function knownGpuCount() {
+  try {
+    const n = Number.parseInt(localStorage.getItem(COUNT_KEY), 10);
+    return Number.isInteger(n) && n >= 1 && n <= 8 ? n : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function rememberGpuCount(n) {
+  try {
+    if (Number.isInteger(n) && n >= 1 && n <= 8) localStorage.setItem(COUNT_KEY, String(n));
+  } catch {
+  }
+}
+
 function buildCard() {
   const panel = make("div", "gpu-panel");
   const head = make("div", "gpu-head");
@@ -84,13 +102,19 @@ function showNotice(container, gpuError) {
   hasPlaceholder = false;
   container.textContent = "";
   if (!gpuError) {
-    cards = [buildCard()];
-    const refs = cards[0].refs;
-    text(refs.name, "Detecting GPUs\u2026");
-    for (const key of ["pstate", "temp", "power", "core", "mem", "vramUsed", "vramTotal", "util"]) {
-      text(refs[key], DASH);
+    const count = knownGpuCount();
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < count; i++) {
+      const card = buildCard();
+      const refs = card.refs;
+      text(refs.name, "Detecting GPUs\u2026");
+      for (const key of ["pstate", "temp", "power", "core", "mem", "vramUsed", "vramTotal", "util"]) {
+        text(refs[key], DASH);
+      }
+      cards.push(card);
+      frag.appendChild(card.panel);
     }
-    container.appendChild(cards[0].panel);
+    container.appendChild(frag);
     hasPlaceholder = true;
     return;
   }
@@ -112,6 +136,8 @@ export function render(container, gpus, gpuError) {
     return;
   }
 
+  rememberGpuCount(gpus.length);
+
   if (hasPlaceholder || cards.length !== gpus.length) {
     hasPlaceholder = false;
     cards = gpus.map(() => buildCard());
@@ -119,6 +145,11 @@ export function render(container, gpus, gpuError) {
     const frag = document.createDocumentFragment();
     for (const card of cards) frag.appendChild(card.panel);
     container.appendChild(frag);
+    try {
+      localStorage.setItem("vmd:gpuH", String(container.offsetHeight));
+      document.documentElement.style.removeProperty("--gpus-min");
+    } catch {
+    }
   }
 
   for (let i = 0; i < gpus.length; i++) {
