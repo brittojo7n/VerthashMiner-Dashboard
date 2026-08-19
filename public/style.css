@@ -72,7 +72,6 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
@@ -184,6 +183,7 @@ h1 {
   min-width: 140px;
   justify-content: center;
   text-align: center;
+  contain: layout;
 }
 
 #status {
@@ -253,7 +253,8 @@ h1 {
 
 .wide {
   grid-column: 1 / -1;
-  min-height: 120px;
+  min-height: 500px;
+  contain: layout;
 }
 
 .gpu-panel {
@@ -262,6 +263,11 @@ h1 {
   border: 1px solid rgba(var(--white-rgb), 0.05);
   border-radius: calc(var(--radius) - 4px);
   padding: var(--pad);
+}
+
+#gpus {
+  min-height: 380px;
+  contain: layout;
 }
 
 .gpu-empty {
@@ -383,6 +389,7 @@ h1 {
   font-size: var(--fs-small);
   letter-spacing: 0.3px;
   min-width: 0;
+  contain: layout;
 }
 
 .bar-bg {
@@ -415,6 +422,7 @@ h1 {
   font-size: var(--fs-small);
   min-height: 0;
   transition: min-height 0.2s;
+  contain: layout;
 }
 
 .errorbox.show {
@@ -588,6 +596,7 @@ h1 {
   color: var(--lime-400);
   scrollbar-width: thin;
   scrollbar-color: rgba(var(--white-rgb), 0.2) rgba(var(--black-rgb), 0.2);
+  contain: layout;
 }
 
 .console-terminal::-webkit-scrollbar {
@@ -773,6 +782,7 @@ h1 {
     min-height: 200px;
     max-height: 350px;
     font-size: 11px;
+  contain: layout;
   }
 
   .log-entry {
@@ -782,9 +792,10 @@ h1 {
 
   .status {
     padding: 6px 14px;
-  min-width: 140px;
-  justify-content: center;
-  text-align: center;
+    min-width: 140px;
+    justify-content: center;
+    text-align: center;
+    contain: layout;
   }
 
   .mvalue-sm {

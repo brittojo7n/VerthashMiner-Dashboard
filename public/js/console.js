@@ -25,11 +25,14 @@ const MAX_HIGHLIGHT_CHARS = 512;
 
 const ESCAPE = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
 
+function escapeHtml(text) {
+  return text.replace(/[&<>"']/g, ch => ESCAPE[ch]);
+}
+
 function highlight(raw) {
-  const text = String(raw);
-  const out = text.replace(/[&<>"']/g, ch => ESCAPE[ch]);
-  if (text.length > MAX_HIGHLIGHT_CHARS) return out;
-  let painted = out;
+  const escaped = escapeHtml(String(raw));
+  if (escaped.length > MAX_HIGHLIGHT_CHARS) return escaped;
+  let painted = escaped;
   for (let i = 0; i < RULES.length; i++) {
     painted = painted.replace(RULES[i][0], `<span class="${RULES[i][1]}">$1</span>`);
   }
@@ -75,9 +78,7 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
   };
 
   return {
-    get autoScroll() {
-      return autoScroll;
-    },
+    get autoScroll() { return autoScroll; },
     set autoScroll(value) {
       autoScroll = value;
       if (value) scrollToBottom();
@@ -101,8 +102,10 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
         rendered = 0;
       }
 
-      let added = 0;
+      const keep = Math.min(Math.max(capacity, count), isLite() ? MAX_ROWS_LITE : MAX_ROWS);
       const frag = document.createDocumentFragment();
+      let added = 0;
+
       for (const entry of entries) {
         if (!entry || entry.id <= maxId) continue;
         const row = make("div", `log-entry log-type-${entry.type || "info"}`);
@@ -111,12 +114,12 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
         maxId = entry.id;
         added++;
       }
+
       if (!added) return;
 
       lines.appendChild(frag);
       rendered += added;
 
-      const keep = Math.min(Math.max(capacity, count), isLite() ? MAX_ROWS_LITE : MAX_ROWS);
       while (rendered > keep && lines.firstChild) {
         lines.removeChild(lines.firstChild);
         rendered--;

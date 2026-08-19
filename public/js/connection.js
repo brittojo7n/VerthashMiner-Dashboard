@@ -14,7 +14,7 @@ function readStore(key) {
   catch { return 0; }
 }
 function writeStore(key, value) {
-  try { sessionStorage.setItem(key, String(value)); } catch {  }
+  try { sessionStorage.setItem(key, String(value)); } catch { }
 }
 
 function getPaceDelay(now) {
@@ -38,7 +38,7 @@ async function retryDelay(response) {
   try {
     const data = await response.clone().json();
     if (Number.isFinite(data?.retryAfterMs)) return data.retryAfterMs;
-  } catch {  }
+  } catch { }
   const header = Number.parseInt(response.headers.get("Retry-After") || "", 10);
   return Number.isFinite(header) && header > 0 ? header * 1000 : 5000;
 }
@@ -52,8 +52,10 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
   let paceOnce = true;
 
   const clearTimers = () => {
-    clearTimeout(retryTimer); retryTimer = null;
-    clearInterval(countdownTimer); countdownTimer = null;
+    clearTimeout(retryTimer);
+    retryTimer = null;
+    clearInterval(countdownTimer);
+    countdownTimer = null;
   };
 
   const schedule = (delay, label) => {
@@ -122,7 +124,7 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
             return rateLimited(streamWait);
           }
         }
-      } catch {  }
+      } catch { }
 
       onStatusText?.("OFFLINE", !wasConnected);
       toast.error("Connection Lost", "Lost contact with the dashboard host. Retrying automatically.", "offline");

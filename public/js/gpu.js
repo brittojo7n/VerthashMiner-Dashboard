@@ -11,9 +11,9 @@ const FIELDS = [
 ];
 
 let cards = [];
-let placeholder = false;
+let hasPlaceholder = false;
 
-function buildCard(index) {
+function buildCard() {
   const panel = make("div", "gpu-panel");
   const head = make("div", "gpu-head");
   const name = make("div", "gpu-name");
@@ -76,28 +76,22 @@ function buildCard(index) {
   util.append(row, barBg);
 
   panel.append(head, metrics, util);
-  return { panel, refs, index };
+  return { panel, refs };
 }
 
-function renderSkeleton(container) {
-  if (placeholder && cards.length === 1) return;
-  cards = [buildCard(0)];
-  placeholder = true;
-  container.textContent = "";
-  const { refs, panel } = cards[0];
-  text(refs.name, "Detecting GPUs\u2026");
-  for (const key of ["pstate", "temp", "power", "core", "mem", "vramUsed", "vramTotal", "util"]) {
-    text(refs[key], DASH);
-  }
-  container.appendChild(panel);
-}
-
-function renderNotice(container, gpuError) {
+function showNotice(container, gpuError) {
   cards = [];
-  placeholder = false;
+  hasPlaceholder = false;
   container.textContent = "";
   if (!gpuError) {
-    renderSkeleton(container);
+    cards = [buildCard()];
+    const refs = cards[0].refs;
+    text(refs.name, "Detecting GPUs\u2026");
+    for (const key of ["pstate", "temp", "power", "core", "mem", "vramUsed", "vramTotal", "util"]) {
+      text(refs[key], DASH);
+    }
+    container.appendChild(cards[0].panel);
+    hasPlaceholder = true;
     return;
   }
   const box = make("div", "small gpu-empty");
@@ -114,14 +108,13 @@ function renderNotice(container, gpuError) {
 
 export function render(container, gpus, gpuError) {
   if (!gpus || gpus.length === 0) {
-    if (!gpuError) renderSkeleton(container);
-    else renderNotice(container, gpuError);
+    showNotice(container, gpuError);
     return;
   }
 
-  if (placeholder || cards.length !== gpus.length) {
-    placeholder = false;
-    cards = gpus.map((_, i) => buildCard(i));
+  if (hasPlaceholder || cards.length !== gpus.length) {
+    hasPlaceholder = false;
+    cards = gpus.map(() => buildCard());
     container.textContent = "";
     const frag = document.createDocumentFragment();
     for (const card of cards) frag.appendChild(card.panel);

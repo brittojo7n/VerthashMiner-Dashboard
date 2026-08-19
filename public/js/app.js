@@ -1,6 +1,6 @@
 import "./perf.js";
 import { el, text, className } from "./dom.js";
-import { timestamp, uptime, stripLogPrefix } from "./format.js";
+import { timestamp, uptime, stripLogPrefix, DASH } from "./format.js";
 import {
   presentSnapshot,
   sharesPerMinute,
@@ -13,73 +13,67 @@ import * as gpuView from "./gpu.js";
 import { createConsole } from "./console.js";
 import { createConnection } from "./connection.js";
 
-const ACTION_STATUS = { start: "STARTING", stop: "STOPPING", restart: "RESTARTING" };
-const ACTION_TOAST = {
-  start: ["Starting Miner", "Launching the VerthashMiner process."],
-  stop: ["Stopping Miner", "Shutting down the VerthashMiner process."],
-  restart: ["Restarting Miner", "Stopping and relaunching the VerthashMiner process."]
+const ACTION_META = {
+  start:  { status: "STARTING",  label: "START", toast: ["Starting Miner", "Launching the VerthashMiner process."] },
+  stop:   { status: "STOPPING",  label: "STOP",  toast: ["Stopping Miner", "Shutting down the VerthashMiner process."] },
+  restart:{ status: "RESTARTING", label: "RESTART", toast: ["Restarting Miner", "Stopping and relaunching the VerthashMiner process."] }
 };
 
-const dot = el("dot");
-const statusEl = el("status");
-const hostEl = el("host");
-const btnAction = el("btnAction");
-const btnRestart = el("btnRestart");
-const errorEl = el("error");
-const gpusBox = el("gpus");
-const localTimeEl = el("localTime");
-const authModal = el("authModal");
-const authInput = el("authInput");
-const authError = el("authError");
-const btnAutoScroll = el("btnAutoScroll");
-const uptimeEl = el("uptime");
-const spmEl = el("sharesPerMinute");
-const hashrateEl = el("hashrate");
-const acceptedEl = el("accepted");
-const ratioEl = el("ratio");
-const rejectedEl = el("rejected");
-const difficultyEl = el("difficulty");
-const lastAcceptedEl = el("lastAccepted");
-const walletEl = el("walletAddress");
+const DOT_CLASS = {
+  MINING: "dot ok", CONNECTED: "dot ok",
+  WAITING: "dot warn", DISCONNECTED: "dot warn",
+  STOPPED: "dot err", CRASHED: "dot err", ERROR: "dot err"
+};
 
-const view = createConsole({
+const els = {
+  dot: el("dot"), status: el("status"), host: el("host"),
+  btnAction: el("btnAction"), btnRestart: el("btnRestart"), error: el("error"),
+  gpus: el("gpus"), localTime: el("localTime"),
+  authModal: el("authModal"), authInput: el("authInput"), authError: el("authError"), authSubmit: el("authSubmit"),
+  btnAutoScroll: el("btnAutoScroll"),
+  uptime: el("uptime"), spm: el("sharesPerMinute"),
+  hashrate: el("hashrate"), accepted: el("accepted"), ratio: el("ratio"),
+  rejected: el("rejected"), difficulty: el("difficulty"),
+  lastAccepted: el("lastAccepted"), wallet: el("walletAddress")
+};
+
+const consoleView = createConsole({
   terminal: el("terminal"),
   lines: el("logLines"),
   counter: el("logCount"),
-  onAutoScrollChange: paintAutoScroll
+  onAutoScrollChange: onAutoScroll
 });
 
 let serverNow = null, capturedAt = 0, startedAt = null, tz = null;
 let accepted = 0, ticker = null;
+let pendingStatus = null;
+let lastError = null, lastGpuError = null, lastStatus = null;
 
 function tick() {
   if (serverNow == null) return;
   const now = serverNow + (Date.now() - capturedAt);
   const elapsed = Math.max(0, now - startedAt);
-  text(localTimeEl, timestamp(now, tz));
-  text(uptimeEl, uptime(Math.floor(elapsed / 1000)));
-  text(spmEl, sharesPerMinute(accepted, elapsed));
+  text(els.localTime, timestamp(now, tz));
+  text(els.uptime, uptime(Math.floor(elapsed / 1000)));
+  text(els.spm, sharesPerMinute(accepted, elapsed));
 }
 const startClock = () => { ticker ||= setInterval(tick, 1000); };
 const stopClock = () => { clearInterval(ticker); ticker = null; };
 
-let pendingStatus = null;
-let lastError = null, lastGpuError = null, lastStatus = null;
-
 function applyChrome(status, locked) {
-  text(statusEl, status);
+  text(els.status, status);
   const idle = IDLE.has(status);
   const busy = locked || (!idle && !LIVE.has(status));
-  className(dot, dotClass(status));
-  text(btnAction, idle ? "START" : "STOP");
-  className(btnAction, `c-btn ${idle ? "btn-start" : "btn-stop"}`);
-  btnAction.disabled = busy;
-  btnRestart.disabled = busy || idle;
+  className(els.dot, DOT_CLASS[status] || "dot err");
+  text(els.btnAction, idle ? "START" : "STOP");
+  className(els.btnAction, `c-btn ${idle ? "btn-start" : "btn-stop"}`);
+  els.btnAction.disabled = busy;
+  els.btnRestart.disabled = busy || idle;
 }
 
-function paintAutoScroll(on) {
-  className(btnAutoScroll, `c-btn${on ? " active" : ""}`);
-  text(btnAutoScroll, `Auto-scroll: ${on ? "ON" : "OFF"}`);
+function onAutoScroll(on) {
+  className(els.btnAutoScroll, `c-btn${on ? " active" : ""}`);
+  text(els.btnAutoScroll, `Auto-scroll: ${on ? "ON" : "OFF"}`);
 }
 
 function announce(status) {
@@ -109,29 +103,28 @@ function render(snapshot) {
   tick();
   startClock();
 
-  announce(snapshot.mining.status);
-
   const display = presentSnapshot(snapshot, { now: serverNow, pendingStatus });
+  announce(display.status);
 
-  text(hostEl, display.host);
+  text(els.host, display.host);
   applyChrome(display.status, !!pendingStatus);
 
-  text(hashrateEl, display.hashrate);
-  text(acceptedEl, display.accepted);
-  text(ratioEl, display.ratio);
-  text(rejectedEl, display.rejected);
-  text(difficultyEl, display.difficulty);
-  text(lastAcceptedEl, display.lastAccepted);
-  text(walletEl, display.wallet);
+  text(els.hashrate, display.hashrate);
+  text(els.accepted, display.accepted);
+  text(els.ratio, display.ratio);
+  text(els.rejected, display.rejected);
+  text(els.difficulty, display.difficulty);
+  text(els.lastAccepted, display.lastAccepted);
+  text(els.wallet, display.wallet);
 
-  view.render(snapshot.miner.logs, {
+  consoleView.render(snapshot.miner.logs, {
     count: snapshot.logCount,
     capacity: snapshot.logCapacity
   });
 
   if (snapshot.miner.lastError) {
-    className(errorEl, "errorbox show");
-    text(errorEl, `CRITICAL ERROR: ${snapshot.miner.lastError}`);
+    className(els.error, "errorbox show");
+    text(els.error, `CRITICAL ERROR: ${snapshot.miner.lastError}`);
     if (snapshot.miner.lastError !== lastError) {
       lastError = snapshot.miner.lastError;
       const detail = stripLogPrefix(snapshot.miner.lastError);
@@ -142,7 +135,7 @@ function render(snapshot) {
       }
     }
   } else {
-    className(errorEl, "errorbox");
+    className(els.error, "errorbox");
     lastError = null;
   }
 
@@ -159,29 +152,29 @@ function render(snapshot) {
     lastGpuError = null;
   }
 
-  gpuView.render(gpusBox, snapshot.gpu, snapshot.gpuError);
+  gpuView.render(els.gpus, snapshot.gpu, snapshot.gpuError);
 }
 
 const connection = createConnection({
   onSnapshot: render,
   onUnauthorized: showAuth,
-  onLive: () => { authModal.classList.remove("show"); },
-  onCountdown: message => text(hostEl, message),
+  onLive: () => els.authModal.classList.remove("show"),
+  onCountdown: message => text(els.host, message),
   onStatusText: (label, unreachable) => {
     stopClock();
     pendingStatus = null;
-    text(statusEl, label);
-    className(dot, "dot err");
-    if (unreachable) text(hostEl, "Host Unreachable");
-    btnAction.disabled = true;
-    btnRestart.disabled = true;
+    text(els.status, label);
+    className(els.dot, "dot err");
+    if (unreachable) text(els.host, "Host Unreachable");
+    els.btnAction.disabled = true;
+    els.btnRestart.disabled = true;
   }
 });
 
 function showAuth() {
-  authModal.classList.add("show");
-  authInput.value = "";
-  authInput.focus();
+  els.authModal.classList.add("show");
+  els.authInput.value = "";
+  els.authInput.focus();
 }
 
 async function login() {
@@ -189,35 +182,34 @@ async function login() {
     const res = await fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
-      body: JSON.stringify({ passphrase: authInput.value })
+      body: JSON.stringify({ passphrase: els.authInput.value })
     });
     if (res.ok) {
-      authModal.classList.remove("show");
-      authError.style.display = "none";
+      els.authModal.classList.remove("show");
+      els.authError.style.display = "none";
       toast.success("Login Successful", "Welcome to the VerthashMiner Dashboard.", "login-success");
       connection.restart();
       return;
     }
     if (res.status === 429) {
-      authError.textContent = "Too many attempts. Please wait a moment and try again.";
+      els.authError.textContent = "Too many attempts. Please wait a moment and try again.";
       toast.warn("Too Many Requests", "Too many failed attempts. Please wait before trying again.", "rate-limit-login");
     } else {
-      authError.textContent = "Invalid passphrase";
+      els.authError.textContent = "Invalid passphrase";
     }
   } catch {
-    authError.textContent = "Invalid passphrase";
+    els.authError.textContent = "Invalid passphrase";
   }
-  authError.style.display = "block";
+  els.authError.style.display = "block";
 }
 
 async function runAction(action) {
-  const next = ACTION_STATUS[action];
-  if (!next || pendingStatus) return;
-  pendingStatus = next;
-  applyChrome(next, true);
+  const meta = ACTION_META[action];
+  if (!meta || pendingStatus) return;
+  pendingStatus = meta.status;
+  applyChrome(pendingStatus, true);
 
-  const [title, message] = ACTION_TOAST[action];
-  toast.info(title, message, `miner-${action}`);
+  toast.info(meta.toast[0], meta.toast[1], `miner-${action}`);
 
   try {
     const res = await fetch(`/api/miner/${action}`, {
@@ -233,7 +225,7 @@ async function runAction(action) {
         try {
           const data = await res.clone().json();
           if (Number.isFinite(data.retryAfterSeconds)) seconds = data.retryAfterSeconds;
-        } catch {  }
+        } catch { }
         toast.warn("Too Many Requests",
           `Miner controls are rate limited. Please wait ${seconds} second${seconds === 1 ? "" : "s"} before trying again.`,
           "rate-limit-action");
@@ -257,27 +249,25 @@ function promptAction(action, label) {
   armedAction = action;
   text(el("confirmTitle"), label);
   text(el("confirmDesc"), `Do you want to ${label.toLowerCase()} the miner process?`);
-  className(confirmYes, `auth-btn auth-btn-${action}`);
+  className(confirmYes, `auth-btn auth-btn-${action.toLowerCase()}`);
   text(confirmYes, label);
   confirmModal.classList.add("show");
 }
 const closeConfirm = () => { confirmModal.classList.remove("show"); armedAction = null; };
 
-el("authSubmit").addEventListener("click", login);
-authInput.addEventListener("keydown", e => { if (e.key === "Enter") login(); });
+els.authSubmit.addEventListener("click", login);
+els.authInput.addEventListener("keydown", e => { if (e.key === "Enter") login(); });
 el("confirmCancel").addEventListener("click", closeConfirm);
 confirmYes.addEventListener("click", () => {
   const action = armedAction;
   closeConfirm();
   if (action) runAction(action);
 });
-btnAction.addEventListener("click", () =>
-  promptAction(btnAction.textContent === "START" ? "start" : "stop",
-    btnAction.textContent === "START" ? "START" : "STOP"));
-btnRestart.addEventListener("click", () => promptAction("restart", "RESTART"));
-btnAutoScroll.addEventListener("click", () => {
-  view.autoScroll = !view.autoScroll;
-  paintAutoScroll(view.autoScroll);
+els.btnAction.addEventListener("click", () => promptAction(els.btnAction.textContent === "START" ? "start" : "stop", els.btnAction.textContent === "START" ? "START" : "STOP"));
+els.btnRestart.addEventListener("click", () => promptAction("restart", "RESTART"));
+els.btnAutoScroll.addEventListener("click", () => {
+  consoleView.autoScroll = !consoleView.autoScroll;
+  onAutoScroll(consoleView.autoScroll);
 });
 el("btnCopyLogs").addEventListener("click", async event => {
   const rows = el("logLines").querySelectorAll(".log-msg");
@@ -289,7 +279,7 @@ el("btnCopyLogs").addEventListener("click", async event => {
     const original = button.textContent;
     button.textContent = "Copied!";
     setTimeout(() => { button.textContent = original; }, 1200);
-  } catch {  }
+  } catch { }
 });
 
 document.addEventListener("visibilitychange", () => {
