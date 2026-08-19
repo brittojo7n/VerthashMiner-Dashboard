@@ -181,6 +181,9 @@ h1 {
   font-size: var(--fs-badge);
   letter-spacing: 1px;
   text-transform: uppercase;
+  min-width: 140px;
+  justify-content: center;
+  text-align: center;
 }
 
 #status {
@@ -250,6 +253,7 @@ h1 {
 
 .wide {
   grid-column: 1 / -1;
+  min-height: 120px;
 }
 
 .gpu-panel {
@@ -378,6 +382,7 @@ h1 {
 
   font-size: var(--fs-small);
   letter-spacing: 0.3px;
+  min-width: 0;
 }
 
 .bar-bg {
@@ -408,10 +413,13 @@ h1 {
   word-break: break-word;
   font-family: var(--mono);
   font-size: var(--fs-small);
+  min-height: 0;
+  transition: min-height 0.2s;
 }
 
 .errorbox.show {
   display: block;
+  min-height: 48px;
 }
 
 .console-box {
@@ -774,6 +782,9 @@ h1 {
 
   .status {
     padding: 6px 14px;
+  min-width: 140px;
+  justify-content: center;
+  text-align: center;
   }
 
   .mvalue-sm {
