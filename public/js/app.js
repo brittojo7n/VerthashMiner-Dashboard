@@ -278,17 +278,18 @@ function initDashboard() {
   });
 
   let refreshing = false;
-  function softRefresh() {
+  async function softRefresh() {
     if (refreshing) return;
     refreshing = true;
     els.refresh.disabled = true;
     els.refresh.classList.add("spinning");
-    try {
-      consoleView.clearSession();
-      connection.restart();
-      toast.info("Session Refreshed", "Console cleared and re-synced from the server.", "soft-refresh");
-    } catch {
-      toast.error("Refresh Failed", "Could not refresh the session. Please try again.", "soft-refresh");
+    const result = await connection.refresh();
+    if (result === "ok") {
+      toast.info("Data Refreshed", "Pulled the latest stats from the dashboard API.", "soft-refresh");
+    } else if (result === "limited") {
+      toast.warn("Slow Down", "Refresh is rate limited. Please wait a moment and try again.", "soft-refresh");
+    } else if (result === "failed") {
+      toast.error("Refresh Failed", "Could not reach the dashboard API. Please try again.", "soft-refresh");
     }
     setTimeout(() => {
       refreshing = false;

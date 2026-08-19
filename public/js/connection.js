@@ -190,6 +190,24 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
   return {
     connect,
     restart() { backoff = 0; connect(); },
+    async refresh() {
+      try {
+        const res = await fetch("/api/status", { cache: "no-store" });
+        if (res.status === 401) {
+          onUnauthorized?.();
+          return "unauthorized";
+        }
+        if (res.status === 429) return "limited";
+        if (!res.ok) return "failed";
+        const snapshot = await res.json().catch(() => null);
+        if (!snapshot) return "failed";
+        onSnapshot(snapshot);
+        if (!source || source.readyState === EventSource.CLOSED) connect();
+        return "ok";
+      } catch {
+        return "failed";
+      }
+    },
     suspend() {
       clearTimers();
       connected = false;

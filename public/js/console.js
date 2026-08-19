@@ -136,10 +136,6 @@ const restored = cache.load();
       if (value) scrollToBottom();
     },
 
-    clearSession() {
-      reset(true);
-    },
-
     render(entries, meta = {}) {
       try {
         const serverCount = Number.isFinite(meta.count) ? meta.count : (entries || []).length;
