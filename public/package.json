@@ -1,4 +1,0 @@
-{
-  "//": "Marks the browser sources as ES modules. The browser already treats them as modules via <script type=\"module\">; this file exists so Node (and the test suite) resolves them the same way. It is never served: the static cache only publishes .html/.css/.js/.svg/.ico.",
-  "type": "module"
-}

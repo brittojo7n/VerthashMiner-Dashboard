@@ -42,6 +42,3 @@ node_modules/
 
 # Kilo
 .kilo/
-
-# Generated test environment (mock miner + placeholder verthash.dat)
-.testenv/

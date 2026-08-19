@@ -177,24 +177,17 @@ src/
 public/
   index.html
   style.css
+  favicon.svg
   js/
     app.js             entry point and render loop
     connection.js      SSE lifecycle, backoff, rate-limit recovery
     gpu.js             GPU telemetry cards
     console.js         miner console
     toast.js           notifications
-    present.js         pure snapshot -> display-string projection (shared with the tests)
+    present.js         pure snapshot -> display-string projection
+    perf.js            client capability gate for low-end devices
     dom.js             cached lookups and change-guarded writes
     format.js          pure formatting helpers
-test/
-  helpers/             fixtures (canonical console corpus), independent oracle, harness
-  mocks/               executable VerthashMiner stand-in with failure modes
-  unit/ integration/ failure/ stress/
-tools/
-  setup-test-env.js    generates .testenv/ (mock miner + placeholder verthash.dat)
-docs/
-  TESTING.md           how the suite is structured and why
-  AUDIT.md             security / performance / accuracy audit
 ```
 
 ## Architecture
@@ -260,25 +253,41 @@ written to **stderr** in the form:
 [YYYY-MM-DD HH:MM:SS] LEVEL  message
 ```
 
-with `LEVEL` padded to five characters (`ERROR`, `WARN`, `INFO`, `DEBUG`). The
-parser depends on that layout, and on these formats:
+with `LEVEL` padded to five characters (`ERROR`, `WARN`, `INFO`, `DEBUG`), which
+puts the level at a fixed offset. The level is treated as authoritative: only
+`ERROR` lines can change the reported status, so routine output such as
+`DEBUG Failed to get Stratum session id` cannot be mistaken for a crash.
 
 | Data | Format |
 |---|---|
 | Per-device hashrate | `cu_device(N):[ err:N,][ temp:NC,][ power:NW,][ fan:N%,] hashrate: N.NN kH/s` |
 | Share result | `accepted: A/B (P%), total hashrate: N.NN kH/s` or `(pending...)` |
-| Difficulty | `Stratum difficulty set to N` |
+| Difficulty | `Stratum difficulty set to N` (may be exponential, e.g. `1e-05`) |
 | Device list | `\tIndex: N. Name: ... pcieId: bb:dd:f` |
+| Worker banner | `Configured N(CL) and M(CUDA) workers` |
 
-Two details are easy to get wrong: the inline `err:N` field is a memory-error
-counter on an otherwise healthy line and must not be treated as a failure, and
-stratum disconnects carry no fatal keyword, so they need explicit handling or
-the dashboard keeps reporting `MINING` while the pool is gone.
+`B` in the share line is `accepted + rejected`, so rejects are `B - A`, and
+`total hashrate` is the instantaneous sum of the per-thread rates - which is why
+the dashboard sums the per-device lines rather than averaging them. The rig total
+is only published once every configured worker has reported at least once, so a
+warming-up rig never shows one GPU's rate as the whole machine.
+
+Three details are easy to get wrong:
+
+- the inline `err:N` field is a memory-error counter on an otherwise healthy
+  line and must not be treated as a failure;
+- stratum disconnects carry no fatal keyword (`Stratum connection timed out`,
+  `stratum_recv_line failed`, `Stratum authentication failed`, ...), so they need
+  explicit handling or the dashboard keeps reporting `MINING` while the pool is
+  gone;
+- `cu_device(N)` prints the **worker slot**, not the CUDA device index. They only
+  coincide when every device is selected. With `--cu-devices 1,3` the dashboard
+  maps worker 0 back to device 1, so telemetry stays attached to the right card.
 
 ## Performance notes
 
-Numbers below are produced by `npm run test:stress`, which fails the run if any
-of them regresses by an order of magnitude.
+Measured on the reference setup: a dashboard tab open, the miner streaming, and
+`nvidia-smi` polling at the default 5s interval.
 
 | Metric | Measured |
 |---|---|
@@ -290,7 +299,6 @@ of them regresses by an order of magnitude.
 | SSE frame (default `MAX_LOGS=50`) | **~800 B** incremental vs 6.8 KB full replay (8.5x) |
 | Cold page load (gzip) | **18.3 KB** for the whole UI, 11 requests |
 | Warm page load | **0 B** — every asset revalidates to `304` |
-| Firehose (32 472 lines in 3 s) | 4.2% CPU, heap growth **+0.1 MB**, server responsive |
 | `nvidia-smi` spawns, 3 clients, 1.5 s | **1** |
 
 The zero-idle property is structural and must be preserved: GPU polling and the
@@ -316,39 +324,7 @@ Mali-400, 1.5 GB RAM) without giving up the glassmorphism design:
 | No looping animations in cheap mode | The pulse dot and terminal caret stop repainting continuously |
 | `prefers-reduced-motion` / `update: slow` | Locked to the cheap mode permanently |
 | Console row cap | 60 rendered rows on weak devices, 200 otherwise, regardless of `MAX_LOGS` |
-| Pre-compressed assets + `ETag` | 18.3 KB cold, 0 B warm |
+| Pre-compressed assets + `ETag` | 18.3 KB on a cold load, 0 B on a reload |
 | Only the used font weights are requested | No wasted font downloads, no synthesised weights |
 
 Nothing about the visual design changes on a capable machine.
-
-## Testing
-
-The repository ships a dependency-free test suite (168 tests) built on
-`node --test`:
-
-```bash
-npm test              # unit + integration + failure modes
-npm run test:stress   # throughput, memory and CPU budgets
-npm run test:all      # everything
-```
-
-Dashboard values are verified *differentially*: a canonical VerthashMiner console
-corpus is pushed through the real parser, state, SSE and browser projection, and
-compared against an independent re-derivation of the same log lines. See
-[docs/TESTING.md](docs/TESTING.md), and [docs/AUDIT.md](docs/AUDIT.md) for the
-security/performance audit behind the current implementation.
-
-### Trying it without a miner
-
-```bash
-npm run setup:testenv           # builds .testenv/ with a mock miner
-ENV_FILE=.testenv/.env node server.js
-```
-
-`tools/setup-test-env.js` also writes a **placeholder** `verthash.dat`. It is not a
-valid data file - the real ~1.2 GB one is derived from the Vertcoin blockchain and
-must be generated by the miner itself:
-
-```bat
-VerthashMiner --gen-verthash-data verthash.dat
-```
