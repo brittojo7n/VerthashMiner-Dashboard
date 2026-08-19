@@ -1,17 +1,3 @@
-/*
- * logcache.js — per-tab session cache for the web console.
- *
- * Behaves like a standard devtools console session:
- *   - history survives in-tab navigation (leave and come back),
- *   - a full page refresh starts a fresh session (cache is discarded and the
- *     console re-seeds from the server's 50 most recent lines),
- *   - capped at MAX_ENTRIES lines; oldest entries are dropped first.
- *
- * Every storage interaction is defensive: disabled storage (private mode,
- * cookie blocking), quota errors, and corrupted payloads all degrade to
- * plain in-memory behaviour without ever throwing into the render path.
- */
-
 const KEY = "vmd:console";
 const VERSION = 1;
 
@@ -76,7 +62,6 @@ function sanitize(entries) {
 export function load() {
   if (!usable()) return [];
   if (isReloadNavigation()) {
-    // Refresh = fresh console session, seeded from the server replay.
     clear();
     return [];
   }
@@ -103,8 +88,6 @@ export function save(entries) {
       JSON.stringify({ v: VERSION, entries: entries.slice(-MAX_ENTRIES) })
     );
   } catch {
-    // Quota exceeded or storage revoked mid-session: stop persisting for the
-    // rest of this session and drop the stale payload if possible.
     broken = true;
     clear();
   }

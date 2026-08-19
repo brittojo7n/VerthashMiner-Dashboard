@@ -19,9 +19,6 @@ const RULES = [
   [/^(\[(?:SYSTEM|WARN|ERROR|INFO|DEBUG)\])/g, "hl-tag"]
 ];
 
-// Client-side session history cap: like a devtools console, the terminal
-// accumulates past the server's 50-line replay buffer up to this many rows,
-// then prunes the oldest so the DOM and memory stay bounded.
 const MAX_LINES = cache.MAX_ENTRIES;
 const MAX_HIGHLIGHT_CHARS = 512;
 const PERSIST_DELAY_MS = 2000;
@@ -94,9 +91,7 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
     }, PERSIST_DELAY_MS);
   };
 
-  // Flush pending history before the tab is left or hidden so an in-tab
-  // navigation back to the dashboard restores a complete session.
-  window.addEventListener("pagehide", persistNow);
+window.addEventListener("pagehide", persistNow);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) persistNow();
   });
@@ -116,10 +111,7 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
     updateCounter();
   };
 
-  // Restore the previous session history: survives in-tab navigation,
-  // cleared by logcache on a full refresh so the console re-seeds from the
-  // server's 50 most recent lines and grows again.
-  const restored = cache.load();
+const restored = cache.load();
   if (restored.length) {
     const frag = document.createDocumentFragment();
     for (const entry of restored) {
@@ -144,9 +136,7 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
       try {
         const serverCount = Number.isFinite(meta.count) ? meta.count : (entries || []).length;
 
-        // Server restart detection: the log sequence starts over, so stale
-        // ids held by this tab would silently swallow every new line.
-        if (Number.isFinite(meta.seq) && meta.seq < maxId) reset(true);
+if (Number.isFinite(meta.seq) && meta.seq < maxId) reset(true);
 
         if (serverCount === 0) {
           if (maxId !== 0) reset(true);
@@ -179,9 +169,7 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
 
         lines.appendChild(frag);
 
-        // Prune from line 1,001: oldest rows leave the DOM and the cache so
-        // a long-lived tab never bloats memory or layout.
-        while (history.length > MAX_LINES && lines.firstChild) {
+while (history.length > MAX_LINES && lines.firstChild) {
           lines.removeChild(lines.firstChild);
           history.shift();
         }
@@ -190,8 +178,7 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
         persistSoon();
         if (autoScroll) scrollToBottom();
       } catch (err) {
-        // The console must never take the dashboard down with it.
-        try { console.error("[dashboard] console render failed", err); } catch { }
+      try { console.error("[dashboard] console render failed", err); } catch { }
       }
     }
   };
