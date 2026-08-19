@@ -6,9 +6,6 @@ const path = require("node:path");
 const GPU_POLL_MIN_MS = 3000;
 const GPU_POLL_MAX_MS = 10000;
 const GPU_POLL_DEFAULT_MS = 5000;
-const MAX_LOGS_MIN = 15;
-const MAX_LOGS_MAX = 500;
-const MAX_LOGS_DEFAULT = 50;
 const WEAK_SECRET_LENGTH = 32;
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -125,12 +122,6 @@ function buildConfig(env = process.env, opts = {}) {
     );
   }
 
-  const rawMaxLogs = env.MAX_LOGS;
-  const MAX_LOGS = clampInt(rawMaxLogs, MAX_LOGS_MIN, MAX_LOGS_MAX, MAX_LOGS_DEFAULT);
-  if (rawMaxLogs != null && rawMaxLogs !== "" && Number(rawMaxLogs) !== MAX_LOGS) {
-    warnings.push(`MAX_LOGS clamped to ${MAX_LOGS} (allowed ${MAX_LOGS_MIN}-${MAX_LOGS_MAX}).`);
-  }
-
   const MINER_EXE =
     env.MINER_EXE || (platform === "win32" ? "VerthashMiner.exe" : "VerthashMiner");
 
@@ -148,7 +139,6 @@ function buildConfig(env = process.env, opts = {}) {
     GPU_POLL_MAX_MS,
     GPU_POLL_DEFAULT_MS,
     clampGpuPollMs,
-    MAX_LOGS,
     MINER_EXE,
     MINER_ARGS: Object.freeze(MINER_ARGS),
     MINER_CWD: env.MINER_CWD || "",

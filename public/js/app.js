@@ -125,7 +125,6 @@ function initDashboard() {
 
     consoleView.render(snapshot.miner.logs, {
       count: snapshot.logCount,
-      capacity: snapshot.logCapacity,
       seq: snapshot.logSeq
     });
 

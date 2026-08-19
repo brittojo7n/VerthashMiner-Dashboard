@@ -1,5 +1,5 @@
 import { make, text } from "./dom.js";
-import { isLite } from "./perf.js";
+import * as cache from "./logcache.js";
 
 const RULES = [
   [/(\b[\d.]+\s*(?:kH|MH|GH|TH)\/s\b)/gi, "hl-hash"],
@@ -19,9 +19,12 @@ const RULES = [
   [/^(\[(?:SYSTEM|WARN|ERROR|INFO|DEBUG)\])/g, "hl-tag"]
 ];
 
-const MAX_ROWS_LITE = 60;
-const MAX_ROWS = 200;
+// Client-side session history cap: like a devtools console, the terminal
+// accumulates past the server's 50-line replay buffer up to this many rows,
+// then prunes the oldest so the DOM and memory stay bounded.
+const MAX_LINES = cache.MAX_ENTRIES;
 const MAX_HIGHLIGHT_CHARS = 512;
+const PERSIST_DELAY_MS = 2000;
 
 const ESCAPE = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
 
@@ -47,8 +50,9 @@ const EMPTY_HTML =
 export function createConsole({ terminal, lines, counter, onAutoScrollChange }) {
   let autoScroll = true;
   let maxId = 0;
-  let rendered = 0;
+  let history = [];
   let scrollQueued = false;
+  let persistTimer = null;
 
   const scrollToBottom = () => {
     if (scrollQueued) return;
@@ -71,11 +75,63 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
     { passive: true }
   );
 
-  const reset = () => {
+  const updateCounter = () =>
+    text(counter, `${history.length} log${history.length === 1 ? "" : "s"}`);
+
+  const persistNow = () => {
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    cache.save(history);
+  };
+
+  const persistSoon = () => {
+    if (persistTimer || !cache.usable()) return;
+    persistTimer = setTimeout(() => {
+      persistTimer = null;
+      cache.save(history);
+    }, PERSIST_DELAY_MS);
+  };
+
+  // Flush pending history before the tab is left or hidden so an in-tab
+  // navigation back to the dashboard restores a complete session.
+  window.addEventListener("pagehide", persistNow);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) persistNow();
+  });
+
+  const buildRow = entry => {
+    const row = make("div", `log-entry log-type-${entry.type || "info"}`);
+    row.dataset.id = entry.id;
+    row.innerHTML = `<span class="log-prompt">&gt;</span><span class="log-msg">${highlight(entry.text)}</span>`;
+    return row;
+  };
+
+  const reset = clearStorage => {
     lines.innerHTML = EMPTY_HTML;
     maxId = 0;
-    rendered = 0;
+    history = [];
+    if (clearStorage) cache.clear();
+    updateCounter();
   };
+
+  // Restore the previous session history: survives in-tab navigation,
+  // cleared by logcache on a full refresh so the console re-seeds from the
+  // server's 50 most recent lines and grows again.
+  const restored = cache.load();
+  if (restored.length) {
+    const frag = document.createDocumentFragment();
+    for (const entry of restored) {
+      frag.appendChild(buildRow(entry));
+      maxId = entry.id;
+    }
+    lines.textContent = "";
+    lines.appendChild(frag);
+    history = restored;
+    updateCounter();
+    scrollToBottom();
+  }
 
   return {
     get autoScroll() { return autoScroll; },
@@ -85,51 +141,58 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
     },
 
     render(entries, meta = {}) {
-      const count = Number.isFinite(meta.count) ? meta.count : (entries || []).length;
-      const capacity = Number.isFinite(meta.capacity) ? meta.capacity : count;
+      try {
+        const serverCount = Number.isFinite(meta.count) ? meta.count : (entries || []).length;
 
-      // Server restart detection: the log sequence starts over, so stale ids
-      // held by this tab would silently swallow every new line.
-      if (Number.isFinite(meta.seq) && meta.seq < maxId) reset();
+        // Server restart detection: the log sequence starts over, so stale
+        // ids held by this tab would silently swallow every new line.
+        if (Number.isFinite(meta.seq) && meta.seq < maxId) reset(true);
 
-      if (count === 0) {
-        if (maxId !== 0) reset();
-        text(counter, "0 logs");
-        return;
+        if (serverCount === 0) {
+          if (maxId !== 0) reset(true);
+          else updateCounter();
+          return;
+        }
+
+        if (!entries || entries.length === 0) {
+          updateCounter();
+          return;
+        }
+
+        if (maxId === 0 && history.length === 0) lines.textContent = "";
+
+        const frag = document.createDocumentFragment();
+        let added = 0;
+
+        for (const entry of entries) {
+          if (!entry || typeof entry.id !== "number" || entry.id <= maxId) continue;
+          frag.appendChild(buildRow(entry));
+          history.push({ id: entry.id, text: String(entry.text), type: entry.type });
+          maxId = entry.id;
+          added++;
+        }
+
+        if (!added) {
+          updateCounter();
+          return;
+        }
+
+        lines.appendChild(frag);
+
+        // Prune from line 1,001: oldest rows leave the DOM and the cache so
+        // a long-lived tab never bloats memory or layout.
+        while (history.length > MAX_LINES && lines.firstChild) {
+          lines.removeChild(lines.firstChild);
+          history.shift();
+        }
+
+        updateCounter();
+        persistSoon();
+        if (autoScroll) scrollToBottom();
+      } catch (err) {
+        // The console must never take the dashboard down with it.
+        try { console.error("[dashboard] console render failed", err); } catch { }
       }
-
-      text(counter, `${count} log${count === 1 ? "" : "s"}`);
-
-      if (!entries || entries.length === 0) return;
-      if (maxId === 0) {
-        lines.textContent = "";
-        rendered = 0;
-      }
-
-      const keep = Math.min(Math.max(capacity, count), isLite() ? MAX_ROWS_LITE : MAX_ROWS);
-      const frag = document.createDocumentFragment();
-      let added = 0;
-
-      for (const entry of entries) {
-        if (!entry || entry.id <= maxId) continue;
-        const row = make("div", `log-entry log-type-${entry.type || "info"}`);
-        row.innerHTML = `<span class="log-prompt">&gt;</span><span class="log-msg">${highlight(entry.text)}</span>`;
-        frag.appendChild(row);
-        maxId = entry.id;
-        added++;
-      }
-
-      if (!added) return;
-
-      lines.appendChild(frag);
-      rendered += added;
-
-      while (rendered > keep && lines.firstChild) {
-        lines.removeChild(lines.firstChild);
-        rendered--;
-      }
-
-      if (autoScroll) scrollToBottom();
     }
   };
 }

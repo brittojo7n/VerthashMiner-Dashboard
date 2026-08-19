@@ -611,6 +611,8 @@ h1 {
 .console-terminal::-webkit-scrollbar-thumb {
   background: rgba(var(--white-rgb), 0.15);
   border-radius: 4px;
+  /* Keep the thumb grabbable/visible even at the 1,000-line history cap. */
+  min-height: 48px;
 }
 
 .log-lines-wrapper {

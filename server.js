@@ -22,7 +22,7 @@ function yieldCpuToMiner() {
 class Server {
   constructor(options = {}) {
     this.config = options.config || config;
-    this.state = createState(this.config.WALLET, this.config.MAX_LOGS);
+    this.state = createState(this.config.WALLET, LIMITS.MAX_LOGS);
     this._exiting = false;
     this._shutdownWatchdog = null;
 

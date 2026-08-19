@@ -4,7 +4,7 @@ const os = require("node:os");
 const { STATUS } = require("./constants");
 
 class CircularLogBuffer {
-  constructor(capacity = 25) {
+  constructor(capacity = 50) {
     this.capacity = Math.max(1, capacity | 0);
     this.buf = new Array(this.capacity);
     this.head = 0;
@@ -65,7 +65,7 @@ function getServerTz() {
 const SERVER_TZ = getServerTz();
 const HOSTNAME = os.hostname();
 
-function createState(wallet = "", maxLogs = 25) {
+function createState(wallet = "", maxLogs = 50) {
   return {
     dirty: true,
     startedAt: Date.now(),
