@@ -33,7 +33,7 @@ export function presentSnapshot(snapshot, options = {}) {
     actionLabel: IDLE_STATUS.has(status) ? "START" : "STOP",
     hashrate: num(m.hashrateKHs, 2),
     accepted: m.submitted === 0 ? DASH : `${m.accepted} / ${m.submitted}`,
-    ratio: snapshot.acceptedRatio == null ? DASH : `${num(snapshot.acceptedRatio, 1)}%`,
+    ratio: snapshot.acceptedRatio == null ? DASH : `${num(snapshot.acceptedRatio, 2)}%`,
     rejected: String(m.rejected),
     difficulty: m.difficulty == null ? DASH : String(m.difficulty),
     lastAccepted: m.lastAcceptedAt ? timestamp(m.lastAcceptedAt) : DASH,
@@ -60,7 +60,7 @@ export function presentGpu(gpu) {
     vramTotal: num(gpu.memoryTotalMB, 0),
     hashrate: gpu.hashrate != null ? num(gpu.hashrate, 2) : DASH,
     eff: eff != null ? num(eff, 2) : DASH,
-    util: num(gpu.utilizationPct, 1),
+    util: num(gpu.utilizationPct, 0),
     barWidth: `${util}%`
   };
 }

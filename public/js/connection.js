@@ -100,6 +100,19 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
       onSnapshot(payload);
     });
 
+    source.addEventListener("rejected", () => {
+      connected = false;
+      source?.close();
+      source = null;
+      toast.warn(
+        "Viewer Limit Reached",
+        "This dashboard already has the maximum number of live viewers. Retrying in 30 seconds.",
+        "sse-limit"
+      );
+      onStatusText?.("VIEWER LIMIT");
+      schedule(30000, "Retrying");
+    });
+
     source.onerror = async () => {
       const wasConnected = connected;
       connected = false;

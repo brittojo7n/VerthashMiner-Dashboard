@@ -94,7 +94,7 @@ function createState(wallet = "", maxLogs = 25) {
       hashratesReady: false,
       expectedWorkers: 0,
       workerMap: null,
-      lastJsonRejectTime: 0,
+      jsonRejects: 0,
       pciMap: Object.create(null)
     },
     gpu: [],

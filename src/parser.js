@@ -9,7 +9,7 @@ const RX_JSON_DIFF =
   /"mining\.set_difficulty".*?"params"\s*:\s*\[\s*([+-]?[\d.]+(?:[eE][+-]?\d+)?)\s*\]/i;
 const RX_ACC = /accepted:\s*(\d+)\s*\/\s*(\d+)(?:.*?total hashrate:\s*([\d.]+|\(pending\.\.\.\)))?/i;
 const RX_WORKERS = /configured\s+(\d+)\(cl\)(?:\s+and\s+(\d+)\(cuda\))?\s+workers/i;
-const RX_THREADS = /^(\d+)\s+miner threads started/i;
+const RX_THREADS = /(\d+)\s+miner threads started/i;
 const RX_NZERR = /\berrors?:\s*[1-9]\d*\b/i;
 const RX_DEV_MEMERR = /\berr:\s*[1-9]\d*,/i;
 const RX_FATAL = /\b(?:cuda\s+error|failed\s+to|fatal|exception|enoent|out\s+of\s+memory)\b/i;
@@ -20,7 +20,6 @@ const RX_POOL_DOWN =
 const RX_REJECT = /"result"\s*:\s*(?:false|null)\s*,\s*"error"\s*:\s*\[\s*\d+\s*,\s*"([^"]+)"/i;
 
 const LEVELS = new Set(["ERROR", "WARN", "INFO", "DEBUG"]);
-const REJECT_CORRELATION_MS = 2000;
 
 function levelOf(line) {
   if (
@@ -152,7 +151,7 @@ function parseMinerLine(raw, state, pushLog) {
   if (lc.includes('"result"') && lc.includes('"error"')) {
     const rejectMatch = RX_REJECT.exec(line);
     if (rejectMatch) {
-      mining.lastJsonRejectTime = Date.now();
+      mining.jsonRejects = (mining.jsonRejects || 0) + 1;
       emitLog(state, pushLog, `[Stratum] Share Rejected: ${rejectMatch[1]}`, LOG.ERROR);
     }
   }
@@ -190,7 +189,7 @@ function parseMinerLine(raw, state, pushLog) {
       mining.expectedWorkers = Number(workers[1] || 0) + Number(workers[2] || 0);
       state.dirty = true;
     } else if (level !== null) {
-      const threads = RX_THREADS.exec(line.slice(28));
+      const threads = RX_THREADS.exec(line);
       if (threads) {
         mining.expectedWorkers = Number(threads[1]);
         state.dirty = true;
@@ -223,14 +222,13 @@ function parseMinerLine(raw, state, pushLog) {
 
         const rejected = Math.max(0, submitted - accepted);
         if (rejected > mining.rejected) {
-          const delta = rejected - mining.rejected;
-          const sinceJsonReject = Date.now() - (mining.lastJsonRejectTime || 0);
+          const unexplained = rejected - Math.max(mining.jsonRejects || 0, mining.rejected);
 
-          if (sinceJsonReject > REJECT_CORRELATION_MS) {
+          if (unexplained > 0) {
             emitLog(
               state,
               pushLog,
-              `[Stratum] ${delta} Share(s) Rejected (Failsafe)`,
+              `[Stratum] ${unexplained} Share(s) Rejected (Failsafe)`,
               LOG.ERROR
             );
           }

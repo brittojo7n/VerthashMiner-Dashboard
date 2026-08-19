@@ -133,7 +133,7 @@ class SseHub {
 
     if (this.clients.size >= LIMITS.MAX_SSE_CLIENTS) {
       try {
-        res.write("event: error\ndata: Too many clients\n\n");
+        res.write("event: rejected\ndata: too_many_clients\n\n");
         res.end();
       } catch {
       }

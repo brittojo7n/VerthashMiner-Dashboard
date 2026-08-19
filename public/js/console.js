@@ -41,7 +41,7 @@ function highlight(raw) {
 
 const EMPTY_HTML =
   '<div class="log-empty"><span class="log-prompt">&gt;</span>' +
-  '<span class="log-text">VerthashMiner console active. Waiting for miner output...</span>' +
+  '<span class="log-text">VerthashMiner console initialized. Waiting for miner output...</span>' +
   '<span class="term-cursor">_</span></div>';
 
 export function createConsole({ terminal, lines, counter, onAutoScrollChange }) {
@@ -87,6 +87,10 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
     render(entries, meta = {}) {
       const count = Number.isFinite(meta.count) ? meta.count : (entries || []).length;
       const capacity = Number.isFinite(meta.capacity) ? meta.capacity : count;
+
+      // Server restart detection: the log sequence starts over, so stale ids
+      // held by this tab would silently swallow every new line.
+      if (Number.isFinite(meta.seq) && meta.seq < maxId) reset();
 
       if (count === 0) {
         if (maxId !== 0) reset();

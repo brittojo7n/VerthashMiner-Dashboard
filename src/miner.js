@@ -23,7 +23,7 @@ const CLEAN_STATS = Object.freeze({
   lastAcceptedAt: null,
   hashratesReady: false,
   expectedWorkers: 0,
-  lastJsonRejectTime: 0
+  jsonRejects: 0
 });
 
 function resolveExe(exe, cwd) {
@@ -64,6 +64,7 @@ class MinerManager {
     this._forceKillTimer = null;
     this._actionTimer = null;
     this._pendingAction = null;
+    this._statusRollback = null;
     this._spawning = false;
     this._probe = null;
 
@@ -121,6 +122,7 @@ class MinerManager {
     if (this.proc || this.state.miner.running || this._spawning) return Promise.resolve();
 
     this._resetStats();
+    this.state.miner.lastError = "";
 
     const { MINER_ARGS, MINER_CWD } = this.config;
     if (!MINER_CWD || !MINER_ARGS.length) {
@@ -293,7 +295,12 @@ class MinerManager {
   _clearScheduledAction() {
     clearTimeout(this._actionTimer);
     this._actionTimer = null;
+    if (this._pendingAction && this._statusRollback && this.proc && this.state.miner.running) {
+      this._setMining({ status: this._statusRollback });
+      this._emit();
+    }
     this._pendingAction = null;
+    this._statusRollback = null;
   }
 
   _markStopped() {
@@ -316,6 +323,7 @@ class MinerManager {
 
     this._clearScheduledAction();
     this._pendingAction = action;
+    this._statusRollback = this.state.mining.status;
     this._setMining({ status: ACTIONS[action] });
     this._emit();
 
@@ -323,6 +331,7 @@ class MinerManager {
       const pending = this._pendingAction;
       this._actionTimer = null;
       this._pendingAction = null;
+      this._statusRollback = null;
       if (pending && typeof this[pending] === "function") {
         Promise.resolve()
           .then(() => this[pending]())
