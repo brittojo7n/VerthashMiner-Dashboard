@@ -2,6 +2,8 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const zlib = require("node:zlib");
+const crypto = require("node:crypto");
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -12,19 +14,51 @@ const MIME = {
 };
 
 const SERVABLE = new Set(Object.keys(MIME));
+const COMPRESSIBLE = new Set([".html", ".css", ".js", ".svg"]);
+const MIN_COMPRESS_BYTES = 512;
 
-function headersFor(file, buf) {
-  const isHtml = file.endsWith(".html");
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'"
+].join("; ");
+
+const PERMISSIONS = "camera=(), microphone=(), geolocation=(), interest-cohort=()";
+
+function etagOf(buf) {
+  return `"${crypto.createHash("sha1").update(buf).digest("base64url").slice(0, 22)}"`;
+}
+
+function headersFor(file, length, etag, encoding) {
   const headers = {
     "Content-Type": MIME[path.extname(file)] || "application/octet-stream",
     "Cache-Control": "no-cache",
-    "Content-Length": buf.length,
-    "X-Content-Type-Options": "nosniff"
+    "Content-Length": length,
+    ETag: etag,
+    Vary: "Accept-Encoding",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer"
   };
-  if (isHtml) {
-    headers["Content-Security-Policy"] = "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; img-src 'self' data:; connect-src 'self'";
+  if (encoding) headers["Content-Encoding"] = encoding;
+  if (file.endsWith(".html")) {
+    headers["Content-Security-Policy"] = CSP;
+    headers["Permissions-Policy"] = PERMISSIONS;
   }
   return Object.freeze(headers);
+}
+
+function notModifiedHeaders(etag) {
+  return Object.freeze({
+    ETag: etag,
+    "Cache-Control": "no-cache",
+    Vary: "Accept-Encoding"
+  });
 }
 
 function loadStaticCache(publicDir) {
@@ -33,19 +67,52 @@ function loadStaticCache(publicDir) {
 
   const walk = dir => {
     let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
-    catch { return; }
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
 
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) { walk(full); continue; }
-      if (!SERVABLE.has(path.extname(entry.name))) continue;
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+
+      const ext = path.extname(entry.name);
+      if (!SERVABLE.has(ext)) continue;
 
       let buf;
-      try { buf = fs.readFileSync(full); } catch { continue; }
+      try {
+        buf = fs.readFileSync(full);
+      } catch {
+        continue;
+      }
 
-      const url = "/" + path.relative(root, full).split(path.sep).join("/");
-      cache[url] = { buf, hdr: headersFor(entry.name, buf) };
+      const etag = etagOf(buf);
+      const asset = {
+        buf,
+        etag,
+        hdr: headersFor(entry.name, buf.length, etag),
+        notModified: notModifiedHeaders(etag),
+        gzip: null,
+        gzipHdr: null
+      };
+
+      if (COMPRESSIBLE.has(ext) && buf.length >= MIN_COMPRESS_BYTES) {
+        try {
+          const gzip = zlib.gzipSync(buf, { level: zlib.constants.Z_BEST_COMPRESSION });
+          if (gzip.length < buf.length) {
+            asset.gzip = gzip;
+            asset.gzipHdr = headersFor(entry.name, gzip.length, etag, "gzip");
+          }
+        } catch {
+        }
+      }
+
+      cache["/" + path.relative(root, full).split(path.sep).join("/")] = asset;
     }
   };
 
@@ -56,4 +123,4 @@ function loadStaticCache(publicDir) {
   return cache;
 }
 
-module.exports = { loadStaticCache };
+module.exports = { loadStaticCache, CSP, MIME };

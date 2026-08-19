@@ -3,7 +3,6 @@
 const { LIMITS } = require("./constants");
 
 const RX_ANSI = /\x1b\[[0-?]*[ -/]*[@-~]/g;
-const RX_PCI = /([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.?([0-9a-fA-F]?)/;
 const RX_SECTION = /(cuda|opencl)\s.*(devices:|device config)/i;
 const RX_INLINE = /index:\s*(\d+).*?pcieid:\s*([0-9a-fA-F:.]+)/i;
 const RX_INDEX = /deviceindex:\s*(\d+)/i;
@@ -13,11 +12,22 @@ const RX_UNAVAILABLE = /not\s*avilable/i;
 
 const stripAnsi = line => String(line).replace(RX_ANSI, "");
 
+const pad2 = part => (part.length === 1 ? `0${part}` : part);
+
 function normalizePci(raw) {
-  const m = RX_PCI.exec(String(raw));
-  return m
-    ? `${m[1].toLowerCase()}:${m[2].toLowerCase()}:${(m[3] || "0").toLowerCase()}`
-    : String(raw).toLowerCase();
+  const text = String(raw).trim().toLowerCase();
+  const parts = text.split(/[:.]/).filter(Boolean);
+
+  if (parts.length >= 3) {
+    const tail = parts.slice(-3);
+    if (tail.every(part => /^[0-9a-f]{1,8}$/.test(part))) {
+      return `${pad2(tail[0])}:${pad2(tail[1])}:${tail[2]}`;
+    }
+  }
+  if (parts.length === 2 && parts.every(part => /^[0-9a-f]{1,8}$/.test(part))) {
+    return `${pad2(parts[0])}:${pad2(parts[1])}:0`;
+  }
+  return text;
 }
 
 function parseCudaDeviceList(output, pciMap) {
@@ -36,7 +46,7 @@ function parseCudaDeviceList(output, pciMap) {
 
     const inline = RX_INLINE.exec(line);
     if (inline) {
-      pciMap[normalizePci(inline[2])] = inline[1];
+      if (!RX_UNAVAILABLE.test(line)) pciMap[normalizePci(inline[2])] = inline[1];
       pendingIndex = null;
       continue;
     }
@@ -53,6 +63,7 @@ function parseCudaDeviceList(output, pciMap) {
       pendingIndex = null;
     }
   }
+  return pciMap;
 }
 
 function createStreamReader(onLine, onFlush, isEnabled, forward) {
@@ -62,20 +73,33 @@ function createStreamReader(onLine, onFlush, isEnabled, forward) {
     if (forward) forward(chunk);
     buffer += chunk;
 
-    if (buffer.length > LIMITS.STREAM_BUFFER_BYTES) {
-      const lastNewline = buffer.lastIndexOf("\n");
-      buffer = lastNewline === -1 ? "" : buffer.slice(lastNewline + 1);
+    const cut = buffer.lastIndexOf("\n");
+    if (cut === -1) {
+      if (buffer.length > LIMITS.STREAM_BUFFER_BYTES) {
+        buffer = buffer.slice(buffer.length - LIMITS.STREAM_BUFFER_BYTES);
+      }
+      return;
     }
 
-    const cut = buffer.lastIndexOf("\n");
-    if (cut === -1) return;
+    const block = buffer.slice(0, cut);
+    buffer = buffer.slice(cut + 1);
+    if (buffer.length > LIMITS.STREAM_BUFFER_BYTES) {
+      buffer = buffer.slice(buffer.length - LIMITS.STREAM_BUFFER_BYTES);
+    }
 
     const enabled = isEnabled();
-    for (const line of buffer.slice(0, cut).split(/\r?\n/)) {
+    let start = 0;
+    for (;;) {
+      const nl = block.indexOf("\n", start);
+      const end = nl === -1 ? block.length : nl;
+      let line = block.slice(start, end);
+      if (line.charCodeAt(line.length - 1) === 13 ) line = line.slice(0, -1);
       if (line) onLine(line, enabled);
+      if (nl === -1) break;
+      start = nl + 1;
     }
-    buffer = buffer.slice(cut + 1);
-    if (enabled) onFlush?.();
+
+    if (enabled && typeof onFlush === "function") onFlush();
   };
 }
 

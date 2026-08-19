@@ -3,138 +3,182 @@
 const { formatStatsSnapshot } = require("./state");
 const { LIMITS } = require("./constants");
 
+const HEARTBEAT_FRAME = ": hb\n\n";
+const OPEN_FRAME = ": stream established\n\n";
+
 class SseHub {
   constructor({ state, onSubscriberChange }) {
     this.state = state;
     this.onSubscriberChange = onSubscriberChange;
-    this.clients = new Set();
+
+    this.clients = new Map();
     this.bcastTimer = null;
-    this.cachedPayload = null;
+    this.heartbeatTimer = null;
+    this.lastNotified = -1;
   }
 
   get size() {
     return this.clients.size;
   }
 
-  broadcast() {
-    if (this.clients.size === 0 || !this.state.dirty) return;
+  _frame(snapshot) {
+    return `event: stats\ndata: ${JSON.stringify(snapshot)}\n\n`;
+  }
 
-    if (this.bcastTimer) return;
+  _fullFrame() {
+    return this._frame(formatStatsSnapshot(this.state));
+  }
+
+  _startHeartbeat() {
+    if (this.heartbeatTimer) return;
+    this.heartbeatTimer = setInterval(() => {
+      for (const [res] of this.clients) {
+        if (!this._write(res, HEARTBEAT_FRAME)) this._drop(res);
+      }
+    }, LIMITS.HEARTBEAT_MS);
+    if (typeof this.heartbeatTimer.unref === "function") this.heartbeatTimer.unref();
+  }
+
+  _stopHeartbeat() {
+    if (!this.heartbeatTimer) return;
+    clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = null;
+  }
+
+  _write(res, payload) {
+    if (res.writableEnded || res.destroyed) return false;
+    try {
+      const drained = res.write(payload);
+      if (!drained) {
+        const meta = this.clients.get(res);
+        if (meta) {
+          meta.blocked = true;
+          res.once("drain", () => {
+            const current = this.clients.get(res);
+            if (!current) return;
+            current.blocked = false;
+            current.blockedCount = 0;
+          });
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  _drop(res) {
+    if (!this.clients.delete(res)) return;
+    try {
+      res.end();
+    } catch {
+    }
+    if (this.clients.size === 0) this._stopHeartbeat();
+    this._notifyChange();
+  }
+
+  _notifyChange() {
+    const size = this.clients.size;
+    if (size === this.lastNotified) return;
+    this.lastNotified = size;
+    if (typeof this.onSubscriberChange === "function") this.onSubscriberChange(size);
+  }
+
+  broadcast() {
+    if (this.clients.size === 0 || !this.state.dirty || this.bcastTimer) return;
 
     this.bcastTimer = setTimeout(() => {
       this.bcastTimer = null;
       if (this.clients.size === 0) return;
-      if (this.state.dirty || !this.cachedPayload) {
-        this.cachedPayload = `event: stats\ndata: ${JSON.stringify(formatStatsSnapshot(this.state))}\n\n`;
-        this.state.dirty = false;
-      }
 
-      const payload = this.cachedPayload;
+      const seq = this.state.miner.logs.seq;
 
-      for (const res of this.clients) {
-        if (res.blocked) {
-          res.blockedCount = (res.blockedCount || 0) + 1;
-          if (res.blockedCount >= 5) {
-            this.clients.delete(res);
-            this._notifyChange();
-            res.end();
-          }
+      const frames = new Map();
+
+      this.state.dirty = false;
+
+      for (const [res, meta] of this.clients) {
+        if (meta.blocked) {
+          meta.blockedCount++;
+          if (meta.blockedCount >= LIMITS.SSE_MAX_BLOCKED_TICKS) this._drop(res);
           continue;
         }
 
-        try {
-          const drained = res.write(payload);
-          if (!drained) {
-            res.blocked = true;
-            res.once("drain", () => {
-              res.blocked = false;
-              res.blockedCount = 0;
-            });
-          }
-        } catch {
-          this.clients.delete(res);
-          this._notifyChange();
+        let payload = frames.get(meta.lastLogSeq);
+        if (payload === undefined) {
+          payload = this._frame(formatStatsSnapshot(this.state, { logsSince: meta.lastLogSeq }));
+          frames.set(meta.lastLogSeq, payload);
         }
+
+        if (this._write(res, payload)) meta.lastLogSeq = seq;
+        else this._drop(res);
       }
     }, LIMITS.BROADCAST_MS);
+
+    if (typeof this.bcastTimer.unref === "function") this.bcastTimer.unref();
   }
 
   _reapDeadClients() {
-    for (const res of this.clients) {
-      const dead = res.writableEnded || res.destroyed ||
+    for (const [res] of this.clients) {
+      const dead =
+        res.writableEnded ||
+        res.destroyed ||
         (res.socket && (res.socket.destroyed || !res.socket.writable));
-      if (dead) {
-        this.clients.delete(res);
-        try { res.end(); } catch { }
-      }
+      if (dead) this._drop(res);
     }
   }
 
   handleConnection(req, res) {
+    if (this.clients.size >= LIMITS.MAX_SSE_CLIENTS) this._reapDeadClients();
+
     if (this.clients.size >= LIMITS.MAX_SSE_CLIENTS) {
-      this._reapDeadClients();
-      this._notifyChange();
-    }
-    if (this.clients.size >= LIMITS.MAX_SSE_CLIENTS) {
-      res.write("event: error\ndata: Too many clients\n\n");
-      res.end();
-      return;
+      try {
+        res.write("event: error\ndata: Too many clients\n\n");
+        res.end();
+      } catch {
+      }
+      return false;
     }
 
-    this.clients.add(res);
+    const meta = { lastLogSeq: 0, blocked: false, blockedCount: 0 };
+    this.clients.set(res, meta);
+
+    let frame;
+    try {
+      frame = this._fullFrame();
+    } catch {
+      frame = this._frame({ now: Date.now(), error: "snapshot_failed" });
+    }
+
+    if (!this._write(res, OPEN_FRAME) || !this._write(res, frame)) {
+      this._drop(res);
+      return false;
+    }
+    meta.lastLogSeq = this.state.miner.logs.seq;
+    if (typeof res.flush === "function") res.flush();
+
+    this._startHeartbeat();
     this._notifyChange();
 
-    try {
-      res.write(": stream established\n\n");
-
-      let freshSnapshot;
-      try {
-        freshSnapshot = formatStatsSnapshot(this.state);
-        this.state.dirty = false;
-      } catch {
-        freshSnapshot = { now: Date.now(), miner: this.state.miner, mining: this.state.mining, gpu: this.state.gpu, host: this.state.host };
-      }
-      this.cachedPayload = `event: stats\ndata: ${JSON.stringify(freshSnapshot)}\n\n`;
-
-      res.write(this.cachedPayload);
-
-      if (res.flush) res.flush();
-    } catch {
-      this.clients.delete(res);
-      this._notifyChange();
-      return;
-    }
-
-    const heartbeat = setInterval(() => {
-      try {
-        res.write(": hb\n\n");
-      } catch {
-        clearInterval(heartbeat);
-        this.clients.delete(res);
-        this._notifyChange();
-      }
-    }, LIMITS.HEARTBEAT_MS);
-
     const cleanup = () => {
-      clearInterval(heartbeat);
-      if (this.clients.has(res)) {
-        this.clients.delete(res);
-        if (this.clients.size === 0 && this.bcastTimer) {
+      if (!this.clients.has(res)) return;
+      this.clients.delete(res);
+      if (this.clients.size === 0) {
+        this._stopHeartbeat();
+        if (this.bcastTimer) {
           clearTimeout(this.bcastTimer);
           this.bcastTimer = null;
         }
-        this._notifyChange();
       }
+      this._notifyChange();
     };
 
     req.on("close", cleanup);
     req.on("error", cleanup);
-  }
+    res.on("close", cleanup);
+    res.on("error", cleanup);
 
-  _notifyChange() {
-    if (typeof this.onSubscriberChange === "function") {
-      this.onSubscriberChange(this.clients.size);
-    }
+    return true;
   }
 
   closeAll() {
@@ -142,10 +186,12 @@ class SseHub {
       clearTimeout(this.bcastTimer);
       this.bcastTimer = null;
     }
-    for (const res of this.clients) {
+    this._stopHeartbeat();
+    for (const [res] of this.clients) {
       try {
         res.end();
-      } catch { }
+      } catch {
+      }
     }
     this.clients.clear();
     this._notifyChange();

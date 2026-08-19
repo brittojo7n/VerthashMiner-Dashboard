@@ -1,13 +1,18 @@
+import "./perf.js";
 import { el, text, className } from "./dom.js";
-import { num, uptime, timestamp, stripLogPrefix, DASH } from "./format.js";
+import { timestamp, uptime, stripLogPrefix } from "./format.js";
+import {
+  presentSnapshot,
+  sharesPerMinute,
+  dotClass,
+  IDLE_STATUS as IDLE,
+  LIVE_STATUS as LIVE
+} from "./present.js";
 import * as toast from "./toast.js";
 import * as gpuView from "./gpu.js";
 import { createConsole } from "./console.js";
 import { createConnection } from "./connection.js";
 
-const IDLE = new Set(["STOPPED", "CRASHED", "ERROR"]);
-
-const LIVE = new Set(["MINING", "CONNECTED", "WAITING", "DISCONNECTED"]);
 const ACTION_STATUS = { start: "STARTING", stop: "STOPPING", restart: "RESTARTING" };
 const ACTION_TOAST = {
   start: ["Starting Miner", "Launching the VerthashMiner process."],
@@ -27,6 +32,15 @@ const authModal = el("authModal");
 const authInput = el("authInput");
 const authError = el("authError");
 const btnAutoScroll = el("btnAutoScroll");
+const uptimeEl = el("uptime");
+const spmEl = el("sharesPerMinute");
+const hashrateEl = el("hashrate");
+const acceptedEl = el("accepted");
+const ratioEl = el("ratio");
+const rejectedEl = el("rejected");
+const difficultyEl = el("difficulty");
+const lastAcceptedEl = el("lastAccepted");
+const walletEl = el("walletAddress");
 
 const view = createConsole({
   terminal: el("terminal"),
@@ -41,11 +55,10 @@ let accepted = 0, ticker = null;
 function tick() {
   if (serverNow == null) return;
   const now = serverNow + (Date.now() - capturedAt);
+  const elapsed = Math.max(0, now - startedAt);
   text(localTimeEl, timestamp(now, tz));
-  text(el("uptime"), uptime(Math.floor((now - startedAt) / 1000)));
-  const minutes = (now - startedAt) / 60000;
-  const spm = minutes > 0 ? accepted / minutes : accepted;
-  text(el("sharesPerMinute"), spm > 0 ? num(spm, 3) : DASH);
+  text(uptimeEl, uptime(Math.floor(elapsed / 1000)));
+  text(spmEl, sharesPerMinute(accepted, elapsed));
 }
 const startClock = () => { ticker ||= setInterval(tick, 1000); };
 const stopClock = () => { clearInterval(ticker); ticker = null; };
@@ -57,7 +70,7 @@ function applyChrome(status, locked) {
   text(statusEl, status);
   const idle = IDLE.has(status);
   const busy = locked || (!idle && !LIVE.has(status));
-  className(dot, `dot ${idle ? "err" : status === "MINING" || status === "CONNECTED" ? "ok" : "warn"}`);
+  className(dot, dotClass(status));
   text(btnAction, idle ? "START" : "STOP");
   className(btnAction, `c-btn ${idle ? "btn-start" : "btn-stop"}`);
   btnAction.disabled = busy;
@@ -96,23 +109,25 @@ function render(snapshot) {
   tick();
   startClock();
 
-  text(hostEl, `Host: ${snapshot.host.hostname}`);
   announce(snapshot.mining.status);
 
-  const status = pendingStatus
-    || (!snapshot.miner.running && LIVE.has(snapshot.mining.status) ? "STOPPED" : snapshot.mining.status);
-  applyChrome(status, !!pendingStatus);
+  const display = presentSnapshot(snapshot, { now: serverNow, pendingStatus });
 
-  const m = snapshot.mining;
-  text(el("hashrate"), num(m.hashrateKHs, 2));
-  text(el("accepted"), m.submitted === 0 ? DASH : `${m.accepted} / ${m.submitted}`);
-  text(el("ratio"), snapshot.acceptedRatio == null ? DASH : `${num(snapshot.acceptedRatio, 1)}%`);
-  text(el("rejected"), m.rejected);
-  text(el("difficulty"), m.difficulty ?? DASH);
-  text(el("lastAccepted"), m.lastAcceptedAt ? timestamp(m.lastAcceptedAt) : DASH);
-  text(el("walletAddress"), snapshot.miner.wallet || DASH);
+  text(hostEl, display.host);
+  applyChrome(display.status, !!pendingStatus);
 
-  view.render(snapshot.miner.logs);
+  text(hashrateEl, display.hashrate);
+  text(acceptedEl, display.accepted);
+  text(ratioEl, display.ratio);
+  text(rejectedEl, display.rejected);
+  text(difficultyEl, display.difficulty);
+  text(lastAcceptedEl, display.lastAccepted);
+  text(walletEl, display.wallet);
+
+  view.render(snapshot.miner.logs, {
+    count: snapshot.logCount,
+    capacity: snapshot.logCapacity
+  });
 
   if (snapshot.miner.lastError) {
     className(errorEl, "errorbox show");
@@ -205,7 +220,7 @@ async function runAction(action) {
   toast.info(title, message, `miner-${action}`);
 
   try {
-    const res = await fetch(`/api/miner/${action}`, { 
+    const res = await fetch(`/api/miner/${action}`, {
       method: "POST",
       headers: { "X-Requested-With": "XMLHttpRequest" }
     });

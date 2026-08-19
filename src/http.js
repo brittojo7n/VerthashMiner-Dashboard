@@ -13,44 +13,61 @@ const NOSNIFF = "nosniff";
 const HDR_JSON = Object.freeze({
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": NO_STORE,
-  "X-Content-Type-Options": NOSNIFF
+  "X-Content-Type-Options": NOSNIFF,
+  "Referrer-Policy": "no-referrer"
 });
 const HDR_TEXT = Object.freeze({
-  "Content-Type": "text/plain",
+  "Content-Type": "text/plain; charset=utf-8",
   "Cache-Control": NO_STORE,
-  "X-Content-Type-Options": NOSNIFF
+  "X-Content-Type-Options": NOSNIFF,
+  "Referrer-Policy": "no-referrer"
 });
 const HDR_SSE = Object.freeze({
   "Content-Type": "text/event-stream; charset=utf-8",
   "Cache-Control": "no-cache, no-transform",
-  "Connection": "keep-alive",
+  Connection: "keep-alive",
   "X-Accel-Buffering": "no",
-  "X-Content-Type-Options": NOSNIFF
+  "X-Content-Type-Options": NOSNIFF,
+  "Referrer-Policy": "no-referrer"
 });
 
 const MAX_BODY_BYTES = 4096;
 const MAX_STREAM_BLOCKS = 128;
 const MINER_ACTIONS = new Set(["start", "stop", "restart"]);
 
-const limitMiner = createRateLimiter(2, 2000, 3000);
-const limitStatus = createRateLimiter(3, 2000, 3000);
-const limitEvents = createRateLimiter(3, 2000, 3000);
+const TOO_LARGE = Symbol("payload_too_large");
+
+const SERVER_TIMEOUTS = Object.freeze({
+  headersTimeout: 20000,
+  requestTimeout: 30000,
+  keepAliveTimeout: 5000,
+  maxHeadersCount: 64
+});
 
 const send = (res, status, headers, body) => {
-  res.writeHead(status, headers);
-  res.end(body);
+  if (res.writableEnded || res.destroyed) return;
+  try {
+    res.writeHead(status, headers);
+    res.end(body);
+  } catch {
+  }
 };
 const sendText = (res, status, body) => send(res, status, HDR_TEXT, body);
 const sendJson = (res, status, payload) => send(res, status, HDR_JSON, JSON.stringify(payload));
 
 function sendRateLimited(res, waitMs) {
   const seconds = Math.max(1, Math.ceil(waitMs / 1000));
-  send(res, 429, { ...HDR_JSON, "Retry-After": String(seconds) }, JSON.stringify({
-    error: "rate_limited",
-    retryAfterMs: waitMs,
-    retryAfterSeconds: seconds,
-    message: "Too many requests. Please wait before refreshing again."
-  }));
+  send(
+    res,
+    429,
+    { ...HDR_JSON, "Retry-After": String(seconds) },
+    JSON.stringify({
+      error: "rate_limited",
+      retryAfterMs: waitMs,
+      retryAfterSeconds: seconds,
+      message: "Too many requests. Please wait before refreshing again."
+    })
+  );
 }
 
 function getLanIp() {
@@ -62,24 +79,45 @@ function getLanIp() {
   return "127.0.0.1";
 }
 
+function isSameOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try {
+    return new URL(origin).host === req.headers.host;
+  } catch {
+    return false;
+  }
+}
+
 function readJsonBody(req) {
   return new Promise(resolve => {
     let size = 0;
     const chunks = [];
+    let done = false;
+    const finish = value => {
+      if (done) return;
+      done = true;
+      resolve(value);
+    };
+
     req.on("data", chunk => {
       size += chunk.length;
       if (size > MAX_BODY_BYTES) {
-        req.destroy();
-        resolve(null);
+        chunks.length = 0;
+        finish(TOO_LARGE);
         return;
       }
       chunks.push(chunk);
     });
     req.on("end", () => {
-      try { resolve(JSON.parse(Buffer.concat(chunks).toString("utf8"))); }
-      catch { resolve(null); }
+      try {
+        finish(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+      } catch {
+        finish(null);
+      }
     });
-    req.on("error", () => resolve(null));
+    req.on("error", () => finish(null));
+    req.on("aborted", () => finish(null));
   });
 }
 
@@ -89,83 +127,112 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
   const sessions = new SessionStore({ secret: config.SESSION_SECRET });
   const streamBlocks = new Map();
 
-  const routes = {
-    "POST /api/login": async (req, res, ip) => {
-      if (!requiresAuth) return sendText(res, 404, "Not found");
-      
-      if (req.headers["x-requested-with"] !== "XMLHttpRequest") {
-        return sendText(res, 403, "Forbidden: CSRF check failed");
-      }
+  const limitMiner = createRateLimiter(2, 2000, 3000);
+  const limitStatus = createRateLimiter(3, 2000, 3000);
+  const limitEvents = createRateLimiter(3, 2000, 3000);
+  const limitLogin = createRateLimiter(10, 10000, 10000);
 
-      sessions.prune();
+  const routes = new Map();
 
-      const lockout = sessions.lockoutMs(ip);
-      if (lockout) return sendRateLimited(res, lockout);
+  routes.set("POST /api/login", async (req, res, ip) => {
+    if (!requiresAuth) return sendText(res, 404, "Not found");
+    if (req.headers["x-requested-with"] !== "XMLHttpRequest" || !isSameOrigin(req)) {
+      return sendText(res, 403, "Forbidden: CSRF check failed");
+    }
 
-      const body = await readJsonBody(req);
-      if (!body) return sendText(res, 400, "Bad Request");
+    const flood = limitLogin(ip);
+    if (flood) return sendRateLimited(res, flood);
 
-      if (!safeEqual(body.passphrase, config.PASSPHRASE)) {
-        sessions.recordFailure(ip);
-        return sendText(res, 401, "Unauthorized");
-      }
+    sessions.prune();
 
-      sessions.clearFailures(ip);
-      const token = sessions.issue();
-      send(res, 200, { ...HDR_JSON, "Set-Cookie": sessions.cookieFor(token) }, '{"status":"ok"}');
-    },
+    const lockout = sessions.lockoutMs(ip);
+    if (lockout) return sendRateLimited(res, lockout);
 
-    "GET /events": (req, res, ip) => {
-      const wait = limitEvents(ip);
-      if (wait) {
-        if (streamBlocks.size >= MAX_STREAM_BLOCKS) {
-          const now = Date.now();
-          for (const [key, expiry] of streamBlocks) {
-            if (expiry <= now) streamBlocks.delete(key);
-          }
-          if (streamBlocks.size >= MAX_STREAM_BLOCKS) {
-            streamBlocks.delete(streamBlocks.keys().next().value);
-          }
+    const body = await readJsonBody(req);
+    if (body === TOO_LARGE) {
+      send(res, 413, { ...HDR_TEXT, Connection: "close" }, "Payload Too Large");
+      res.on("finish", () => req.destroy());
+      return;
+    }
+    if (!body || typeof body.passphrase !== "string") return sendText(res, 400, "Bad Request");
+
+    if (!safeEqual(body.passphrase, config.PASSPHRASE)) {
+      sessions.recordFailure(ip);
+      return sendText(res, 401, "Unauthorized");
+    }
+
+    sessions.clearFailures(ip);
+    const token = sessions.issue();
+    send(
+      res,
+      200,
+      { ...HDR_JSON, "Set-Cookie": sessions.cookieFor(token) },
+      '{"status":"ok"}'
+    );
+  });
+
+  routes.set("GET /events", (req, res, ip) => {
+    const wait = limitEvents(ip);
+    if (wait) {
+      if (streamBlocks.size >= MAX_STREAM_BLOCKS) {
+        const now = Date.now();
+        for (const [key, expiry] of streamBlocks) {
+          if (expiry <= now) streamBlocks.delete(key);
         }
-        streamBlocks.set(ip, Date.now() + wait);
-        return sendRateLimited(res, wait);
+        if (streamBlocks.size >= MAX_STREAM_BLOCKS) {
+          streamBlocks.delete(streamBlocks.keys().next().value);
+        }
       }
-      streamBlocks.delete(ip);
-      res.writeHead(200, HDR_SSE);
-      sseHub.handleConnection(req, res);
-    },
+      streamBlocks.set(ip, Date.now() + wait);
+      return sendRateLimited(res, wait);
+    }
+    streamBlocks.delete(ip);
 
-    "GET /api/status": (req, res, ip) => {
-      const wait = limitStatus(ip);
-      if (wait) return sendRateLimited(res, wait);
+    if (res.writableEnded || res.destroyed) return;
+    req.socket.setTimeout(0);
+    res.writeHead(200, HDR_SSE);
+    sseHub.handleConnection(req, res);
+  });
 
-      const blockedUntil = streamBlocks.get(ip) || 0;
-      const streamRetryMs = blockedUntil - Date.now();
-      if (streamRetryMs <= 0) {
-        if (blockedUntil) streamBlocks.delete(ip);
-        return sendJson(res, 200, formatStatsSnapshot(state));
-      }
+  routes.set("GET /api/status", (req, res, ip) => {
+    const wait = limitStatus(ip);
+    if (wait) return sendRateLimited(res, wait);
 
-      sendJson(res, 200, {
-        ...formatStatsSnapshot(state),
-        streamRetryAfterMs: streamRetryMs,
-        streamRetryAfterSeconds: Math.max(1, Math.ceil(streamRetryMs / 1000))
-      });
-    },
+    const blockedUntil = streamBlocks.get(ip) || 0;
+    const streamRetryMs = blockedUntil - Date.now();
+    if (streamRetryMs <= 0) {
+      if (blockedUntil) streamBlocks.delete(ip);
+      return sendJson(res, 200, formatStatsSnapshot(state));
+    }
 
-    "GET /health": (req, res) => sendText(res, 200, "ok")
-  };
+    sendJson(res, 200, {
+      ...formatStatsSnapshot(state),
+      streamRetryAfterMs: streamRetryMs,
+      streamRetryAfterSeconds: Math.max(1, Math.ceil(streamRetryMs / 1000))
+    });
+  });
 
-  return http.createServer((req, res) => {
+  routes.set("GET /health", (req, res) => sendText(res, 200, "ok"));
+
+  const server = http.createServer((req, res) => {
     const url = req.url || "/";
     const queryAt = url.indexOf("?");
     const pathname = queryAt === -1 ? url : url.slice(0, queryAt);
     const method = req.method || "GET";
     const ip = req.socket.remoteAddress || "";
 
-    if (method === "GET") {
+    if (method === "GET" || method === "HEAD") {
       const asset = staticFiles[pathname];
-      if (asset) return send(res, 200, asset.hdr, asset.buf);
+      if (asset) {
+        if (req.headers["if-none-match"] === asset.etag) {
+          return send(res, 304, asset.notModified, undefined);
+        }
+        const encodings = req.headers["accept-encoding"];
+        const gzip = asset.gzip && typeof encodings === "string" && encodings.includes("gzip");
+        const headers = gzip ? asset.gzipHdr : asset.hdr;
+        if (method === "HEAD") return send(res, 200, headers, undefined);
+        return send(res, 200, headers, gzip ? asset.gzip : asset.buf);
+      }
     }
 
     const isApi = pathname.startsWith("/api/") || pathname === "/events";
@@ -177,22 +244,47 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     if (method === "POST" && pathname.startsWith("/api/miner/")) {
       const action = pathname.slice("/api/miner/".length);
       if (!MINER_ACTIONS.has(action)) return sendText(res, 404, "Not found");
-      
-      if (req.headers["x-requested-with"] !== "XMLHttpRequest") {
+      if (req.headers["x-requested-with"] !== "XMLHttpRequest" || !isSameOrigin(req)) {
         return sendText(res, 403, "Forbidden: CSRF check failed");
       }
 
       const wait = limitMiner(ip);
       if (wait) return sendRateLimited(res, wait);
-      minerManager.requestAction(action);
+
+      try {
+        minerManager.requestAction(action);
+      } catch {
+        return sendJson(res, 500, { status: "error" });
+      }
       return sendJson(res, 200, { status: "ok" });
     }
 
-    const handler = routes[`${method} ${pathname}`];
-    if (handler) return handler(req, res, ip);
+    const handler = routes.get(`${method} ${pathname}`);
+    if (handler) {
+      let result;
+      try {
+        result = handler(req, res, ip);
+      } catch {
+        return sendText(res, 500, "Internal Server Error");
+      }
+      if (result && typeof result.catch === "function") {
+        result.catch(() => sendText(res, 500, "Internal Server Error"));
+      }
+      return;
+    }
 
     sendText(res, 404, "Not found");
   });
+
+  Object.assign(server, SERVER_TIMEOUTS);
+
+  server.on("clientError", (err, socket) => {
+    if (!socket.writable || socket.destroyed) return;
+    socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+  });
+
+  server.sessions = sessions;
+  return server;
 }
 
-module.exports = { getLanIp, createHttpServer };
+module.exports = { getLanIp, createHttpServer, isSameOrigin, MAX_BODY_BYTES };

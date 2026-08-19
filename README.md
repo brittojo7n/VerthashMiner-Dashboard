@@ -81,6 +81,7 @@ MINER_ARGS=-u your_wallet_address -p c=VTC -o stratum+tcp://your_pool_address:po
 - **`MINER_ARGS`**: This variable determines how the dashboard launches the miner. You must supply your wallet address, pool, and path to the `verthash.dat` file exactly as you would in a normal `.bat` file.
 - **`GPU_POLL_MS`**: How often (in milliseconds) the dashboard queries `nvidia-smi` while a dashboard tab is open. **Default is `5000`**. Allowed range is **`3000`–`10000`** (3–10 seconds). Values outside this range are clamped. Polling is globally rate-limited: page refresh, tab reconnect, or multiple clients cannot trigger `nvidia-smi` more often than this interval. The last cached GPU telemetry is sent immediately on refresh so the UI does not go blank.
 - **`MAX_LOGS`**: Sets the maximum number of console logs to hold in memory and display on the dashboard (default is 50, minimum is 15, maximum is 500).
+- **`ENV_FILE`**: Optional. Absolute or relative path to an alternative `.env` file (real environment variables always win over file values).
 - **`FORWARD_CONSOLE`**: When set to `true`, forwards the miner's stdout/stderr directly to the dashboard's terminal for local debugging. **Defaults to `false`** — when disabled, there is zero CPU or memory overhead from console forwarding. Only enable this if you need to watch miner logs locally without using the web UI.
 
 #### Security & Authentication
@@ -144,9 +145,14 @@ If another device cannot connect, Windows Firewall may be blocking the TCP port 
 
 ## API
 
-- JSON status: `GET /api/status`
-- Live stream: `GET /events`
+- JSON status: `GET /api/status` — full snapshot (used as the polling fallback)
+- Live stream: `GET /events` — SSE; each frame carries only *new* console lines
+  (`logsFrom`, `logSeq`, `logCount`, `logCapacity`), and any client that misses a
+  frame is transparently resynchronised
 - Health check: `GET /health`
+- Login: `POST /api/login` — requires `X-Requested-With: XMLHttpRequest` and a
+  same-origin `Origin` when one is sent
+- Controls: `POST /api/miner/{start|stop|restart}` — same CSRF requirements
 
 ## Project structure
 
@@ -171,12 +177,15 @@ src/
 public/
   index.html
   style.css
+  favicon.svg
   js/
     app.js             entry point and render loop
     connection.js      SSE lifecycle, backoff, rate-limit recovery
     gpu.js             GPU telemetry cards
     console.js         miner console
     toast.js           notifications
+    present.js         pure snapshot -> display-string projection
+    perf.js            client capability gate for low-end devices
     dom.js             cached lookups and change-guarded writes
     format.js          pure formatting helpers
 ```
@@ -209,11 +218,20 @@ watt not spent hashing. Idle cost is kept at zero structurally, not by tuning:
 | Mechanism | Effect |
 |---|---|
 | GPU polling gated on subscriber count | no `nvidia-smi` spawns when nobody is watching |
-| Log parsing gated on subscriber count | no regex work on miner output while idle |
+| Log fan-out gated on subscriber count | no DOM payloads, no SSE frames, no timers while idle |
 | Client closes its stream on `visibilitychange` | a hidden tab drops the server to true idle |
 | Poll interval clamped to 3-10s with a global cooldown | refresh or extra clients cannot amplify spawns |
+| Failure backoff on `nvidia-smi` | a missing driver stops costing a spawn every 5s |
+| Incremental console frames | each update ships new lines only, not the whole buffer |
+| One shared SSE heartbeat | timer count does not scale with clients |
 | Static assets read into memory once at boot | no disk I/O per request |
 | `FORWARD_CONSOLE=false` by default | no stdout writes while idle |
+
+Miner output *is* still parsed while idle - that is deliberate. Skipping it would
+leave a client that attaches later looking at stale counters, and the measured
+cost is 5 us per console line (see below), i.e. far below the noise floor at real
+log rates. What is gated is everything that scales: telemetry polling, snapshot
+serialisation, and network fan-out.
 
 Any change must preserve this. The browser tab is effectively the on/off switch
 for all server-side work.
@@ -235,31 +253,78 @@ written to **stderr** in the form:
 [YYYY-MM-DD HH:MM:SS] LEVEL  message
 ```
 
-with `LEVEL` padded to five characters (`ERROR`, `WARN`, `INFO`, `DEBUG`). The
-parser depends on that layout, and on these formats:
+with `LEVEL` padded to five characters (`ERROR`, `WARN`, `INFO`, `DEBUG`), which
+puts the level at a fixed offset. The level is treated as authoritative: only
+`ERROR` lines can change the reported status, so routine output such as
+`DEBUG Failed to get Stratum session id` cannot be mistaken for a crash.
 
 | Data | Format |
 |---|---|
 | Per-device hashrate | `cu_device(N):[ err:N,][ temp:NC,][ power:NW,][ fan:N%,] hashrate: N.NN kH/s` |
 | Share result | `accepted: A/B (P%), total hashrate: N.NN kH/s` or `(pending...)` |
-| Difficulty | `Stratum difficulty set to N` |
+| Difficulty | `Stratum difficulty set to N` (may be exponential, e.g. `1e-05`) |
 | Device list | `\tIndex: N. Name: ... pcieId: bb:dd:f` |
+| Worker banner | `Configured N(CL) and M(CUDA) workers` |
 
-Two details are easy to get wrong: the inline `err:N` field is a memory-error
-counter on an otherwise healthy line and must not be treated as a failure, and
-stratum disconnects carry no fatal keyword, so they need explicit handling or
-the dashboard keeps reporting `MINING` while the pool is gone.
+`B` in the share line is `accepted + rejected`, so rejects are `B - A`, and
+`total hashrate` is the instantaneous sum of the per-thread rates - which is why
+the dashboard sums the per-device lines rather than averaging them. The rig total
+is only published once every configured worker has reported at least once, so a
+warming-up rig never shows one GPU's rate as the whole machine.
+
+Three details are easy to get wrong:
+
+- the inline `err:N` field is a memory-error counter on an otherwise healthy
+  line and must not be treated as a failure;
+- stratum disconnects carry no fatal keyword (`Stratum connection timed out`,
+  `stratum_recv_line failed`, `Stratum authentication failed`, ...), so they need
+  explicit handling or the dashboard keeps reporting `MINING` while the pool is
+  gone;
+- `cu_device(N)` prints the **worker slot**, not the CUDA device index. They only
+  coincide when every device is selected. With `--cu-devices 1,3` the dashboard
+  maps worker 0 back to device 1, so telemetry stays attached to the right card.
 
 ## Performance notes
 
-Measured with a tab open and the miner streaming:
+Measured on the reference setup: a dashboard tab open, the miner streaming, and
+`nvidia-smi` polling at the default 5s interval.
 
-- **Idle CPU (no tab open): 0.00000%** — no timers, no polling, no parsing.
-- **Active CPU: ~0.13%**, dominated by the `nvidia-smi` spawn.
-- **RSS: ~55 MB**, of which roughly 40 MB is the Node runtime itself; the
-  application accounts for a few MB. A lower total is not reachable on Node
-  regardless of application code.
+| Metric | Measured |
+|---|---|
+| Console parsing | **1.5-2.4 us/line** (50 000 lines in 77-119 ms) |
+| Idle CPU (miner streaming, no tab open) | **0.02%** — no polling, no fan-out, no timers |
+| Active CPU (dashboard open, 85 log lines/min) | **0.13%** over a 3 minute soak |
+| RSS | **~56 MB**; application heap is **5.5 MB**, the rest is the Node runtime |
+| Heap drift (1 000 lines, 500+ frames) | **0.03 MB** — flat, no leak |
+| SSE frame (default `MAX_LOGS=50`) | **~800 B** incremental vs 6.8 KB full replay (8.5x) |
+| Cold page load (gzip) | **18.3 KB** for the whole UI, 11 requests |
+| Warm page load | **0 B** — every asset revalidates to `304` |
+| `nvidia-smi` spawns, 3 clients, 1.5 s | **1** |
 
-The zero-idle property is structural and must be preserved: GPU polling and log
-parsing are both gated on there being at least one SSE subscriber, and the
-client closes its stream when the tab is hidden.
+The zero-idle property is structural and must be preserved: GPU polling and the
+SSE fan-out are gated on there being at least one subscriber, and the client
+closes its stream when the tab is hidden.
+
+On Windows the dashboard drops itself to **below-normal process priority** and explicitly
+restores the miner to normal, so supervision can never win a CPU contest against hashing.
+
+**GPU usage by the dashboard is zero.** It never links or loads CUDA, OpenCL or
+NVML; the only GPU-adjacent call is a read-only `nvidia-smi --query-gpu` that
+creates no device context and allocates no VRAM.
+
+## Low-end and tablet clients
+
+The UI is designed to stay smooth on hardware like a Samsung Galaxy Tab E (quad-core A7,
+Mali-400, 1.5 GB RAM) without giving up the glassmorphism design:
+
+| Technique | Effect |
+|---|---|
+| Capability gate (`public/js/perf.js`) | The page renders in a cheap mode first and only enables `backdrop-filter`, large shadows and looping animations after the device proves it can hold ~60 fps. A weak device never paints an expensive frame; a desktop is upgraded within ~200 ms. |
+| Layered-gradient glass fallback | Same blue translucent look, zero per-frame GPU cost, no real-time blur |
+| No looping animations in cheap mode | The pulse dot and terminal caret stop repainting continuously |
+| `prefers-reduced-motion` / `update: slow` | Locked to the cheap mode permanently |
+| Console row cap | 60 rendered rows on weak devices, 200 otherwise, regardless of `MAX_LOGS` |
+| Pre-compressed assets + `ETag` | 18.3 KB on a cold load, 0 B on a reload |
+| Only the used font weights are requested | No wasted font downloads, no synthesised weights |
+
+Nothing about the visual design changes on a capable machine.
