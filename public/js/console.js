@@ -1,5 +1,99 @@
 import { make, text } from "./dom.js";
-import * as cache from "./logcache.js";
+
+const CACHE_KEY = "vmd:console";
+const CACHE_VERSION = 1;
+const MAX_LINES = 1000;
+const MAX_TEXT_LENGTH = 2048;
+const MAX_HIGHLIGHT_CHARS = 512;
+const PERSIST_DELAY_MS = 2000;
+
+let storageUsable = null;
+let storageBroken = false;
+
+function cacheUsable() {
+  if (storageBroken) return false;
+  if (storageUsable !== null) return storageUsable;
+  try {
+    const probe = "vmd:probe";
+    window.sessionStorage.setItem(probe, "1");
+    window.sessionStorage.removeItem(probe);
+    storageUsable = true;
+  } catch {
+    storageUsable = false;
+  }
+  return storageUsable;
+}
+
+function isReloadNavigation() {
+  try {
+    if (typeof performance !== "undefined") {
+      if (typeof performance.getEntriesByType === "function") {
+        const nav = performance.getEntriesByType("navigation");
+        if (nav && nav.length) return nav[0].type === "reload";
+      }
+      if (performance.navigation) return performance.navigation.type === 1;
+    }
+  } catch {
+  }
+  return false;
+}
+
+function cacheClear() {
+  try {
+    window.sessionStorage.removeItem(CACHE_KEY);
+  } catch {
+  }
+}
+
+function sanitize(entries) {
+  const clean = [];
+  let lastId = 0;
+  for (const entry of entries) {
+    if (!entry || typeof entry.id !== "number" || !Number.isFinite(entry.id)) continue;
+    if (entry.id <= lastId || typeof entry.text !== "string") continue;
+    clean.push({
+      id: entry.id,
+      text: entry.text.slice(0, MAX_TEXT_LENGTH),
+      type: typeof entry.type === "string" ? entry.type : "info"
+    });
+    lastId = entry.id;
+  }
+  return clean.slice(-MAX_LINES);
+}
+
+function cacheLoad() {
+  if (!cacheUsable()) return [];
+  if (isReloadNavigation()) {
+    cacheClear();
+    return [];
+  }
+  try {
+    const raw = window.sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.v !== CACHE_VERSION || !Array.isArray(parsed.entries)) {
+      cacheClear();
+      return [];
+    }
+    return sanitize(parsed.entries);
+  } catch {
+    cacheClear();
+    return [];
+  }
+}
+
+function cacheSave(entries) {
+  if (!cacheUsable() || !Array.isArray(entries)) return;
+  try {
+    window.sessionStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ v: CACHE_VERSION, entries: entries.slice(-MAX_LINES) })
+    );
+  } catch {
+    storageBroken = true;
+    cacheClear();
+  }
+}
 
 const RULES = [
   [/(\b[\d.]+\s*(?:kH|MH|GH|TH)\/s\b)/gi, "hl-hash"],
@@ -18,10 +112,6 @@ const RULES = [
   [/\b(ERROR|FATAL)\b/g, "hl-err"],
   [/^(\[(?:SYSTEM|WARN|ERROR|INFO|DEBUG)\])/g, "hl-tag"]
 ];
-
-const MAX_LINES = cache.MAX_ENTRIES;
-const MAX_HIGHLIGHT_CHARS = 512;
-const PERSIST_DELAY_MS = 2000;
 
 const ESCAPE = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
 
@@ -80,18 +170,18 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
       clearTimeout(persistTimer);
       persistTimer = null;
     }
-    cache.save(history);
+    cacheSave(history);
   };
 
   const persistSoon = () => {
-    if (persistTimer || !cache.usable()) return;
+    if (persistTimer || !cacheUsable()) return;
     persistTimer = setTimeout(() => {
       persistTimer = null;
-      cache.save(history);
+      cacheSave(history);
     }, PERSIST_DELAY_MS);
   };
 
-window.addEventListener("pagehide", persistNow);
+  window.addEventListener("pagehide", persistNow);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) persistNow();
   });
@@ -111,11 +201,11 @@ window.addEventListener("pagehide", persistNow);
     lines.innerHTML = EMPTY_HTML;
     maxId = 0;
     history = [];
-    if (clearStorage) cache.clear();
+    if (clearStorage) cacheClear();
     updateCounter();
   };
 
-const restored = cache.load();
+  const restored = cacheLoad();
   if (restored.length) {
     const frag = document.createDocumentFragment();
     for (const entry of restored) {
@@ -140,7 +230,7 @@ const restored = cache.load();
       try {
         const serverCount = Number.isFinite(meta.count) ? meta.count : (entries || []).length;
 
-if (Number.isFinite(meta.seq) && meta.seq < maxId) reset(true);
+        if (Number.isFinite(meta.seq) && meta.seq < maxId) reset(true);
 
         if (serverCount === 0) {
           if (maxId !== 0) reset(true);
@@ -173,7 +263,7 @@ if (Number.isFinite(meta.seq) && meta.seq < maxId) reset(true);
 
         lines.appendChild(frag);
 
-while (history.length > MAX_LINES && lines.firstChild) {
+        while (history.length > MAX_LINES && lines.firstChild) {
           lines.removeChild(lines.firstChild);
           history.shift();
         }
@@ -182,7 +272,7 @@ while (history.length > MAX_LINES && lines.firstChild) {
         persistSoon();
         if (autoScroll) scrollToBottom();
       } catch (err) {
-      try { console.error("[dashboard] console render failed", err); } catch { }
+        try { console.error("[dashboard] console render failed", err); } catch { }
       }
     }
   };

@@ -50,6 +50,10 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
   let backoff = 0;
   let connected = false;
   let paceOnce = true;
+  let lastFrameAt = 0;
+  let lastSeq = -1;
+
+  const STREAM_STALE_MS = 15000;
 
   const clearTimers = () => {
     clearTimeout(retryTimer);
@@ -86,10 +90,13 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
   function openStream() {
     source?.close();
     source = new EventSource("/events");
+    lastFrameAt = Date.now();
 
     source.addEventListener("stats", event => {
       let payload;
       try { payload = JSON.parse(event.data); } catch { return; }
+      lastFrameAt = Date.now();
+      if (Number.isFinite(payload.logSeq)) lastSeq = payload.logSeq;
       if (!connected) {
         connected = true;
         backoff = 0;
@@ -202,7 +209,15 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
         const snapshot = await res.json().catch(() => null);
         if (!snapshot) return "failed";
         onSnapshot(snapshot);
-        if (!source || source.readyState === EventSource.CLOSED) connect();
+
+        const dead = !source || source.readyState === EventSource.CLOSED;
+        const behind = Number.isFinite(snapshot.logSeq) && lastSeq >= 0 && snapshot.logSeq - lastSeq >= 2;
+        const silent = lastFrameAt > 0 && Date.now() - lastFrameAt > STREAM_STALE_MS;
+        if (dead || behind || silent) {
+          connected = false;
+          clearTimers();
+          openStream();
+        }
         return "ok";
       } catch {
         return "failed";

@@ -37,10 +37,6 @@ function probe() {
   requestAnimationFrame(step);
 }
 
-export function isLite() {
-  return lite;
-}
-
 if (!media("(prefers-reduced-motion: reduce)") && !media("(update: slow)")) {
   const nav = typeof navigator === "object" && navigator ? navigator : {};
   const memory = nav.deviceMemory || 0;

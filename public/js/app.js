@@ -1,9 +1,13 @@
 import "./perf.js";
 import { el, text, className } from "./dom.js";
-import { timestamp, uptime, stripLogPrefix, DASH } from "./format.js";
 import {
   presentSnapshot,
   sharesPerMinute,
+  dotClass,
+  timestamp,
+  uptime,
+  stripLogPrefix,
+  DASH,
   IDLE_STATUS as IDLE,
   LIVE_STATUS as LIVE
 } from "./present.js";
@@ -16,13 +20,6 @@ const ACTION_META = {
   start:  { status: "STARTING",  label: "START", toast: ["Starting Miner", "Launching the VerthashMiner process."] },
   stop:   { status: "STOPPING",  label: "STOP",  toast: ["Stopping Miner", "Shutting down the VerthashMiner process."] },
   restart:{ status: "RESTARTING", label: "RESTART", toast: ["Restarting Miner", "Stopping and relaunching the VerthashMiner process."] }
-};
-
-const DOT_CLASS = {
-  MINING: "dot ok", CONNECTED: "dot ok",
-  WAITING: "dot warn", DISCONNECTED: "dot warn",
-  STARTING: "dot warn", STOPPING: "dot warn", RESTARTING: "dot warn",
-  STOPPED: "dot err", CRASHED: "dot err", ERROR: "dot err"
 };
 
 function initDashboard() {
@@ -71,7 +68,7 @@ function initDashboard() {
     text(els.status, status);
     const idle = IDLE.has(status);
     const busy = locked || (!idle && !LIVE.has(status));
-    className(els.dot, DOT_CLASS[status] || "dot err");
+    className(els.dot, dotClass(status));
     text(els.btnAction, idle ? "START" : "STOP");
     className(els.btnAction, `c-btn ${idle ? "btn-start" : "btn-stop"}`);
     els.btnAction.disabled = busy;

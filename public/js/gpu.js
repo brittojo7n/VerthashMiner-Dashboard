@@ -1,6 +1,5 @@
 import { make, text, className, style } from "./dom.js";
-import { DASH } from "./format.js";
-import { presentGpu } from "./present.js";
+import { DASH, presentGpu } from "./present.js";
 
 const FIELDS = [
   ["pstate", "P-State", ""],
