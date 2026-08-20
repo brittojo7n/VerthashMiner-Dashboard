@@ -129,6 +129,9 @@ class SseHub {
     }
     meta.lastLogSeq = this.state.miner.logs.seq;
     if (typeof res.flush === "function") res.flush();
+    // the opening frame above already serialised the current state; dropping
+    // the dirty flag avoids one redundant full re-broadcast per connection.
+    this.state.dirty = false;
     this._startHeartbeat();
     this._notifyChange();
     const cleanup = () => {

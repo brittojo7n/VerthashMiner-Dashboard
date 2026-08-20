@@ -63,6 +63,7 @@ export function presentGpu(gpu) {
     hashrate: gpu.hashrate != null ? num(gpu.hashrate, 2) : DASH,
     eff: eff != null ? num(eff, 2) : DASH,
     util: num(gpu.utilizationPct, 0),
-    barWidth: `${util}%`
+    barWidth: `${util}%`,
+    barScale: util / 100
   };
 }

@@ -65,7 +65,6 @@ function getServerTz() {
 const SERVER_TZ = getServerTz();
 const HOSTNAME = os.hostname();
 
-const EMPTY_HASH = Object.create(null);
 const EMPTY_WORKER = null;
 
 function createState(wallet = "", maxLogs = 50) {
@@ -92,7 +91,9 @@ function createState(wallet = "", maxLogs = 50) {
       difficulty: null,
       status: STATUS.STOPPED,
       lastAcceptedAt: null,
-      gpuHashrates: EMPTY_HASH,
+      // per-state own map: a shared frozen-sentinel here would leak hashrates
+      // between state instances (multiple Servers in one process, tests).
+      gpuHashrates: Object.create(null),
       seenDevices: [],
       hashratesReady: false,
       expectedWorkers: 0,

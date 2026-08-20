@@ -13,7 +13,10 @@ const SMI_BIN = process.platform === "win32" ? "nvidia-smi.exe" : "nvidia-smi";
 const EXEC_TIMEOUT_MS = 1500;
 
 function toNumber(value) {
-  const n = Number(value);
+  if (value == null) return null;
+  const text = String(value).trim();
+  if (!text) return null; // blank CSV field: unknown, not zero
+  const n = Number(text);
   return Number.isFinite(n) ? n : null;
 }
 

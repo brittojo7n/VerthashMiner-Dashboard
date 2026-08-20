@@ -189,9 +189,14 @@ public/
     console.js         miner console
     toast.js           notifications
     present.js         pure snapshot -> display-string projection
-    perf.js            client capability gate for low-end devices
+    perf.js            capability gate + runtime governor for the fx tier
     dom.js             cached lookups and change-guarded writes
-    format.js          pure formatting helpers
+test/
+  run-all.sh           full sweep: unit + e2e (+ browser harness with --all)
+  unit/                node:test suites for every module
+  e2e/                 real server + mock miner + mock nvidia-smi scenarios
+  browser/             dev-only puppeteer harness (tablet FPS emulation, visual parity)
+  mocks/               VerthashMiner and nvidia-smi emulators
 ```
 
 ## Architecture
@@ -316,19 +321,51 @@ restores the miner to normal, so supervision can never win a CPU contest against
 NVML; the only GPU-adjacent call is a read-only `nvidia-smi --query-gpu` that
 creates no device context and allocates no VRAM.
 
+## Testing
+
+The repository ships a dependency-free test harness (see `test/README.md`):
+
+```bash
+test/run-all.sh          # unit + end-to-end, zero dependencies
+test/run-all.sh --all    # + browser harness (tablet FPS emulation, visual parity)
+```
+
+- **Unit** (`node:test`): every `src/` module plus the browser-side pure
+  modules — log-classification edge cases (`err:N` memory counters, worker-slot
+  remapping, stratum outage semantics), ring-buffer boundaries, SSE coalescing
+  and incremental frames, session/lockout logic, config validation, the miner
+  lifecycle state machine (run against a mock miner child process), and the
+  perf-gate decision ladder.
+- **End-to-end**: boots the real server with a mock VerthashMiner streaming the
+  documented log formats and a mock `nvidia-smi`, then cross-checks the console
+  lines the UI shows against every derived metric (rig hashrate = sum of
+  per-device console rates, share counters, difficulty, PCI-bus telemetry join),
+  and exercises rate limits, auth/CSRF/lockout, miner controls, zero-idle
+  gating, crash and pool-outage/recovery paths.
+- **Browser** (dev-only, `test/browser`): emulates a 4 GB / quad-core tablet
+  (CPU throttling + software compositing) and measures real frame rates under a
+  live stream; also pixel-diffs the client before/after changes at the full fx
+  tier to prove visual parity.
+
 ## Low-end and tablet clients
 
-The UI is designed to stay smooth on hardware like a Samsung Galaxy Tab E (quad-core A7,
-Mali-400, 1.5 GB RAM) without giving up the glassmorphism design:
+The UI is designed to hold 60 fps on hardware like a 4 GB / quad-core tablet
+without giving up the glassmorphism design on capable machines:
 
 | Technique | Effect |
 |---|---|
-| Capability gate (`public/js/perf.js`) | The page renders in a cheap mode first and only enables `backdrop-filter`, large shadows and looping animations after the device proves it can hold ~60 fps. A weak device never paints an expensive frame; a desktop is upgraded within ~200 ms. |
+| Capability gate (`public/js/perf.js`) | The page renders in the cheap tier first. The expensive tier (`backdrop-filter`, deeper shadows, pulse/caret loops) must be **earned**: devices with ≤2 GB RAM are locked out immediately; ≥8 GB + ≥8 cores are upgraded instantly; everything in between (which is where 4 GB tablets live — `deviceMemory` rounds every 4–7 GB device down to `4`) runs a ~0.7 s **compositing probe** that renders a real blurred surface and must hold a 60 fps frame budget on it. |
+| Runtime governor | After the fx tier is enabled, real frame times are sampled continuously. Two consecutive ~1.5 s windows below the 60 fps budget demote the page back to the cheap tier and lock it for the tab session — a mis-classified device self-heals in seconds instead of janking until the next reload. |
+| Compositor-only metric updates | The GPU utilization bar animates `transform: scaleX()` instead of `width`, so every telemetry tick paints zero layout. |
 | Layered-gradient glass fallback | Same blue translucent look, zero per-frame GPU cost, no real-time blur |
 | No looping animations in cheap mode | The pulse dot and terminal caret stop repainting continuously |
+| Hover paints gated to `hover: hover` pointers | Touch screens never re-paint cards from sticky `:hover` during scroll |
+| Hidden modals leave the paint tree | The auth/confirm overlays drop `visibility` and their composited layers when closed (fades preserved) |
 | `prefers-reduced-motion` / `update: slow` | Locked to the cheap mode permanently |
 | Console history cap | Per-tab session history tops out at 1,000 rendered rows; the oldest rows are pruned first, so long-lived tabs stay flat on memory |
 | Pre-compressed assets + `ETag` | 18.3 KB on a cold load, 0 B on a reload |
 | Only the used font weights are requested | No wasted font downloads, no synthesised weights |
 
-Nothing about the visual design changes on a capable machine.
+Nothing about the visual design changes on a capable machine — the browser
+harness (`test/browser/visual.js`) pixel-diffs the old and new clients at the
+full fx tier on deterministic data and requires **zero** differing pixels.

@@ -42,3 +42,6 @@ node_modules/
 
 # Kilo
 .kilo/
+
+# Browser harness artifacts (regenerable)
+test/browser/out/
