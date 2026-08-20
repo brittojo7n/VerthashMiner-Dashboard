@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# VerthashMiner stand-in used as MINER_EXE by the test harness.
-# Routes the dashboard's `--device-list` probe and the real spawn to miner-mock.js.
-DIR="$(cd "$(dirname "$0")" && pwd)"
-exec node "$DIR/miner-mock.js" "$@"

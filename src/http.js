@@ -77,6 +77,10 @@ function isSameOrigin(req) {
   try { return new URL(origin).host === req.headers.host; } catch { return false; }
 }
 
+function passesXhrGuard(req) {
+  return req.headers["x-requested-with"] === "XMLHttpRequest" && isSameOrigin(req);
+}
+
 function readJsonBody(req) {
   return new Promise(resolve => {
     let size = 0;
@@ -112,9 +116,7 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
 
   routes.set("POST /api/login", async (req, res, ip) => {
     if (!requiresAuth) return sendText(res, 404, "Not found");
-    if (req.headers["x-requested-with"] !== "XMLHttpRequest" || !isSameOrigin(req)) {
-      return sendText(res, 403, "Forbidden: CSRF check failed");
-    }
+    if (!passesXhrGuard(req)) return sendText(res, 403, "Forbidden: CSRF check failed");
     const flood = limitLogin(ip);
     if (flood) return sendRateLimited(res, flood);
     sessions.prune();
@@ -212,9 +214,7 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     if (method === "POST" && pathname.startsWith("/api/miner/")) {
       const action = pathname.slice("/api/miner/".length);
       if (!MINER_ACTIONS.has(action)) return sendText(res, 404, "Not found");
-      if (req.headers["x-requested-with"] !== "XMLHttpRequest" || !isSameOrigin(req)) {
-        return sendText(res, 403, "Forbidden: CSRF check failed");
-      }
+      if (!passesXhrGuard(req)) return sendText(res, 403, "Forbidden: CSRF check failed");
       const wait = limitMiner(ip);
       if (wait) return sendRateLimited(res, wait);
       try { minerManager.requestAction(action); } catch { return sendJson(res, 500, { status: "error" }); }
@@ -240,4 +240,4 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
   return server;
 }
 
-module.exports = { getLanIp, createHttpServer, isSameOrigin, MAX_BODY_BYTES };
+module.exports = { getLanIp, createHttpServer, isSameOrigin, passesXhrGuard, MAX_BODY_BYTES };

@@ -24,9 +24,6 @@ function levelOf(line) {
 
 function canSetRunStatus(state) {
   const status = state.mining.status;
-  // log lines drive the status machine only while the miner runs organically;
-  // deliberate user actions (RESTARTING/STOPPING/STOPPED) own the status until
-  // they resolve, so a straggler hashrate line cannot flip the pill mid-action.
   return Boolean(state.miner && state.miner.running && status !== STATUS.RESTARTING && status !== STATUS.STOPPING && status !== STATUS.STOPPED);
 }
 
@@ -116,9 +113,6 @@ function parseMinerLine(raw, state, pushLog) {
         mining.gpuHashrates[deviceKey] = hr;
         if (hashratesReady(state, deviceKey)) mining.hashrateKHs = sumDeviceHashrates(mining.gpuHashrates);
         state.dirty = true;
-        // Threads keep hashing on the last job while the pool is gone, so a
-        // healthy per-device line alone must not mask a stratum outage. Only a
-        // share acceptance or an explicit reconnect line may clear DISCONNECTED.
         if (hr > 0 && canSetRunStatus(state) && mining.status !== STATUS.DISCONNECTED) {
           mining.status = STATUS.MINING;
           if (!isFatal) state.miner.lastError = "";

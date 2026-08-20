@@ -2,7 +2,6 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const zlib = require("node:zlib");
 const crypto = require("node:crypto");
 
 const MIME = {
@@ -73,9 +72,7 @@ function loadStaticCache(publicDir) {
         buf,
         etag,
         hdr: headersFor(entry.name, buf.length, etag),
-        notModified: notModifiedHeaders(etag),
-        gzip: null,
-        gzipHdr: null
+        notModified: notModifiedHeaders(etag)
       };
       cache["/" + path.relative(root, full).split(path.sep).join("/")] = asset;
     }

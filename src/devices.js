@@ -65,4 +65,4 @@ function createStreamReader(onLine, onFlush, isEnabled, forward) {
   };
 }
 
-module.exports = { normalizePci, parseCudaDeviceList, createStreamReader, stripAnsi };
+module.exports = { normalizePci, parseCudaDeviceList, createStreamReader };

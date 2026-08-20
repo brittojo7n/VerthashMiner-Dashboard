@@ -113,8 +113,6 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.5p
 .purple { color: var(--purple); }
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap); margin-top: var(--gap); }
 .metric { border: 1px solid rgba(var(--white-rgb), 0.05); border-radius: calc(var(--radius) - 4px); padding: var(--pad); background: rgba(var(--black-rgb), 0.2); transition: background 0.2s; }
-/* hover paints only for devices with a real hover pointer: touch screens would
-   otherwise keep re-painting cards on sticky :hover during and after scroll */
 @media (hover: hover) {
   .panel:not(.wide):hover { border-color: var(--border-hover); }
   .metric:hover { background: rgba(var(--black-rgb), 0.3); }
@@ -128,8 +126,6 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.5p
 .small { color: var(--muted); font-size: var(--fs-small); }
 .wallet-addr { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; opacity: 0.55; font-size: var(--fs-small); letter-spacing: 0.3px; min-width: 0; contain: layout; }
 .bar-bg { height: 6px; border-radius: 10px; background: rgba(var(--white-rgb), 0.1); margin-top: 12px; overflow: hidden; }
-/* filled via scaleX (compositor-only) instead of width (layout+paint per frame);
-   identical visual growth, zero main-thread cost on every telemetry tick */
 .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); width: 100%; transform: scaleX(0); transform-origin: 0 50%; transition: transform 0.3s ease-out; box-shadow: 0 0 10px rgba(var(--accent2-rgb), 0.5); will-change: transform; }
 .errorbox { display: none; margin-top: var(--gap); padding: var(--pad); border: 1px solid rgba(var(--red-rgb), 0.3); border-radius: 12px; background: rgba(var(--red-rgb), 0.1); color: var(--red-300); word-break: break-word; font-family: var(--mono); font-size: var(--fs-small); min-height: 0; transition: min-height 0.2s; contain: layout; }
 .errorbox.show { display: block; min-height: 48px; }
@@ -227,9 +223,6 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.5p
 }
 .local-time-bar { position: fixed; bottom: 0; right: 0; display: flex; align-items: center; gap: 8px; padding: 6px 16px; background: rgba(var(--bg-rgb), 0.9); border-top: 1px solid rgba(var(--white-rgb), 0.09); border-left: 1px solid rgba(var(--white-rgb), 0.09); border-top-left-radius: 10px; z-index: 100; pointer-events: none; user-select: none; }
 .local-time-value { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--slate-300); letter-spacing: 0.4px; }
-/* hidden modals drop out of the paint tree entirely (visibility) instead of
-   sitting on the compositor as two fullscreen layers; fades preserved by
-   delaying the visibility flip until the opacity transition ends */
 .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 999; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.3s, visibility 0s linear 0.3s; }
 .modal-backdrop.show { opacity: 1; visibility: visible; pointer-events: all; transition: opacity 0.3s, visibility 0s; will-change: opacity; }
 .auth-modal { padding: 32px; border-radius: var(--radius); border: 1px solid rgba(var(--white-rgb), 0.1); box-shadow: var(--shadow-float); will-change: transform, opacity; width: 100%; max-width: 360px; text-align: center; }

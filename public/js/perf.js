@@ -1,64 +1,24 @@
-/*
- * Capability gate + runtime governor for the visual-effects tier.
- *
- * Modes:
- *   lite (default) - layered-gradient glass, no backdrop-filter, no looping
- *                    animations: the mode every device renders first.
- *   fx  (html.fx)  - real-time backdrop blur, deeper shadows, pulse/caret loops.
- *
- * Decision ladder (the expensive tier must be *earned*):
- *   1. prefers-reduced-motion / update:slow      -> lite, locked.
- *   2. session lock (a previous governor demote) -> lite, locked (per tab).
- *   3. memory <= 2 GB                            -> lite, locked (no probe:
- *      compositing budget is hopeless there, don't even spend a frame on it).
- *   4. memory >= 8 GB && cores >= 8              -> fx immediately (desktop
- *      class), governor still watches.
- *   5. everything else (incl. 4 GB tablets, whose deviceMemory rounds down to
- *      4) -> render a real blurred surface and hold 60fps against it for
- *      ~0.7s. Pass: fx. Fail: lite.
- *   6. while fx is active a governor samples real frame times; if the device
- *      cannot hold the 60fps budget for two consecutive windows it demotes to
- *      lite and locks the session - so a mis-classified tablet self-heals
- *      within seconds instead of janking until the next reload.
- */
-
-const FRAME_BUDGET_MS = 17;      // 60fps frame budget
-const PROBE_FRAMES = 42;         // ~0.7s at 60Hz
-const PROBE_SKIP = 4;            // discard warm-up frames
-const PROBE_DELAY_MS = 600;      // let first-load compile/GC settle before probing
-const PROBE_P95_MS = 25;         // probe surface is small: hold close to 60fps on it
-const GOVERNOR_WINDOW_MS = 1500; // strike window
-const GOVERNOR_STRIKES = 2;      // consecutive strikes -> demote
-const GOVERNOR_P95_MS = 34;      // sustained worst-frame ceiling (~1 dropped frame)
-const LOCK_KEY = "vmd:fxLock";   // sessionStorage: this tab stays lite
+const hasDom = typeof document !== "undefined" && typeof document.documentElement === "object";
+const root = hasDom ? document.documentElement : null;
+const media = query => (typeof matchMedia === "function" ? matchMedia(query).matches : false);
+const FRAME_BUDGET_MS = 17;
+const PROBE_FRAMES = 42;
+const PROBE_SKIP = 4;
+const PROBE_DELAY_MS = 600;
+const PROBE_P95_MS = 25;
+const GOVERNOR_WINDOW_MS = 1500;
+const GOVERNOR_STRIKES = 2;
+const GOVERNOR_P95_MS = 34;
+const LOCK_KEY = "vmd:fxLock";
 
 function createPerfGate(env) {
-  const {
-    root,
-    media,
-    raf,                          // raf(cb) -> cancel()
-    visible,                      // () => boolean
-    navigatorLike,
-    storage,                      // { get(k), set(k,v), remove(k) } or null
-    onChange,                     // (mode) => void
-    onVisible,                    // (cb) => void; called when page becomes visible
-    delay,                        // (fn, ms) => void; deferred task runner
-    now = Date.now
-  } = env;
-
-  const self = {
-    mode: "lite",
-    locked: false,
-    reason: "boot",
-    started: false
-  };
+  const { root, media, raf, visible, navigatorLike, storage, onChange, onVisible, delay } = env;
+  const self = { mode: "lite", locked: false, reason: "boot", started: false };
 
   function setMode(mode, reason) {
     self.reason = reason;
     const changed = self.mode !== mode;
     self.mode = mode;
-    // the class always mirrors the mode, even on a repeat call, so a demotion
-    // also clears an externally-forced fx tier
     if (root && root.classList) {
       if (mode === "fx") root.classList.add("fx");
       else root.classList.remove("fx");
@@ -77,7 +37,6 @@ function createPerfGate(env) {
     lockLite(reason);
   }
 
-  /* ---- runtime governor: real frame times while fx is live ---- */
   let govActive = false;
   let govLast = 0;
   let govWindowStart = 0;
@@ -94,9 +53,8 @@ function createPerfGate(env) {
       const verdict = judgeWindow(govDeltas);
       govWindowStart = t;
       govDeltas = [];
-      if (verdict < 0) {
-        govStrikes = 0; // healthy window resets the strike count
-      } else if (++govStrikes >= GOVERNOR_STRIKES) {
+      if (verdict < 0) govStrikes = 0;
+      else if (++govStrikes >= GOVERNOR_STRIKES) {
         lockLiteForSession("governor: cannot hold 60fps");
         return;
       }
@@ -104,9 +62,8 @@ function createPerfGate(env) {
     govCancel = raf(governorFrame);
   }
 
-  // <0 healthy, >=0 severity of the miss
   function judgeWindow(deltas) {
-    if (deltas.length < 12) return -1; // not enough signal (tab hidden, etc.)
+    if (deltas.length < 12) return -1;
     const sorted = deltas.slice().sort((a, b) => a - b);
     const median = sorted[sorted.length >> 1];
     const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
@@ -130,9 +87,9 @@ function createPerfGate(env) {
     if (govCancel) { govCancel(); govCancel = null; }
   }
 
-  /* ---- compositing probe: measure a *real* blurred surface ---- */
   let probing = false;
   let probed = false;
+
   function probe(makeSurface) {
     if (probed || probing || !visible()) return false;
     probing = true;
@@ -140,11 +97,10 @@ function createPerfGate(env) {
     const deltas = [];
     let last = 0;
     let frame = 0;
-    let cancel = null;
     const step = t => {
       if (frame++ > PROBE_SKIP && last) deltas.push(t - last);
       last = t;
-      if (frame < PROBE_FRAMES) { cancel = raf(step); return; }
+      if (frame < PROBE_FRAMES) { raf(step); return; }
       probed = true;
       probing = false;
       if (surface && surface.destroy) surface.destroy();
@@ -159,11 +115,10 @@ function createPerfGate(env) {
         setMode("lite", `probe failed (median ${median.toFixed(1)}ms, p95 ${p95.toFixed(1)}ms)`);
       }
     };
-    cancel = raf(step);
+    raf(step);
     return true;
   }
 
-  /* ---- decision ladder ---- */
   function start(makeSurface) {
     if (self.started) return;
     self.started = true;
@@ -182,9 +137,10 @@ function createPerfGate(env) {
       startGovernor();
       return;
     }
-    // mid class (4 GB tablets, unknown memory): prove the compositor first,
-    // after the initial parse/compile burst has settled
-    const beginProbe = () => { if (visible()) probe(makeSurface); else if (typeof onVisible === "function") onVisible(() => probe(makeSurface)); };
+    const beginProbe = () => {
+      if (visible()) probe(makeSurface);
+      else if (typeof onVisible === "function") onVisible(() => probe(makeSurface));
+    };
     if (typeof delay === "function") delay(beginProbe, PROBE_DELAY_MS);
     else if (typeof setTimeout === "function") setTimeout(beginProbe, PROBE_DELAY_MS);
     else beginProbe();
@@ -193,16 +149,11 @@ function createPerfGate(env) {
   return { gate: self, start, probe, lockLite, lockLiteForSession, startGovernor, stopGovernor, judgeWindow };
 }
 
-/* ---- browser bootstrap ---- */
 function initBrowserGate() {
-  const root = document.documentElement;
-  const media = query => (typeof matchMedia === "function" ? matchMedia(query).matches : false);
-  const raf = cb => { const id = requestAnimationFrame(cb); return () => cancelAnimationFrame(id); };
-
-  // A throwaway surface with the app's real glass recipe: an animated backdrop
-  // (compositor-only transform) sampled through backdrop-filter. This measures
-  // exactly the work the fx tier would do, on this device, right now. The
-  // gradient uses near-background tones so the ~0.7s probe is invisible.
+  const raf = cb => {
+    const id = requestAnimationFrame(cb);
+    return () => cancelAnimationFrame(id);
+  };
   const makeSurface = () => {
     const stage = document.createElement("div");
     stage.setAttribute("data-perf-probe", "");
@@ -215,20 +166,14 @@ function initBrowserGate() {
     const style = document.createElement("style");
     style.textContent = "@keyframes vm-probe-move{from{transform:translate3d(0,0,0)}to{transform:translate3d(-64px,-64px,0)}}";
     try { (document.head || root).append(style, stage); } catch { return { destroy() { } }; }
-    return {
-      destroy() {
-        try { stage.remove(); style.remove(); } catch { }
-      }
-    };
+    return { destroy() { try { stage.remove(); style.remove(); } catch { } } };
   };
-
   const storage = {
     get(key) { return window.sessionStorage.getItem(key); },
     set(key, value) { window.sessionStorage.setItem(key, value); },
     remove(key) { window.sessionStorage.removeItem(key); }
   };
-
-  let gateApi;
+  let gateApi = null;
   try {
     gateApi = createPerfGate({
       root,
@@ -245,12 +190,6 @@ function initBrowserGate() {
           cb();
         };
         document.addEventListener("visibilitychange", once);
-      },
-      onChange(mode) {
-        if (mode === "lite" && root.classList.contains("fx")) {
-          // demote: drop the fx-only looping animations immediately
-          void root.offsetWidth; // flush so animations restart clean if re-enabled later
-        }
       }
     });
     gateApi.start(makeSurface);
@@ -260,8 +199,6 @@ function initBrowserGate() {
   if (typeof window !== "undefined") window.__vmPerf = gateApi;
 }
 
-if (typeof document !== "undefined" && typeof document.documentElement === "object") {
-  initBrowserGate();
-}
+if (hasDom) initBrowserGate();
 
 export { createPerfGate, initBrowserGate, FRAME_BUDGET_MS, PROBE_FRAMES, GOVERNOR_WINDOW_MS };

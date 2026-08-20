@@ -15,7 +15,7 @@ const EXEC_TIMEOUT_MS = 1500;
 function toNumber(value) {
   if (value == null) return null;
   const text = String(value).trim();
-  if (!text) return null; // blank CSV field: unknown, not zero
+  if (!text) return null;
   const n = Number(text);
   return Number.isFinite(n) ? n : null;
 }
