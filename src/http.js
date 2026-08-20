@@ -2,15 +2,13 @@
 
 const http = require("node:http");
 const os = require("node:os");
-const zlib = require("node:zlib");
 const { formatStatsSnapshot } = require("./state");
-const { loadStaticCache } = require("./static");
+const { loadStaticCache, negotiate } = require("./static");
 const { SessionStore, safeEqual } = require("./auth");
 const { createRateLimiter } = require("./ratelimit");
 
 const NO_STORE = "no-store";
 const NOSNIFF = "nosniff";
-
 const HDR_JSON = Object.freeze({
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": NO_STORE,
@@ -34,9 +32,7 @@ const HDR_SSE = Object.freeze({
 
 const MAX_BODY_BYTES = 4096;
 const MAX_STREAM_BLOCKS = 128;
-const MINER_ACTIONS = new Set(["start", "stop", "restart"]);
 const TOO_LARGE = Symbol("payload_too_large");
-const COMPRESSIBLE = /\.(html|css|js|svg)$/;
 
 const SERVER_TIMEOUTS = Object.freeze({
   headersTimeout: 20000,
@@ -105,7 +101,6 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
   const requiresAuth = config.PASSPHRASE.length > 0;
   const sessions = new SessionStore({ secret: config.SESSION_SECRET });
   const streamBlocks = new Map();
-  const gzipCache = new Map();
 
   const limitMiner = createRateLimiter(2, 2000, 3000);
   const limitStatus = createRateLimiter(3, 2000, 3000);
@@ -174,6 +169,17 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
 
   routes.set("GET /health", (req, res) => sendText(res, 200, "ok"));
 
+  const minerControl = action => (req, res, ip) => {
+    if (!passesXhrGuard(req)) return sendText(res, 403, "Forbidden: CSRF check failed");
+    const wait = limitMiner(ip);
+    if (wait) return sendRateLimited(res, wait);
+    try { minerManager.requestAction(action); } catch { return sendJson(res, 500, { status: "error" }); }
+    return sendJson(res, 200, { status: "ok" });
+  };
+  routes.set("POST /api/miner/start", minerControl("start"));
+  routes.set("POST /api/miner/stop", minerControl("stop"));
+  routes.set("POST /api/miner/restart", minerControl("restart"));
+
   const server = http.createServer((req, res) => {
     const url = req.url || "/";
     const queryAt = url.indexOf("?");
@@ -184,24 +190,8 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     if (method === "GET" || method === "HEAD") {
       const asset = staticFiles[pathname];
       if (asset) {
-        if (req.headers["if-none-match"] === asset.etag) return send(res, 304, asset.notModified, undefined);
-        const encodings = req.headers["accept-encoding"];
-        const wantsGzip = typeof encodings === "string" && encodings.includes("gzip") && COMPRESSIBLE.test(pathname);
-        let body = asset.buf;
-        let hdr = asset.hdr;
-        if (wantsGzip) {
-          let gzip = gzipCache.get(pathname);
-          if (!gzip) {
-            try { gzip = zlib.gzipSync(body, { level: zlib.constants.Z_BEST_COMPRESSION }); } catch { gzip = body; }
-            if (gzip.length < body.length) gzipCache.set(pathname, gzip);
-          }
-          if (gzip.length < body.length) {
-            body = gzip;
-            hdr = { ...hdr, "Content-Encoding": "gzip", "Content-Length": gzip.length };
-          }
-        }
-        if (method === "HEAD") return send(res, 200, hdr, undefined);
-        return send(res, 200, hdr, body);
+        const out = negotiate(asset, req);
+        return send(res, out.status, out.headers, out.body);
       }
     }
 
@@ -209,16 +199,6 @@ function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
     if (requiresAuth && isApi && pathname !== "/api/login") {
       if (pathname === "/events") sessions.prune();
       if (!sessions.verify(req.headers.cookie)) return sendText(res, 401, "Unauthorized");
-    }
-
-    if (method === "POST" && pathname.startsWith("/api/miner/")) {
-      const action = pathname.slice("/api/miner/".length);
-      if (!MINER_ACTIONS.has(action)) return sendText(res, 404, "Not found");
-      if (!passesXhrGuard(req)) return sendText(res, 403, "Forbidden: CSRF check failed");
-      const wait = limitMiner(ip);
-      if (wait) return sendRateLimited(res, wait);
-      try { minerManager.requestAction(action); } catch { return sendJson(res, 500, { status: "error" }); }
-      return sendJson(res, 200, { status: "ok" });
     }
 
     const handler = routes.get(`${method} ${pathname}`);
