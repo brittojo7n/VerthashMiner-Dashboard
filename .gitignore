@@ -4,30 +4,15 @@
 .env.local
 *.local
 
-# Keep example env files tracked
-!.env.example
-!.env.sample
-!.env.template
-!.env.defaults
-
 # OS-generated files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-Thumbs.db:encryptable
-desktop.ini
-$RECYCLE.BIN/
 *.lnk
 
 # Editor files
 .vscode/
 .idea/
 *.swp
-*.swo
 *~
 .#*
 \#*#
@@ -35,10 +20,6 @@ $RECYCLE.BIN/
 # Logs
 logs/
 *.log
-debug.log
 
 # Node
 node_modules/
-
-# Kilo
-.kilo/

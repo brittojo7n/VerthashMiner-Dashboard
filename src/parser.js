@@ -24,7 +24,7 @@ function levelOf(line) {
 
 function canSetRunStatus(state) {
   const status = state.mining.status;
-  return Boolean(state.miner && state.miner.running && status !== STATUS.STOPPING && status !== STATUS.STOPPED);
+  return Boolean(state.miner && state.miner.running && status !== STATUS.RESTARTING && status !== STATUS.STOPPING && status !== STATUS.STOPPED);
 }
 
 function deviceIndexFor(state, prefix, workerIndex) {
@@ -113,7 +113,10 @@ function parseMinerLine(raw, state, pushLog) {
         mining.gpuHashrates[deviceKey] = hr;
         if (hashratesReady(state, deviceKey)) mining.hashrateKHs = sumDeviceHashrates(mining.gpuHashrates);
         state.dirty = true;
-        if (hr > 0 && canSetRunStatus(state)) { mining.status = STATUS.MINING; if (!isFatal) state.miner.lastError = ""; }
+        if (hr > 0 && canSetRunStatus(state) && mining.status !== STATUS.DISCONNECTED) {
+          mining.status = STATUS.MINING;
+          if (!isFatal) state.miner.lastError = "";
+        }
       }
     }
   }

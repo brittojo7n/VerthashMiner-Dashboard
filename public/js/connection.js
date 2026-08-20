@@ -46,7 +46,20 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
   };
   const nextBackoff = () => (backoff = Math.min(BACKOFF_MAX_MS, backoff ? backoff * 2 : BACKOFF_START_MS));
   function rateLimited(wait) { onStatusText?.("CONNECTING"); schedule(wait, "Resuming"); }
-  async function handleRateLimit(response) { rateLimited(await retryDelay(response)); }
+  async function probeStatus() {
+    try {
+      const res = await fetch("/api/status", { cache: "no-store" });
+      if (res.status === 401) return { unauthorized: true };
+      if (res.status === 429) return { limited: await retryDelay(res) };
+      if (res.ok) {
+        const snapshot = await res.json().catch(() => null);
+        return { ok: true, snapshot, streamWait: Number(snapshot?.streamRetryAfterMs) || 0 };
+      }
+      return {};
+    } catch {
+      return { unreachable: true };
+    }
+  }
   function openStream() {
     source?.close();
     source = new EventSource("/events");
@@ -73,16 +86,11 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
       if (source?.readyState !== EventSource.CLOSED) { onStatusText?.("RECONNECTING"); return; }
       source.close();
       source = null;
-      try {
-        const res = await fetch("/api/status", { cache: "no-store" });
-        if (res.status === 401) return onUnauthorized();
-        if (res.status === 429) return handleRateLimit(res);
-        if (res.ok) {
-          const snapshot = await res.json().catch(() => null);
-          const streamWait = Number(snapshot?.streamRetryAfterMs) || 0;
-          if (streamWait > 0) { if (snapshot) onSnapshot(snapshot); return rateLimited(streamWait); }
-        }
-      } catch { }
+      const r = await probeStatus();
+      if (r.unauthorized) return onUnauthorized();
+      if (r.limited) return rateLimited(r.limited);
+      if (r.snapshot) onSnapshot(r.snapshot);
+      if (r.streamWait > 0) return rateLimited(r.streamWait);
       onStatusText?.("OFFLINE", !wasConnected);
       toast.error("Connection Lost", "Lost contact with the dashboard host. Retrying automatically.", "offline");
       schedule(nextBackoff() + Math.floor(Math.random() * 400), "Reconnecting");
@@ -97,21 +105,16 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
       const paceDelay = getPaceDelay(now);
       if (paceDelay > 0) { onStatusText?.("CONNECTING"); schedule(paceDelay, null); return; }
     }
-    try {
-      const res = await fetch("/api/status", { cache: "no-store" });
-      if (res.status === 401) return onUnauthorized();
-      if (res.status === 429) return handleRateLimit(res);
-      if (res.ok) {
-        let snapshot = null;
-        try { snapshot = await res.json(); onSnapshot(snapshot); } catch (err) { console.error("[dashboard] render failed", err); }
-        const streamWait = Number(snapshot?.streamRetryAfterMs) || 0;
-        if (streamWait > 0) return rateLimited(streamWait);
-        openStream();
-        return;
-      }
-      onStatusText?.("OFFLINE");
-      schedule(nextBackoff(), "Retrying");
-    } catch { onStatusText?.("OFFLINE", true); schedule(nextBackoff(), "Retrying"); }
+    const r = await probeStatus();
+    if (r.unauthorized) return onUnauthorized();
+    if (r.limited) return rateLimited(r.limited);
+    if (r.snapshot) {
+      try { onSnapshot(r.snapshot); } catch (err) { console.error("[dashboard] render failed", err); }
+    }
+    if (r.streamWait > 0) return rateLimited(r.streamWait);
+    if (r.ok) return openStream();
+    onStatusText?.("OFFLINE", r.unreachable);
+    schedule(nextBackoff(), "Retrying");
   }
   return {
     connect,

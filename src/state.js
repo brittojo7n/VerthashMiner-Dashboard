@@ -3,8 +3,6 @@
 const os = require("node:os");
 const { STATUS } = require("./constants");
 
-const MAX_ID = 0x7fffffff;
-
 class CircularLogBuffer {
   constructor(capacity = 50) {
     this.capacity = Math.max(1, capacity | 0);
@@ -65,9 +63,6 @@ function getServerTz() {
 const SERVER_TZ = getServerTz();
 const HOSTNAME = os.hostname();
 
-const EMPTY_HASH = Object.create(null);
-const EMPTY_WORKER = null;
-
 function createState(wallet = "", maxLogs = 50) {
   return {
     dirty: true,
@@ -92,11 +87,11 @@ function createState(wallet = "", maxLogs = 50) {
       difficulty: null,
       status: STATUS.STOPPED,
       lastAcceptedAt: null,
-      gpuHashrates: EMPTY_HASH,
+      gpuHashrates: Object.create(null),
       seenDevices: [],
       hashratesReady: false,
       expectedWorkers: 0,
-      workerMap: EMPTY_WORKER,
+      workerMap: null,
       jsonRejects: 0,
       pciMap: Object.create(null)
     },

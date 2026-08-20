@@ -129,6 +129,7 @@ class SseHub {
     }
     meta.lastLogSeq = this.state.miner.logs.seq;
     if (typeof res.flush === "function") res.flush();
+    this.state.dirty = false;
     this._startHeartbeat();
     this._notifyChange();
     const cleanup = () => {

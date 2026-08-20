@@ -14,6 +14,7 @@ const MIME = {
 };
 
 const SERVABLE = new Set(Object.keys(MIME));
+const COMPRESSIBLE = new Set([".html", ".css", ".js", ".svg"]);
 const MIN_COMPRESS_BYTES = 512;
 
 const CSP = [
@@ -74,6 +75,7 @@ function loadStaticCache(publicDir) {
         etag,
         hdr: headersFor(entry.name, buf.length, etag),
         notModified: notModifiedHeaders(etag),
+        compressible: COMPRESSIBLE.has(ext),
         gzip: null,
         gzipHdr: null
       };
@@ -86,4 +88,32 @@ function loadStaticCache(publicDir) {
   return cache;
 }
 
-module.exports = { loadStaticCache, CSP, MIME };
+function negotiate(asset, req) {
+  if (req.headers["if-none-match"] === asset.etag) return { status: 304, headers: asset.notModified };
+  let headers = asset.hdr;
+  let body = asset.buf;
+  const encodings = req.headers["accept-encoding"];
+  if (asset.compressible && asset.buf.length >= MIN_COMPRESS_BYTES && typeof encodings === "string" && encodings.includes("gzip")) {
+    if (asset.gzip === null) {
+      try {
+        const gz = zlib.gzipSync(asset.buf, { level: zlib.constants.Z_BEST_COMPRESSION });
+        if (gz.length < asset.buf.length) {
+          asset.gzip = gz;
+          asset.gzipHdr = Object.freeze({ ...asset.hdr, "Content-Encoding": "gzip", "Content-Length": gz.length });
+        } else {
+          asset.gzip = false;
+        }
+      } catch {
+        asset.gzip = false;
+      }
+    }
+    if (asset.gzip) {
+      headers = asset.gzipHdr;
+      body = asset.gzip;
+    }
+  }
+  if (req.method === "HEAD") return { status: 200, headers, body: undefined };
+  return { status: 200, headers, body };
+}
+
+module.exports = { loadStaticCache, negotiate, CSP, MIME };

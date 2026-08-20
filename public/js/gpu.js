@@ -114,6 +114,6 @@ export function render(container, gpus, gpuError) {
     text(r.hashrate, v.hashrate);
     text(r.eff, v.eff);
     text(r.util, v.util);
-    style(r.bar, "width", v.barWidth);
+    style(r.bar, "transform", `scaleX(${v.barScale})`);
   }
 }
