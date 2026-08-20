@@ -79,6 +79,15 @@ function loadStaticCache(publicDir) {
         gzip: null,
         gzipHdr: null
       };
+      if (COMPRESSIBLE.has(ext) && buf.length >= MIN_COMPRESS_BYTES) {
+        try {
+          const gzip = zlib.gzipSync(buf, { level: zlib.constants.Z_BEST_COMPRESSION });
+          if (gzip.length < buf.length) {
+            asset.gzip = gzip;
+            asset.gzipHdr = headersFor(entry.name, gzip.length, etag, "gzip");
+          }
+        } catch { }
+      }
       cache["/" + path.relative(root, full).split(path.sep).join("/")] = asset;
     }
   };
