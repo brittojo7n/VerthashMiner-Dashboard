@@ -117,24 +117,9 @@ function negotiate(asset, req) {
   let headers = asset.hdr;
   let body = asset.buf;
   const encodings = req.headers["accept-encoding"];
-  if (asset.compressible && asset.buf.length >= MIN_COMPRESS_BYTES && typeof encodings === "string" && encodings.includes("gzip")) {
-    if (asset.gzip === null) {
-      try {
-        const gz = zlib.gzipSync(asset.buf, { level: zlib.constants.Z_BEST_COMPRESSION });
-        if (gz.length < asset.buf.length) {
-          asset.gzip = gz;
-          asset.gzipHdr = Object.freeze({ ...asset.hdr, "Content-Encoding": "gzip", "Content-Length": gz.length });
-        } else {
-          asset.gzip = false;
-        }
-      } catch {
-        asset.gzip = false;
-      }
-    }
-    if (asset.gzip) {
-      headers = asset.gzipHdr;
-      body = asset.gzip;
-    }
+  if (asset.gzip && typeof encodings === "string" && encodings.includes("gzip")) {
+    headers = asset.gzipHdr;
+    body = asset.gzip;
   }
   if (req.method === "HEAD") return { status: 200, headers, body: undefined };
   return { status: 200, headers, body };

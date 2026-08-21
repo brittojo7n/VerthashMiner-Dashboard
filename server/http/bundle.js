@@ -117,4 +117,4 @@ function bundleModules(read, entry = "core/app") {
   return lines.join("\n");
 }
 
-module.exports = { bundleModules, transformModule, importsOf: src => dependencyIds(src, "") };
+module.exports = { bundleModules };
