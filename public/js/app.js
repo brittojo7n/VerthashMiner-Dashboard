@@ -13,13 +13,13 @@ const ACTION_META = {
 };
 function buildAuthContent() {
   const wrap = make("div");
-  wrap.appendChild(make("h2", null, "Dashboard Secured"));
-  wrap.appendChild(make("p", null, "Please enter your passphrase to continue."));
+  wrap.appendChild(make("h2", null, "Login"));
+  wrap.appendChild(make("p", null, "Enter your passphrase to access the dashboard."));
   const input = make("input", "modal-input");
   input.type = "password";
   input.placeholder = "Passphrase";
   const err = make("div", "modal-error", "Invalid passphrase");
-  const submit = make("button", "modal-btn", "Unlock");
+  const submit = make("button", "modal-btn", "Login");
   submit.type = "button";
   wrap.append(input, err, submit);
   return { wrap, input, err, submit };
