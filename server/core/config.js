@@ -72,7 +72,7 @@ function buildConfig(env = process.env, opts = {}) {
   const platform = opts.platform || process.platform;
   const warnings = [];
   const rawPort = env.PORT;
-  const PORT = clampInt(rawPort, 0, 65535, 3000);
+  const PORT = clampInt(rawPort, 0, 65535, 4067);
   if (rawPort != null && rawPort !== "" && Number(rawPort) !== PORT) warnings.push(`PORT "${rawPort}" is invalid; using ${PORT}.`);
   const HOST = env.HOST || "127.0.0.1";
   const rawGpuPoll = env.GPU_POLL_MS;

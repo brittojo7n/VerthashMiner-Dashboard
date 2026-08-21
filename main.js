@@ -6,6 +6,7 @@ const { GpuManager } = require("./server/miner/gpu");
 const { SseHub } = require("./server/http/sse");
 const { MinerManager } = require("./server/miner/miner");
 const os = require("node:os");
+const crypto = require("node:crypto");
 const { createHttpServer, getLanIp } = require("./server/http/http");
 const { LIMITS, LOG } = require("./server/core/constants");
 const { unrefTimer } = require("./server/core/timers");
@@ -185,6 +186,19 @@ function main() {
   new Server().start();
 }
 
-if (require.main === module) main();
+function generateSecret() {
+  const secret = crypto.randomBytes(32).toString("hex");
+  console.log(secret);
+  console.log(`\n[+] ${secret.length}-character cryptographic secret generated.`);
+  console.log("    Paste this into your .env as SESSION_SECRET=<value>");
+}
+
+if (require.main === module) {
+  if (process.argv.includes("--generate-secret") || process.argv.includes("--gen-secret")) {
+    generateSecret();
+    process.exit(0);
+  }
+  main();
+}
 
 module.exports = { Server, main, yieldCpuToMiner };
