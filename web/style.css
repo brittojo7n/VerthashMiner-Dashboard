@@ -67,7 +67,7 @@ button, input, select, textarea { font-family: inherit; }
 .glass-panel { background: var(--glass-surface); }
 .glass-pill { background: linear-gradient(180deg, rgba(var(--white-rgb), 0.05), rgba(var(--white-rgb), 0)), rgba(var(--bg-rgb), 0.55); }
 .glass-overlay { background: var(--overlay); }
-.glass-modal { background: linear-gradient(160deg, rgba(var(--white-rgb), 0.07), rgba(var(--white-rgb), 0) 50%), rgba(var(--glass-tint), 0.62); }
+.glass-modal { background: var(--glass-surface); }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .fx .glass-panel, .fx .local-time-bar { backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
   .fx .toast { backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); background: linear-gradient(135deg, rgba(var(--toast-rgb), 0.16), rgba(var(--toast-rgb), 0.04) 60%, transparent), rgba(var(--glass-tint), 0.6); }
@@ -227,7 +227,7 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.5p
 .local-time-value { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--slate-300); letter-spacing: 0.4px; }
 .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 999; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.3s, visibility 0s linear 0.3s; }
 .modal-backdrop.show { opacity: 1; visibility: visible; pointer-events: all; transition: opacity 0.3s, visibility 0s; }
-.modal { padding: 32px; border-radius: var(--radius); border: 1px solid rgba(var(--white-rgb), 0.1); box-shadow: var(--shadow-float); width: 100%; max-width: 360px; text-align: center; transform: translateY(12px); transition: transform 0.3s ease; }
+.modal { padding: 32px; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow-float), var(--glass-edge); width: 100%; max-width: 360px; text-align: center; transform: translateY(12px); transition: transform 0.3s ease; }
 .modal-backdrop.show .modal { transform: translateY(0); }
 .modal h2 { margin: 0 0 8px 0; font-size: 22px; color: var(--white); }
 .modal p { color: var(--muted); font-size: 14px; margin: 0 0 24px 0; }
