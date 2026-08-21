@@ -3,7 +3,7 @@
 const http = require("node:http");
 const os = require("node:os");
 const { formatStatsSnapshot } = require("./state");
-const { loadStaticCache, negotiate } = require("./static");
+const { buildAssets, negotiate } = require("./static");
 const { SessionStore, safeEqual } = require("./auth");
 const { createRateLimiter } = require("./ratelimit");
 
@@ -96,8 +96,8 @@ function readJsonBody(req) {
   });
 }
 
-function createHttpServer({ config, state, sseHub, minerManager, publicDir }) {
-  const staticFiles = loadStaticCache(publicDir);
+function createHttpServer({ config, state, sseHub, minerManager, clientDir }) {
+  const staticFiles = buildAssets(clientDir);
   const requiresAuth = config.PASSPHRASE.length > 0;
   const sessions = new SessionStore({ secret: config.SESSION_SECRET });
   const streamBlocks = new Map();
