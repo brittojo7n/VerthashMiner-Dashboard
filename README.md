@@ -53,16 +53,16 @@ src/
   core/                   shared foundations: config, constants, state, timers
   server/                 transport + assets: http, sse, auth, ratelimit, static, bundle
   miner/                  miner process + hardware: miner, parser, devices, gpu
-frontend/                 internal frontend source (never served directly)
+web/                      browser-facing web application
   index.html              document template
-  src/core/               bootstrap + infrastructure: app, head, connection, perf
-  src/components/         UI components: console, gpu, modal, toast
-  src/lib/                shared utilities: dom, present
-  styles/                 stylesheet
-  assets/                 favicon
+  style.css               stylesheet
+  favicon.svg             favicon
+  core/                   bootstrap + infrastructure: app, head, connection, perf
+  components/             UI components: console, gpu, modal, toast
+  lib/                    shared utilities: dom, present
 ```
 
-Delivery follows a three-layer model: `frontend/` source is composed at startup into a single bundle and served through an explicit allowlist (`/`, `/index.html`, `/app.js`, `/style.css`, `/favicon.svg`). Internal paths such as `/js/*`, `/src/*`, `/frontend/*` and any traversal are never resolvable over HTTP.
+Delivery follows a three-layer model: the `web/` source is composed at startup into a single bundle and served through an explicit allowlist (`/`, `/index.html`, `/app.js`, `/style.css`, `/favicon.svg`). Internal paths such as `/js/*`, `/src/*`, `/web/*` and any traversal are never resolvable over HTTP.
 
 ## Resource footprint
 

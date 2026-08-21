@@ -85,9 +85,9 @@ function makeAsset(name, buf, csp) {
   return asset;
 }
 
-function buildAssets(frontendDir) {
-  const root = frontendDir || path.resolve(__dirname, "..", "..", "frontend");
-  const readScript = name => fs.readFileSync(path.join(root, "src", `${name}.js`), "utf8");
+function buildAssets(webDir) {
+  const root = webDir || path.resolve(__dirname, "..", "..", "web");
+  const readScript = name => fs.readFileSync(path.join(root, `${name}.js`), "utf8");
   const head = readScript("core/head").trim();
   const scriptHash = crypto.createHash("sha256").update(head).digest("base64");
   const csp = buildCsp(scriptHash);
@@ -99,8 +99,8 @@ function buildAssets(frontendDir) {
   html = html.replace('<script src="/js/head.js"></script>', `<script>${head}</script>`);
   html = html.replace('<script type="module" src="/js/app.js"></script>', '<script src="/app.js"></script>');
 
-  const css = fs.readFileSync(path.join(root, "styles", "style.css"), "utf8");
-  const favicon = fs.readFileSync(path.join(root, "assets", "favicon.svg"));
+  const css = fs.readFileSync(path.join(root, "style.css"), "utf8");
+  const favicon = fs.readFileSync(path.join(root, "favicon.svg"));
 
   const assets = Object.create(null);
   const index = makeAsset("index.html", Buffer.from(html), csp);

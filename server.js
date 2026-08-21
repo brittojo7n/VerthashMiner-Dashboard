@@ -49,7 +49,7 @@ class Server {
       state: this.state,
       sseHub: this.sseHub,
       minerManager: this.minerManager,
-      frontendDir: options.frontendDir
+      webDir: options.webDir
     });
 
     this.boundExit = () => this.stop();
