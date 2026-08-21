@@ -80,8 +80,8 @@ button, input, select, textarea { font-family: inherit; }
 .refresh-btn:active { transform: scale(0.9); }
 .refresh-btn:disabled { opacity: 0.55; cursor: default; }
 .refresh-btn svg { width: 16px; height: 16px; }
-.refresh-btn.spinning svg { animation: refresh-spin 0.9s cubic-bezier(0.4, 0, 0.2, 1); }
-@keyframes refresh-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.refresh-btn.spinning svg { animation: refresh-spin 0.9s linear infinite; }
+@keyframes refresh-spin { to { transform: rotate(360deg); } }
 h1 { margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.5px; background: linear-gradient(90deg, var(--white), var(--slate-300)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .sub { color: var(--muted); margin-top: 6px; font-weight: 400; font-size: var(--fs-sub); }
 .status { display: inline-flex; align-items: center; gap: 12px; padding: 10px 18px; border: 1px solid rgba(var(--white-rgb), 0.1); border-radius: 50px; font-weight: 700; font-size: var(--fs-badge); letter-spacing: 1px; text-transform: uppercase; min-width: 140px; justify-content: center; text-align: center; contain: layout; }
@@ -256,7 +256,7 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.5p
 .toast-body { min-width: 0; }
 .toast-title { font-size: var(--fs-sub); font-weight: 600; letter-spacing: 0.2px; margin-bottom: 2px; }
 .toast-msg { font-size: var(--fs-small); line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
-@media (prefers-reduced-motion: reduce) { .toast, .bar-fill, .c-btn, .modal-btn, .modal, .modal-backdrop { transition: none; } .toast.show, .toast.hide, .modal { transform: none; } .pulse-indicator, .term-cursor { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .toast, .bar-fill, .c-btn, .modal-btn, .modal, .modal-backdrop { transition: none; } .toast.show, .toast.hide, .modal { transform: none; } .pulse-indicator, .term-cursor, .refresh-btn.spinning svg { animation: none; } }
 @media (max-width: 600px) {
   .toast-stack { bottom: 40px; right: 10px; left: 10px; align-items: stretch; }
   .toast { padding: 11px 13px; }
