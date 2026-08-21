@@ -7,67 +7,114 @@ function parseSpecs(raw) {
   });
 }
 
-function importsOf(src) {
-  const ids = [];
-  for (const re of [
-    /import\s+["']\.\/([\w-]+)\.js["']/g,
-    /import\s+\*\s*as\s+[A-Za-z_$][\w$]*\s+from\s+["']\.\/([\w-]+)\.js["']/g,
-    /import\s+\{[^}]*\}\s+from\s+["']\.\/([\w-]+)\.js["']/g
-  ]) {
-    for (const m of src.matchAll(re)) ids.push(m[1]);
+function dirOf(id) {
+  const i = id.lastIndexOf("/");
+  return i === -1 ? "" : id.slice(0, i);
+}
+
+function resolveSpec(dir, spec) {
+  const clean = spec.replace(/\.js$/, "");
+  const base = dir ? dir.split("/") : [];
+  for (const part of clean.split("/")) {
+    if (part === "." || part === "") continue;
+    if (part === "..") base.pop();
+    else base.push(part);
   }
-  return ids;
+  return base.join("/");
 }
 
-function transformModule(src) {
+function parseImports(src) {
+  const deps = [];
+  for (const raw of src.split("\n")) {
+    const line = raw.trim();
+    let m;
+    if ((m = /^import\s+["']([^"']+)["'];?\s*$/.exec(line))) deps.push({ form: "side", spec: m[1] });
+    else if ((m = /^import\s+\*\s*as\s+([A-Za-z_$][\w$]*)\s+from\s+["']([^"']+)["'];?\s*$/.exec(line))) deps.push({ form: "namespace", local: m[1], spec: m[2] });
+    else if ((m = /^import\s+\{([^}]*)\}\s+from\s+["']([^"']+)["'];?\s*$/.exec(line))) deps.push({ form: "named", raw: m[1], spec: m[2] });
+  }
+  return deps;
+}
+
+function dependencyIds(src, dir) {
+  return parseImports(src).map(d => resolveSpec(dir, d.spec));
+}
+
+function transformExport(line, exportMap) {
+  let m;
+  if ((m = /^export\s+(async\s+)?function\s+([A-Za-z_$][\w$]*)\b/.exec(line))) {
+    exportMap.push({ local: m[2], exported: m[2] });
+    return line.replace(/^export\s+/, "");
+  }
+  if ((m = /^export\s+class\s+([A-Za-z_$][\w$]*)\b/.exec(line))) {
+    exportMap.push({ local: m[1], exported: m[1] });
+    return line.replace(/^export\s+/, "");
+  }
+  if ((m = /^export\s+(const|let|var)\s+([A-Za-z_$][\w$]*)\b/.exec(line))) {
+    exportMap.push({ local: m[2], exported: m[2] });
+    return line.replace(/^export\s+/, "");
+  }
+  if ((m = /^export\s+\{([^}]*)\}\s*;?\s*$/.exec(line))) {
+    for (const s of parseSpecs(m[1])) exportMap.push(s);
+    return "";
+  }
+  return line;
+}
+
+function transformModule(src, id, idMap) {
+  const dir = dirOf(id);
   const exportMap = [];
-  let out = src;
-  out = out.replace(/^[ \t]*import\s+["']\.\/([\w-]+)\.js["'];?[ \t]*$/gm, (m, id) => `__require("${id}");`);
-  out = out.replace(/^[ \t]*import\s+\*\s*as\s+([A-Za-z_$][\w$]*)\s+from\s+["']\.\/([\w-]+)\.js["'];?[ \t]*$/gm, (m, ns, id) => `const ${ns} = __require("${id}");`);
-  out = out.replace(/^[ \t]*import\s+\{([^}]*)\}\s+from\s+["']\.\/([\w-]+)\.js["'];?[ \t]*$/gm, (m, raw, id) => {
-    const specs = parseSpecs(raw).map(s => (s.local === s.exported ? s.local : `${s.local}: ${s.exported}`)).join(", ");
-    return `const { ${specs} } = __require("${id}");`;
-  });
-  out = out.replace(/^[ \t]*export\s+(async\s+)?function\s+([A-Za-z_$][\w$]*)\b/gm, (m, asy, name) => { exportMap.push({ local: name, exported: name }); return `${asy || ""}function ${name}`; });
-  out = out.replace(/^[ \t]*export\s+class\s+([A-Za-z_$][\w$]*)\b/gm, (m, name) => { exportMap.push({ local: name, exported: name }); return `class ${name}`; });
-  out = out.replace(/^[ \t]*export\s+(const|let|var)\s+([A-Za-z_$][\w$]*)\b/gm, (m, kind, name) => { exportMap.push({ local: name, exported: name }); return `${kind} ${name}`; });
-  out = out.replace(/^[ \t]*export\s+\{([^}]*)\}\s*;?[ \t]*$/gm, (m, raw) => { for (const s of parseSpecs(raw)) exportMap.push(s); return ""; });
-  return { body: out, exportMap };
+  const lines = [];
+  for (const raw of src.split("\n")) {
+    const line = raw.trim();
+    let m;
+    if ((m = /^import\s+["']([^"']+)["'];?\s*$/.exec(line))) {
+      lines.push(`__require(${idMap.get(resolveSpec(dir, m[1]))});`);
+    } else if ((m = /^import\s+\*\s*as\s+([A-Za-z_$][\w$]*)\s+from\s+["']([^"']+)["'];?\s*$/.exec(line))) {
+      lines.push(`const ${m[1]} = __require(${idMap.get(resolveSpec(dir, m[2]))});`);
+    } else if ((m = /^import\s+\{([^}]*)\}\s+from\s+["']([^"']+)["'];?\s*$/.exec(line))) {
+      const names = parseSpecs(m[1]).map(s => (s.local === s.exported ? s.local : `${s.local}: ${s.exported}`)).join(", ");
+      lines.push(`const { ${names} } = __require(${idMap.get(resolveSpec(dir, m[2]))});`);
+    } else {
+      lines.push(transformExport(line, exportMap));
+    }
+  }
+  return { body: lines.join("\n"), exportMap };
 }
 
-function bundleModules(read) {
-  const modules = {};
+function bundleModules(read, entry = "core/app") {
+  const sources = {};
   const order = [];
-  const queue = ["app"];
+  const queue = [entry];
   const seen = new Set();
   while (queue.length) {
     const id = queue.shift();
     if (seen.has(id)) continue;
     seen.add(id);
     const src = read(id);
-    modules[id] = src;
+    sources[id] = src;
     order.push(id);
-    for (const dep of importsOf(src)) if (!seen.has(dep)) queue.push(dep);
+    for (const dep of dependencyIds(src, dirOf(id))) if (!seen.has(dep)) queue.push(dep);
   }
+  const idMap = new Map(order.map((id, i) => [id, i]));
   const lines = [
     '"use strict";',
     "(() => {",
-    "const __mods = {};",
-    "const __cache = {};",
+    "const __mods = [];",
+    "const __cache = [];",
     "const __register = (id, fn) => { __mods[id] = fn; };",
     "const __assign = (target, source) => Object.assign(target, source);",
     "const __require = id => { if (__cache[id]) return __cache[id]; const exports = {}; __mods[id](__require, exports); __cache[id] = exports; return exports; };"
   ];
   for (const id of order) {
-    const { body, exportMap } = transformModule(modules[id]);
-    lines.push(`__register("${id}", (__require, __exports) => {`);
+    const { body, exportMap } = transformModule(sources[id], id, idMap);
+    lines.push(`__register(${idMap.get(id)}, (__require, __exports) => {`);
     lines.push(body);
     if (exportMap.length) lines.push(`__assign(__exports, { ${exportMap.map(e => `${e.exported}: ${e.local}`).join(", ")} });`);
     lines.push("});");
   }
-  lines.push('__require("app");');
+  lines.push(`__require(${idMap.get(entry)});`);
   lines.push("})();");
   return lines.join("\n");
 }
 
-module.exports = { bundleModules, transformModule, importsOf };
+module.exports = { bundleModules, transformModule, importsOf: src => dependencyIds(src, "") };

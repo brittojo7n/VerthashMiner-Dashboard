@@ -1,10 +1,10 @@
 import "./perf.js";
-import { el, text, className, make } from "./dom.js";
-import { createModal } from "./modal.js";
-import { presentSnapshot, sharesPerMinute, dotClass, timestamp, uptime, stripLogPrefix, DASH, IDLE_STATUS as IDLE, LIVE_STATUS as LIVE } from "./present.js";
-import * as toast from "./toast.js";
-import * as gpuView from "./gpu.js";
-import { createConsole } from "./console.js";
+import { el, text, className, make } from "../lib/dom.js";
+import { createModal } from "../components/modal.js";
+import { presentSnapshot, sharesPerMinute, dotClass, timestamp, uptime, stripLogPrefix, DASH, IDLE_STATUS as IDLE, LIVE_STATUS as LIVE } from "../lib/present.js";
+import * as toast from "../components/toast.js";
+import * as gpuView from "../components/gpu.js";
+import { createConsole } from "../components/console.js";
 import { createConnection } from "./connection.js";
 const ACTION_META = {
   start: { status: "STARTING", label: "START", toast: ["Starting Miner", "Launching the VerthashMiner process."] },

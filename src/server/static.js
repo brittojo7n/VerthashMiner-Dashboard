@@ -85,10 +85,10 @@ function makeAsset(name, buf, csp) {
   return asset;
 }
 
-function buildAssets(clientDir) {
-  const root = clientDir || path.resolve(__dirname, "..", "..", "client");
-  const readScript = name => fs.readFileSync(path.join(root, "scripts", `${name}.js`), "utf8");
-  const head = readScript("head").trim();
+function buildAssets(frontendDir) {
+  const root = frontendDir || path.resolve(__dirname, "..", "..", "frontend");
+  const readScript = name => fs.readFileSync(path.join(root, "src", `${name}.js`), "utf8");
+  const head = readScript("core/head").trim();
   const scriptHash = crypto.createHash("sha256").update(head).digest("base64");
   const csp = buildCsp(scriptHash);
 

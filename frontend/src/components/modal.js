@@ -1,4 +1,4 @@
-import { make } from "./dom.js";
+import { make } from "../lib/dom.js";
 
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), textarea, select, [tabindex]:not([tabindex="-1"])';
 

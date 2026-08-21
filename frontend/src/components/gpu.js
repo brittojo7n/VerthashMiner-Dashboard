@@ -1,5 +1,5 @@
-import { make, text, className, style } from "./dom.js";
-import { DASH, presentGpu } from "./present.js";
+import { make, text, className, style } from "../lib/dom.js";
+import { DASH, presentGpu } from "../lib/present.js";
 
 const COUNT_KEY = "vmd:gpuCount";
 

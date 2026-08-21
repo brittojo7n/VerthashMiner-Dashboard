@@ -45,6 +45,25 @@ Open `http://127.0.0.1:4067` (or your LAN IP) and enter the passphrase.
 
 To stop mining from the dashboard, use the **STOP** button. To start again, use **START**.
 
+## Project structure
+
+```
+server.js                 entry point (node server.js)
+src/
+  core/                   shared foundations: config, constants, state, timers
+  server/                 transport + assets: http, sse, auth, ratelimit, static, bundle
+  miner/                  miner process + hardware: miner, parser, devices, gpu
+frontend/                 internal frontend source (never served directly)
+  index.html              document template
+  src/core/               bootstrap + infrastructure: app, head, connection, perf
+  src/components/         UI components: console, gpu, modal, toast
+  src/lib/                shared utilities: dom, present
+  styles/                 stylesheet
+  assets/                 favicon
+```
+
+Delivery follows a three-layer model: `frontend/` source is composed at startup into a single bundle and served through an explicit allowlist (`/`, `/index.html`, `/app.js`, `/style.css`, `/favicon.svg`). Internal paths such as `/js/*`, `/src/*`, `/frontend/*` and any traversal are never resolvable over HTTP.
+
 ## Resource footprint
 
 Measured on Node 22 (Linux x86-64, 2 cores): **~0.08% CPU idle**, **~0.2% CPU** with one browser tab streaming. The dashboard's own heap is **~6–8 MB**; the rest of the process RSS is the Node runtime (~41 MB floor), so a plain `node server.js` idles around **54 MB**.
