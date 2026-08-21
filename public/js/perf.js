@@ -99,7 +99,7 @@ function createPerfGate(env) {
   let probed = false;
 
   function probe(makeSurface) {
-    if (probed || probing || !visible()) return false;
+    if (probed || probing || !visible() || self.locked) return false;
     probing = true;
     const surface = makeSurface ? makeSurface() : null;
     const deltas = [];
