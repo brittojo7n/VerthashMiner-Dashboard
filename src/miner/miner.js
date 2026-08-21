@@ -5,9 +5,9 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, execFile } = require("node:child_process");
 const { parseMinerLine } = require("./parser");
-const { STATUS, LOG, LIMITS } = require("./constants");
+const { STATUS, LOG, LIMITS } = require("../core/constants");
 const { parseCudaDeviceList, createStreamReader } = require("./devices");
-const { unrefTimer: timer } = require("./timers");
+const { unrefTimer: timer } = require("../core/timers");
 
 const ACTIONS = Object.freeze({
   start: STATUS.STARTING,

@@ -2,7 +2,7 @@
 
 const http = require("node:http");
 const os = require("node:os");
-const { formatStatsSnapshot } = require("./state");
+const { formatStatsSnapshot } = require("../core/state");
 const { buildAssets, negotiate } = require("./static");
 const { SessionStore, safeEqual } = require("./auth");
 const { createRateLimiter } = require("./ratelimit");

@@ -1,8 +1,8 @@
 "use strict";
 
-const { formatStatsSnapshot } = require("./state");
-const { LIMITS } = require("./constants");
-const { unrefTimer, unrefInterval } = require("./timers");
+const { formatStatsSnapshot } = require("../core/state");
+const { LIMITS } = require("../core/constants");
+const { unrefTimer, unrefInterval } = require("../core/timers");
 
 const HEARTBEAT_FRAME = ": hb\n\n";
 const OPEN_FRAME = ": stream established\n\n";

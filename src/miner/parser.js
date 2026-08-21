@@ -1,6 +1,6 @@
 "use strict";
 
-const { STATUS, LOG } = require("./constants");
+const { STATUS, LOG } = require("../core/constants");
 const { stripAnsi } = require("./devices");
 
 const RX_DEV_HASH = /(cu|cl)_device\((\d+)\).*?hashrate:\s*([\d.]+)/i;

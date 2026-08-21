@@ -27,7 +27,7 @@ function parseEnvFile(text) {
 }
 
 function loadEnvFile(envPath, env = process.env) {
-  const target = envPath || env.ENV_FILE || path.join(path.resolve(__dirname, ".."), ".env");
+  const target = envPath || env.ENV_FILE || path.join(path.resolve(__dirname, "..", ".."), ".env");
   try { if (!fs.existsSync(target)) return env; const parsed = parseEnvFile(fs.readFileSync(target, "utf8")); for (const key of Object.keys(parsed)) { if (env[key] === undefined) env[key] = parsed[key]; } } catch { }
   return env;
 }

@@ -86,21 +86,21 @@ function makeAsset(name, buf, csp) {
 }
 
 function buildAssets(clientDir) {
-  const root = clientDir || path.resolve(__dirname, "..", "client");
-  const read = name => fs.readFileSync(path.join(root, name), "utf8");
-  const head = read("head.js").trim();
+  const root = clientDir || path.resolve(__dirname, "..", "..", "client");
+  const readScript = name => fs.readFileSync(path.join(root, "scripts", `${name}.js`), "utf8");
+  const head = readScript("head").trim();
   const scriptHash = crypto.createHash("sha256").update(head).digest("base64");
   const csp = buildCsp(scriptHash);
 
   const modules = {};
-  const app = bundleModules(id => (modules[id] = read(`${id}.js`)));
+  const app = bundleModules(id => (modules[id] = readScript(id)));
 
-  let html = read("index.html");
+  let html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   html = html.replace('<script src="/js/head.js"></script>', `<script>${head}</script>`);
   html = html.replace('<script type="module" src="/js/app.js"></script>', '<script src="/app.js"></script>');
 
-  const css = read("style.css");
-  const favicon = fs.readFileSync(path.join(root, "favicon.svg"));
+  const css = fs.readFileSync(path.join(root, "styles", "style.css"), "utf8");
+  const favicon = fs.readFileSync(path.join(root, "assets", "favicon.svg"));
 
   const assets = Object.create(null);
   const index = makeAsset("index.html", Buffer.from(html), csp);

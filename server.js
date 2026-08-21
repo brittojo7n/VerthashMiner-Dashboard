@@ -1,14 +1,14 @@
 "use strict";
 
-const config = require("./src/config");
-const { createState } = require("./src/state");
-const { GpuManager } = require("./src/gpu");
-const { SseHub } = require("./src/sse");
-const { MinerManager } = require("./src/miner");
+const config = require("./src/core/config");
+const { createState } = require("./src/core/state");
+const { GpuManager } = require("./src/miner/gpu");
+const { SseHub } = require("./src/server/sse");
+const { MinerManager } = require("./src/miner/miner");
 const os = require("node:os");
-const { createHttpServer, getLanIp } = require("./src/http");
-const { LIMITS, LOG } = require("./src/constants");
-const { unrefTimer } = require("./src/timers");
+const { createHttpServer, getLanIp } = require("./src/server/http");
+const { LIMITS, LOG } = require("./src/core/constants");
+const { unrefTimer } = require("./src/core/timers");
 
 function yieldCpuToMiner() {
   if (process.platform !== "win32") return false;
