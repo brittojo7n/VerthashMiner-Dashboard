@@ -68,7 +68,7 @@ button, input, select, textarea { font-family: inherit; }
 .glass-modal { background: linear-gradient(160deg, rgba(var(--white-rgb), 0.07), rgba(var(--white-rgb), 0) 50%), rgba(var(--glass-tint), 0.92); }
 .fx { --shadow-panel: 0 12px 32px rgba(var(--black-rgb), 0.25); --shadow-sunken: 0 8px 24px rgba(var(--black-rgb), 0.4); --shadow-float: 0 12px 40px rgba(var(--black-rgb), 0.4); }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .fx .glass-panel, .fx .glass-pill, .fx .glass-overlay, .fx .refresh-btn { backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
+  .fx .glass-panel, .fx .glass-overlay { backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
   .fx .glass-panel { background: rgba(var(--glass-tint), 0.55); }
   .fx .glass-modal { background: rgba(var(--glass-tint), 0.62); }
 }
@@ -140,7 +140,6 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.5p
 .console-title { font-size: var(--fs-label); font-weight: 700; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; }
 .console-live-badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 20px; background: rgba(var(--green-rgb), 0.12); border: 1px solid rgba(var(--green-rgb), 0.3); color: var(--green-300); font-size: 10px; font-weight: 700; letter-spacing: 0.5px; }
 .pulse-indicator { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
-.fx .toast { background: linear-gradient(135deg, rgba(var(--toast-rgb), 0.16), rgba(var(--toast-rgb), 0.04) 60%, transparent), rgba(var(--glass-tint), 0.55); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
 .fx .pulse-indicator { animation: pulse 2s infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 .console-actions { display: flex; align-items: center; gap: 8px; }
@@ -202,6 +201,7 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.5p
   .wrap { padding: 10px; }
   .top { flex-direction: column; align-items: flex-start; gap: 10px; }
   .top-left { width: 100%; }
+  .flex-center { width: 100%; flex-wrap: wrap; }
   .refresh-btn { width: 32px; height: 32px; }
   .refresh-btn svg { width: 14px; height: 14px; }
   .grid { grid-template-columns: repeat(2, 1fr); }
@@ -256,9 +256,6 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.5p
 .toast-body { min-width: 0; }
 .toast-title { font-size: var(--fs-sub); font-weight: 600; letter-spacing: 0.2px; margin-bottom: 2px; }
 .toast-msg { font-size: var(--fs-small); line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .toast { background: linear-gradient(135deg, rgba(var(--toast-rgb), 0.20), rgba(var(--toast-rgb), 0.08) 60%, transparent), rgba(var(--glass-tint), 0.97); }
-}
 @media (prefers-reduced-motion: reduce) { .toast, .bar-fill, .c-btn, .auth-btn, .modal-backdrop { transition: none; } .toast.show, .toast.hide { transform: none; } .pulse-indicator, .term-cursor { animation: none; } }
 @media (max-width: 600px) {
   .toast-stack { bottom: 40px; right: 10px; left: 10px; align-items: stretch; }

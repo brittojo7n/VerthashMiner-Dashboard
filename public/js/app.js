@@ -170,7 +170,8 @@ function initDashboard() {
   els.authInput.addEventListener("keydown", e => { if (e.key === "Enter") login(); });
   el("confirmCancel").addEventListener("click", closeConfirm);
   confirmYes.addEventListener("click", () => { const action = armedAction; closeConfirm(); if (action) runAction(action); });
-  els.btnAction.addEventListener("click", () => promptAction(els.btnAction.textContent === "START" ? "start" : "stop", els.btnAction.textContent === "START" ? "START" : "STOP"));
+  const btnActionKind = () => els.btnAction.textContent === "START" ? "start" : "stop";
+  els.btnAction.addEventListener("click", () => { const action = btnActionKind(); promptAction(action, action.toUpperCase()); });
   els.btnRestart.addEventListener("click", () => promptAction("restart", "RESTART"));
   els.btnAutoScroll.addEventListener("click", () => { consoleView.autoScroll = !consoleView.autoScroll; onAutoScroll(consoleView.autoScroll); });
   let refreshing = false;
