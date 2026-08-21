@@ -4,6 +4,7 @@ const { execFile } = require("node:child_process");
 const { LIMITS } = require("./constants");
 const { clampGpuPollMs, GPU_POLL_DEFAULT_MS } = require("./config");
 const { normalizePci } = require("./devices");
+const { unrefTimer } = require("./timers");
 
 const SMI_QUERY = Object.freeze([
   "--query-gpu=name,temperature.gpu,power.draw,utilization.gpu,clocks.gr,clocks.mem,memory.used,memory.total,pstate,pci.bus_id",
@@ -88,8 +89,7 @@ class GpuManager {
   _arm(delay) {
     if (this.timer) { clearTimeout(this.timer); this.timer = null; }
     if (!this.active) return;
-    this.timer = setTimeout(() => this.poll(), delay);
-    if (typeof this.timer.unref === "function") this.timer.unref();
+    this.timer = unrefTimer(() => this.poll(), delay);
   }
 
   _notify() {

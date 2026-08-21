@@ -8,6 +8,7 @@ const { MinerManager } = require("./src/miner");
 const os = require("node:os");
 const { createHttpServer, getLanIp } = require("./src/http");
 const { LIMITS, LOG } = require("./src/constants");
+const { unrefTimer } = require("./src/timers");
 
 function yieldCpuToMiner() {
   if (process.platform !== "win32") return false;
@@ -126,11 +127,10 @@ class Server {
     this.gpuManager.stop();
     this.sseHub.closeAll();
 
-    this._shutdownWatchdog = setTimeout(() => {
+    this._shutdownWatchdog = unrefTimer(() => {
       console.error("[dashboard] shutdown watchdog fired; forcing exit.");
       process.exit(exitCode);
     }, LIMITS.SHUTDOWN_TIMEOUT_MS);
-    if (typeof this._shutdownWatchdog.unref === "function") this._shutdownWatchdog.unref();
 
     const closeHttpServer = () =>
       new Promise(resolve => {

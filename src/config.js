@@ -33,9 +33,7 @@ function loadEnvFile(envPath, env = process.env) {
 }
 
 function clampGpuPollMs(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return GPU_POLL_DEFAULT_MS;
-  return Math.min(GPU_POLL_MAX_MS, Math.max(GPU_POLL_MIN_MS, Math.round(n)));
+  return clampInt(value, GPU_POLL_MIN_MS, GPU_POLL_MAX_MS, GPU_POLL_DEFAULT_MS);
 }
 
 function clampInt(value, min, max, fallback) {

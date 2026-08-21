@@ -147,9 +147,9 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.5p
 .c-btn:hover:not(:disabled) { background: rgba(var(--white-rgb), 0.12); color: var(--text); }
 .c-btn:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 .c-btn.active { background: rgba(var(--accent-rgb), 0.12); border-color: rgba(var(--accent-rgb), 0.4); color: var(--accent); }
-.btn-start { --btn-rgb: var(--green-rgb); --btn-fg: var(--green); --btn-fg-hover: var(--green-300); }
-.btn-stop { --btn-rgb: var(--red-rgb); --btn-fg: var(--red); --btn-fg-hover: var(--red-400); }
-.btn-restart { --btn-rgb: var(--yellow-rgb); --btn-fg: var(--yellow); --btn-fg-hover: var(--yellow-300); }
+.btn-start, .modal-btn-start { --btn-rgb: var(--green-rgb); --btn-fg: var(--green); --btn-fg-hover: var(--green-300); }
+.btn-stop, .modal-btn-stop { --btn-rgb: var(--red-rgb); --btn-fg: var(--red); --btn-fg-hover: var(--red-400); }
+.btn-restart, .modal-btn-restart { --btn-rgb: var(--yellow-rgb); --btn-fg: var(--yellow); --btn-fg-hover: var(--yellow-300); }
 .btn-start, .btn-stop, .btn-restart { background: rgba(var(--btn-rgb), 0.15); border-color: rgba(var(--btn-rgb), 0.4); color: var(--btn-fg); }
 .btn-start:hover:not(:disabled), .btn-stop:hover:not(:disabled), .btn-restart:hover:not(:disabled) { background: rgba(var(--btn-rgb), 0.25); border-color: rgba(var(--btn-rgb), 0.6); color: var(--btn-fg-hover); }
 .console-terminal { min-height: 330px; max-height: 480px; overflow-y: auto; overflow-x: auto; padding: 14px 18px; background: var(--surface-sunken); font-family: var(--mono); font-size: 12.5px; line-height: 1.6; color: var(--lime-400); scrollbar-width: thin; scrollbar-color: rgba(var(--white-rgb), 0.2) rgba(var(--black-rgb), 0.2); contain: layout; }
@@ -232,12 +232,9 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.5p
 .modal-input:focus { border-color: rgba(var(--accent2-rgb), 0.8); box-shadow: 0 0 10px rgba(var(--accent2-rgb), 0.2); }
 .modal-btn { width: 100%; padding: 12px; margin-top: 16px; border-radius: 8px; background: rgba(var(--accent2-rgb), 0.2); color: var(--text); font-weight: 700; border: 1px solid rgba(var(--accent2-rgb), 0.5); cursor: pointer; font-size: 15px; transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease; }
 .modal-btn:hover { background: rgba(var(--accent2-rgb), 0.3); }
-.modal-btn-start { --btn-rgb: var(--green-rgb); --btn-fg: var(--green); --btn-fg-hover: var(--green-300); }
-.modal-btn-stop, .modal-btn-danger { --btn-rgb: var(--red-rgb); --btn-fg: var(--red); --btn-fg-hover: var(--red-400); }
-.modal-btn-restart { --btn-rgb: var(--yellow-rgb); --btn-fg: var(--yellow); --btn-fg-hover: var(--yellow-300); }
 .modal-btn-cancel { --btn-rgb: var(--white-rgb); --btn-fg: var(--muted); --btn-fg-hover: var(--text); --btn-a: 0.08; --btn-b: 0.18; --btn-a-hover: 0.15; --btn-b-hover: 0.3; }
-.modal-btn-start, .modal-btn-stop, .modal-btn-danger, .modal-btn-restart, .modal-btn-cancel { background: rgba(var(--btn-rgb), var(--btn-a, 0.2)); border-color: rgba(var(--btn-rgb), var(--btn-b, 0.5)); color: var(--btn-fg); }
-.modal-btn-start:hover, .modal-btn-stop:hover, .modal-btn-danger:hover, .modal-btn-restart:hover, .modal-btn-cancel:hover { background: rgba(var(--btn-rgb), var(--btn-a-hover, 0.35)); border-color: rgba(var(--btn-rgb), var(--btn-b-hover, 0.7)); color: var(--btn-fg-hover); }
+.modal-btn-start, .modal-btn-stop, .modal-btn-restart, .modal-btn-cancel { background: rgba(var(--btn-rgb), var(--btn-a, 0.2)); border-color: rgba(var(--btn-rgb), var(--btn-b, 0.5)); color: var(--btn-fg); }
+.modal-btn-start:hover, .modal-btn-stop:hover, .modal-btn-restart:hover, .modal-btn-cancel:hover { background: rgba(var(--btn-rgb), var(--btn-a-hover, 0.35)); border-color: rgba(var(--btn-rgb), var(--btn-b-hover, 0.7)); color: var(--btn-fg-hover); }
 .modal-error { color: var(--red); font-size: 13px; margin-top: 12px; display: none; }
 @media (max-width: 600px) {
   .local-time-bar { padding: 4px 10px; border-top-left-radius: 8px; }

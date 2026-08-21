@@ -3,10 +3,6 @@ import { DASH, presentGpu } from "./present.js";
 
 const COUNT_KEY = "vmd:gpuCount";
 
-// Data-driven GPU card definition. Every metric maps a presentGpu() key to a
-// cell; pass a custom spec to render()/buildCard() to reorder, relabel or
-// restyle the card (temp thresholds, extra fields, custom classes) so the
-// same component renders uniformly across all cards.
 export const DEFAULT_SPEC = Object.freeze({
   tempLevels: Object.freeze({ warn: 72, hot: 80 }),
   metrics: Object.freeze([

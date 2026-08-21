@@ -1,8 +1,8 @@
 "use strict";
 
 const { STATUS, LOG } = require("./constants");
+const { stripAnsi } = require("./devices");
 
-const RX_ANSI = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 const RX_DEV_HASH = /(cu|cl)_device\((\d+)\).*?hashrate:\s*([\d.]+)/i;
 const RX_DIFF = /difficulty(?:\s*(?:set|is))?\s*(?:to|:)?\s*([+-]?[\d.]+(?:[eE][+-]?\d+)?)/i;
 const RX_JSON_DIFF = /"mining\.set_difficulty".*?"params"\s*:\s*\[\s*([+-]?[\d.]+(?:[eE][+-]?\d+)?)\s*\]/i;
@@ -77,7 +77,7 @@ function emitLog(state, pushLog, text, type) {
 
 function parseMinerLine(raw, state, pushLog) {
   const source = typeof raw === "string" ? raw : String(raw);
-  const clean = source.indexOf("\u001b") === -1 ? source : source.replace(RX_ANSI, "");
+  const clean = source.indexOf("\u001b") === -1 ? source : stripAnsi(source);
   const line = clean.trim();
   if (!line) return;
   const level = levelOf(line);
