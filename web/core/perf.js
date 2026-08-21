@@ -1,6 +1,7 @@
 const hasDom = typeof document !== "undefined" && typeof document.documentElement === "object";
 const root = hasDom ? document.documentElement : null;
 const media = query => (typeof matchMedia === "function" ? matchMedia(query).matches : false);
+
 const FRAME_BUDGET_MS = 17;
 const PROBE_FRAMES = 42;
 const PROBE_SKIP = 4;
@@ -11,8 +12,17 @@ const GOVERNOR_STRIKES = 2;
 const GOVERNOR_P95_MS = 34;
 const LOCK_KEY = "vmd:fxLock";
 
+function frameStats(deltas) {
+  if (!deltas.length) return null;
+  const sorted = deltas.slice().sort((a, b) => a - b);
+  return {
+    median: sorted[sorted.length >> 1],
+    p95: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))]
+  };
+}
+
 function createPerfGate(env) {
-  const { root, media, raf, visible, navigatorLike, storage, onChange, onVisible, delay } = env;
+  const { root, media, raf, visible, storage, onChange, onVisible, delay } = env;
   const self = { mode: "lite", locked: false, reason: "boot", started: false };
 
   function setMode(mode, reason) {
@@ -44,6 +54,14 @@ function createPerfGate(env) {
   let govStrikes = 0;
   let govCancel = null;
 
+  function judgeWindow(deltas) {
+    if (deltas.length < 12) return -1;
+    const { median, p95 } = frameStats(deltas);
+    if (median > FRAME_BUDGET_MS) return 1;
+    if (p95 > GOVERNOR_P95_MS && median > FRAME_BUDGET_MS * 0.85) return 1;
+    return -1;
+  }
+
   function governorFrame(t) {
     if (!govActive) return;
     if (govLast) govDeltas.push(t - govLast);
@@ -60,16 +78,6 @@ function createPerfGate(env) {
       }
     }
     govCancel = raf(governorFrame);
-  }
-
-  function judgeWindow(deltas) {
-    if (deltas.length < 12) return -1;
-    const sorted = deltas.slice().sort((a, b) => a - b);
-    const median = sorted[sorted.length >> 1];
-    const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
-    if (median > FRAME_BUDGET_MS) return 1;
-    if (p95 > GOVERNOR_P95_MS && median > FRAME_BUDGET_MS * 0.85) return 1;
-    return -1;
   }
 
   function startGovernor() {
@@ -91,7 +99,7 @@ function createPerfGate(env) {
   let probed = false;
 
   function probe(makeSurface) {
-    if (probed || probing || !visible()) return false;
+    if (probed || probing || !visible() || self.locked) return false;
     probing = true;
     const surface = makeSurface ? makeSurface() : null;
     const deltas = [];
@@ -105,9 +113,7 @@ function createPerfGate(env) {
       probing = false;
       if (surface && surface.destroy) surface.destroy();
       if (!deltas.length) return;
-      deltas.sort((a, b) => a - b);
-      const median = deltas[deltas.length >> 1];
-      const p95 = deltas[Math.min(deltas.length - 1, Math.floor(deltas.length * 0.95))];
+      const { median, p95 } = frameStats(deltas);
       if (median <= FRAME_BUDGET_MS && p95 <= PROBE_P95_MS) {
         setMode("fx", "probe passed");
         startGovernor();
@@ -129,14 +135,6 @@ function createPerfGate(env) {
     let locked = false;
     try { locked = storage && storage.get(LOCK_KEY) === "1"; } catch { }
     if (locked) { lockLite("session lock (governor demoted earlier)"); return; }
-    const memory = navigatorLike ? Number(navigatorLike.deviceMemory) || 0 : 0;
-    const cores = navigatorLike ? Number(navigatorLike.hardwareConcurrency) || 0 : 0;
-    if (memory > 0 && memory <= 2) { lockLite("low device memory"); return; }
-    if (memory >= 8 && cores >= 8) {
-      setMode("fx", "desktop class");
-      startGovernor();
-      return;
-    }
     const beginProbe = () => {
       if (visible()) probe(makeSurface);
       else if (typeof onVisible === "function") onVisible(() => probe(makeSurface));
@@ -180,7 +178,6 @@ function initBrowserGate() {
       media,
       raf,
       visible: () => !document.hidden,
-      navigatorLike: typeof navigator === "object" ? navigator : {},
       storage,
       delay: (fn, ms) => { setTimeout(fn, ms); },
       onVisible(cb) {

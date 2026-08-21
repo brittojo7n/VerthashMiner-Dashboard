@@ -5,8 +5,9 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, execFile } = require("node:child_process");
 const { parseMinerLine } = require("./parser");
-const { STATUS, LOG, LIMITS } = require("./constants");
+const { STATUS, LOG, LIMITS } = require("../core/constants");
 const { parseCudaDeviceList, createStreamReader } = require("./devices");
+const { unrefTimer: timer } = require("../core/timers");
 
 const ACTIONS = Object.freeze({
   start: STATUS.STARTING,
@@ -33,12 +34,6 @@ function resolveExe(exe, cwd) {
   if (looksLikePath) return candidate;
   try { if (fs.statSync(candidate).isFile()) return candidate; } catch { }
   return exe;
-}
-
-function timer(fn, ms) {
-  const handle = setTimeout(fn, ms);
-  if (typeof handle.unref === "function") handle.unref();
-  return handle;
 }
 
 class MinerManager {

@@ -1,13 +1,15 @@
 "use strict";
 
-const config = require("./src/config");
-const { createState } = require("./src/state");
-const { GpuManager } = require("./src/gpu");
-const { SseHub } = require("./src/sse");
-const { MinerManager } = require("./src/miner");
+const config = require("./server/core/config");
+const { createState } = require("./server/core/state");
+const { GpuManager } = require("./server/miner/gpu");
+const { SseHub } = require("./server/http/sse");
+const { MinerManager } = require("./server/miner/miner");
 const os = require("node:os");
-const { createHttpServer, getLanIp } = require("./src/http");
-const { LIMITS, LOG } = require("./src/constants");
+const crypto = require("node:crypto");
+const { createHttpServer, getLanIp } = require("./server/http/http");
+const { LIMITS, LOG } = require("./server/core/constants");
+const { unrefTimer } = require("./server/core/timers");
 
 function yieldCpuToMiner() {
   if (process.platform !== "win32") return false;
@@ -48,7 +50,7 @@ class Server {
       state: this.state,
       sseHub: this.sseHub,
       minerManager: this.minerManager,
-      publicDir: options.publicDir
+      webDir: options.webDir
     });
 
     this.boundExit = () => this.stop();
@@ -126,11 +128,10 @@ class Server {
     this.gpuManager.stop();
     this.sseHub.closeAll();
 
-    this._shutdownWatchdog = setTimeout(() => {
+    this._shutdownWatchdog = unrefTimer(() => {
       console.error("[dashboard] shutdown watchdog fired; forcing exit.");
       process.exit(exitCode);
     }, LIMITS.SHUTDOWN_TIMEOUT_MS);
-    if (typeof this._shutdownWatchdog.unref === "function") this._shutdownWatchdog.unref();
 
     const closeHttpServer = () =>
       new Promise(resolve => {
@@ -185,6 +186,19 @@ function main() {
   new Server().start();
 }
 
-if (require.main === module) main();
+function generateSecret() {
+  const secret = crypto.randomBytes(32).toString("hex");
+  console.log(secret);
+  console.log(`\n[+] ${secret.length}-character cryptographic secret generated.`);
+  console.log("    Paste this into your .env as SESSION_SECRET=<value>");
+}
+
+if (require.main === module) {
+  if (process.argv.includes("--generate-secret") || process.argv.includes("--gen-secret")) {
+    generateSecret();
+    process.exit(0);
+  }
+  main();
+}
 
 module.exports = { Server, main, yieldCpuToMiner };

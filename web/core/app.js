@@ -1,21 +1,49 @@
 import "./perf.js";
-import { el, text, className } from "./dom.js";
-import { presentSnapshot, sharesPerMinute, dotClass, timestamp, uptime, stripLogPrefix, DASH, IDLE_STATUS as IDLE, LIVE_STATUS as LIVE } from "./present.js";
-import * as toast from "./toast.js";
-import * as gpuView from "./gpu.js";
-import { createConsole } from "./console.js";
+import { el, text, className, make } from "../lib/dom.js";
+import { createModal } from "../components/modal.js";
+import { presentSnapshot, sharesPerMinute, dotClass, timestamp, uptime, stripLogPrefix, DASH, IDLE_STATUS as IDLE, LIVE_STATUS as LIVE } from "../lib/present.js";
+import * as toast from "../components/toast.js";
+import * as gpuView from "../components/gpu.js";
+import { createConsole } from "../components/console.js";
 import { createConnection } from "./connection.js";
 const ACTION_META = {
   start: { status: "STARTING", label: "START", toast: ["Starting Miner", "Launching the VerthashMiner process."] },
   stop: { status: "STOPPING", label: "STOP", toast: ["Stopping Miner", "Shutting down the VerthashMiner process."] },
   restart: { status: "RESTARTING", label: "RESTART", toast: ["Restarting Miner", "Stopping and relaunching the VerthashMiner process."] }
 };
+function buildAuthContent() {
+  const wrap = make("div");
+  wrap.appendChild(make("h2", null, "Login"));
+  wrap.appendChild(make("p", null, "Enter your passphrase to access the dashboard."));
+  const input = make("input", "modal-input");
+  input.type = "password";
+  input.placeholder = "Passphrase";
+  const err = make("div", "modal-error", "Invalid passphrase");
+  const submit = make("button", "modal-btn", "Login");
+  submit.type = "button";
+  wrap.append(input, err, submit);
+  return { wrap, input, err, submit };
+}
+
+function buildConfirmContent() {
+  const wrap = make("div");
+  const title = make("h2", null, "Confirm Action");
+  const desc = make("p", null, "Are you sure you want to proceed?");
+  const group = make("div", "btn-group");
+  const cancel = make("button", "modal-btn modal-btn-cancel", "Cancel");
+  cancel.type = "button";
+  const yes = make("button", "modal-btn modal-btn-start", "START");
+  yes.type = "button";
+  group.append(cancel, yes);
+  wrap.append(title, desc, group);
+  return { wrap, title, desc, cancel, yes };
+}
+
 function initDashboard() {
   const els = {
     dot: el("dot"), status: el("status"), host: el("host"),
     btnAction: el("btnAction"), btnRestart: el("btnRestart"), error: el("error"),
     gpus: el("gpus"), localTime: el("localTime"),
-    authModal: el("authModal"), authInput: el("authInput"), authError: el("authError"), authSubmit: el("authSubmit"),
     btnAutoScroll: el("btnAutoScroll"),
     uptime: el("uptime"), spm: el("sharesPerMinute"),
     hashrate: el("hashrate"), accepted: el("accepted"), ratio: el("ratio"),
@@ -23,6 +51,9 @@ function initDashboard() {
     lastAccepted: el("lastAccepted"), wallet: el("walletAddress"),
     refresh: el("btnRefresh")
   };
+  const modal = createModal();
+  const auth = buildAuthContent();
+  const confirm = buildConfirmContent();
   const consoleView = createConsole({ terminal: el("terminal"), lines: el("logLines"), counter: el("logCount"), onAutoScrollChange: onAutoScroll });
   let serverNow = null, capturedAt = 0, startedAt = null, tz = null;
   let accepted = 0, ticker = null;
@@ -101,7 +132,7 @@ function initDashboard() {
   const connection = createConnection({
     onSnapshot: render,
     onUnauthorized: showAuth,
-    onLive: () => els.authModal.classList.remove("show"),
+    onLive: () => modal.close(),
     onCountdown: message => text(els.host, message),
     onStatusText: (label, unreachable) => {
       stopClock();
@@ -114,24 +145,23 @@ function initDashboard() {
     }
   });
   function showAuth() {
-    els.authModal.classList.add("show");
-    els.authInput.value = "";
-    els.authInput.focus();
+    auth.input.value = "";
+    auth.err.style.display = "none";
+    modal.open(auth.wrap, { dismissable: false });
   }
   async function login() {
     try {
-      const res = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" }, body: JSON.stringify({ passphrase: els.authInput.value }) });
+      const res = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" }, body: JSON.stringify({ passphrase: auth.input.value }) });
       if (res.ok) {
-        els.authModal.classList.remove("show");
-        els.authError.style.display = "none";
+        modal.close();
         toast.success("Login Successful", "Welcome to the VerthashMiner Dashboard.", "login-success");
         connection.restart();
         return;
       }
-      if (res.status === 429) { els.authError.textContent = "Too many attempts. Please wait a moment and try again."; toast.warn("Too Many Requests", "Too many failed attempts. Please wait before trying again.", "rate-limit-login"); }
-      else els.authError.textContent = "Invalid passphrase";
-    } catch { els.authError.textContent = "Invalid passphrase"; }
-    els.authError.style.display = "block";
+      if (res.status === 429) { auth.err.textContent = "Too many attempts. Please wait a moment and try again."; toast.warn("Too Many Requests", "Too many failed attempts. Please wait before trying again.", "rate-limit-login"); }
+      else auth.err.textContent = "Invalid passphrase";
+    } catch { auth.err.textContent = "Invalid passphrase"; }
+    auth.err.style.display = "block";
   }
   async function runAction(action) {
     const meta = ACTION_META[action];
@@ -153,37 +183,81 @@ function initDashboard() {
     } catch { toast.dismiss(`miner-${action}`); toast.error("Action Failed", "Could not reach the dashboard host. Please try again.", "action-failed"); }
     pendingStatus = null;
   }
-  const confirmModal = el("confirmModal");
-  const confirmYes = el("confirmYes");
   let armedAction = null;
   function promptAction(action, label) {
     if (pendingStatus) return;
     armedAction = action;
-    text(el("confirmTitle"), label);
-    text(el("confirmDesc"), `Do you want to ${label.toLowerCase()} the miner process?`);
-    className(confirmYes, `auth-btn auth-btn-${action.toLowerCase()}`);
-    text(confirmYes, label);
-    confirmModal.classList.add("show");
+    text(confirm.title, label);
+    text(confirm.desc, `Do you want to ${label.toLowerCase()} the miner process?`);
+    className(confirm.yes, `modal-btn modal-btn-${action.toLowerCase()}`);
+    text(confirm.yes, label);
+    modal.open(confirm.wrap, { dismissable: true, onClose: () => { armedAction = null; } });
   }
-  const closeConfirm = () => { confirmModal.classList.remove("show"); armedAction = null; };
-  els.authSubmit.addEventListener("click", login);
-  els.authInput.addEventListener("keydown", e => { if (e.key === "Enter") login(); });
-  el("confirmCancel").addEventListener("click", closeConfirm);
-  confirmYes.addEventListener("click", () => { const action = armedAction; closeConfirm(); if (action) runAction(action); });
-  els.btnAction.addEventListener("click", () => promptAction(els.btnAction.textContent === "START" ? "start" : "stop", els.btnAction.textContent === "START" ? "START" : "STOP"));
+  auth.submit.addEventListener("click", login);
+  auth.input.addEventListener("keydown", e => { if (e.key === "Enter") login(); });
+  confirm.cancel.addEventListener("click", () => modal.close());
+  confirm.yes.addEventListener("click", () => { const action = armedAction; modal.close(); if (action) runAction(action); });
+  const btnActionKind = () => els.btnAction.textContent === "START" ? "start" : "stop";
+  els.btnAction.addEventListener("click", () => { const action = btnActionKind(); promptAction(action, action.toUpperCase()); });
   els.btnRestart.addEventListener("click", () => promptAction("restart", "RESTART"));
   els.btnAutoScroll.addEventListener("click", () => { consoleView.autoScroll = !consoleView.autoScroll; onAutoScroll(consoleView.autoScroll); });
+  const REFRESH_SETTLE_MS = 400;
+  const REFRESH_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
   let refreshing = false;
+
+  function refreshRotationDeg(svg) {
+    const t = getComputedStyle(svg).transform;
+    if (!t || t === "none") return 0;
+    const m = /matrix\(([^)]+)\)/.exec(t);
+    if (!m) return 0;
+    const p = m[1].split(",").map(Number);
+    const deg = Math.atan2(p[1], p[0]) * (180 / Math.PI);
+    return ((deg % 360) + 360) % 360;
+  }
+
+  function finishRefresh() {
+    if (!refreshing) return;
+    refreshing = false;
+    const svg = els.refresh.querySelector("svg");
+    if (svg) { svg.style.transition = ""; svg.style.transform = ""; }
+    els.refresh.classList.remove("spinning");
+    els.refresh.disabled = false;
+    els.refresh.removeAttribute("aria-busy");
+  }
+
+  function settleRefresh() {
+    const svg = els.refresh.querySelector("svg");
+    const reduceMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!svg || reduceMotion) { finishRefresh(); return; }
+    const angle = refreshRotationDeg(svg);
+    if (angle < 0.5) { finishRefresh(); return; }
+    els.refresh.classList.remove("spinning");
+    svg.style.transition = "none";
+    svg.style.transform = `rotate(${angle}deg)`;
+    void getComputedStyle(svg).transform;
+    svg.style.transition = `transform ${REFRESH_SETTLE_MS}ms ${REFRESH_EASE}`;
+    svg.style.transform = "rotate(0deg)";
+    const onEnd = e => {
+      if (e.propertyName !== "transform") return;
+      svg.removeEventListener("transitionend", onEnd);
+      finishRefresh();
+    };
+    svg.addEventListener("transitionend", onEnd);
+  }
+
   async function softRefresh() {
     if (refreshing) return;
     refreshing = true;
     els.refresh.disabled = true;
+    els.refresh.setAttribute("aria-busy", "true");
     els.refresh.classList.add("spinning");
-    const result = await connection.refresh();
+    let result;
+    try { result = await connection.refresh(); }
+    catch { result = "failed"; }
     if (result === "ok") toast.info("Data Refreshed", "Pulled the latest stats from the dashboard API.", "soft-refresh");
     else if (result === "limited") toast.warn("Slow Down", "Refresh is rate limited. Please wait a moment and try again.", "soft-refresh");
     else if (result === "failed") toast.error("Refresh Failed", "Could not reach the dashboard API. Please try again.", "soft-refresh");
-    setTimeout(() => { refreshing = false; els.refresh.disabled = false; els.refresh.classList.remove("spinning"); }, 900);
+    settleRefresh();
   }
   els.refresh.addEventListener("click", softRefresh);
   document.addEventListener("visibilitychange", () => { if (document.hidden) { stopClock(); connection.suspend(); } else { startClock(); if (connection.idle) connection.connect(); } });

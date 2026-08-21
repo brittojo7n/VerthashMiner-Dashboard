@@ -1,4 +1,4 @@
-import * as toast from "./toast.js";
+import * as toast from "../components/toast.js";
 const REFRESH_WINDOW_MS = 2000;
 const BASE_DELAY_MS = 500;
 const PENALTY_DELAY_MS = 3000;

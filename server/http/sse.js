@@ -1,7 +1,8 @@
 "use strict";
 
-const { formatStatsSnapshot } = require("./state");
-const { LIMITS } = require("./constants");
+const { formatStatsSnapshot } = require("../core/state");
+const { LIMITS } = require("../core/constants");
+const { unrefTimer, unrefInterval } = require("../core/timers");
 
 const HEARTBEAT_FRAME = ": hb\n\n";
 const OPEN_FRAME = ": stream established\n\n";
@@ -30,12 +31,11 @@ class SseHub {
 
   _startHeartbeat() {
     if (this.heartbeatTimer) return;
-    this.heartbeatTimer = setInterval(() => {
+    this.heartbeatTimer = unrefInterval(() => {
       for (const [res] of this.clients) {
         if (!this._write(res, HEARTBEAT_FRAME)) this._drop(res);
       }
     }, LIMITS.HEARTBEAT_MS);
-    if (typeof this.heartbeatTimer.unref === "function") this.heartbeatTimer.unref();
   }
 
   _stopHeartbeat() {
@@ -82,7 +82,7 @@ class SseHub {
 
   broadcast() {
     if (this.clients.size === 0 || !this.state.dirty || this.bcastTimer) return;
-    this.bcastTimer = setTimeout(() => {
+    this.bcastTimer = unrefTimer(() => {
       this.bcastTimer = null;
       if (this.clients.size === 0) return;
       const seq = this.state.miner.logs.seq;
@@ -103,7 +103,6 @@ class SseHub {
         else this._drop(res);
       }
     }, LIMITS.BROADCAST_MS);
-    if (typeof this.bcastTimer.unref === "function") this.bcastTimer.unref();
   }
 
   _reapDeadClients() {

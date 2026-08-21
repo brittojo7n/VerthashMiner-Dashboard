@@ -27,15 +27,13 @@ function parseEnvFile(text) {
 }
 
 function loadEnvFile(envPath, env = process.env) {
-  const target = envPath || env.ENV_FILE || path.join(path.resolve(__dirname, ".."), ".env");
+  const target = envPath || env.ENV_FILE || path.join(path.resolve(__dirname, "..", ".."), ".env");
   try { if (!fs.existsSync(target)) return env; const parsed = parseEnvFile(fs.readFileSync(target, "utf8")); for (const key of Object.keys(parsed)) { if (env[key] === undefined) env[key] = parsed[key]; } } catch { }
   return env;
 }
 
 function clampGpuPollMs(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return GPU_POLL_DEFAULT_MS;
-  return Math.min(GPU_POLL_MAX_MS, Math.max(GPU_POLL_MIN_MS, Math.round(n)));
+  return clampInt(value, GPU_POLL_MIN_MS, GPU_POLL_MAX_MS, GPU_POLL_DEFAULT_MS);
 }
 
 function clampInt(value, min, max, fallback) {
@@ -74,7 +72,7 @@ function buildConfig(env = process.env, opts = {}) {
   const platform = opts.platform || process.platform;
   const warnings = [];
   const rawPort = env.PORT;
-  const PORT = clampInt(rawPort, 0, 65535, 3000);
+  const PORT = clampInt(rawPort, 0, 65535, 4067);
   if (rawPort != null && rawPort !== "" && Number(rawPort) !== PORT) warnings.push(`PORT "${rawPort}" is invalid; using ${PORT}.`);
   const HOST = env.HOST || "127.0.0.1";
   const rawGpuPoll = env.GPU_POLL_MS;

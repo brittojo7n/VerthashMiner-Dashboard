@@ -1,4 +1,4 @@
-import { el, make } from "./dom.js";
+import { el, make } from "../lib/dom.js";
 const DEFAULT_MS = 3000;
 const MAX_VISIBLE = 4;
 const ICONS = { info: "i", warn: "!", error: "\u00d7", success: "\u2713", neutral: "\u25a0" };

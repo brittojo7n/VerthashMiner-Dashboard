@@ -1,4 +1,4 @@
-import { make, text } from "./dom.js";
+import { make, text } from "../lib/dom.js";
 const CACHE_KEY = "vmd:console";
 const CACHE_VERSION = 1;
 const MAX_LINES = 1000;
