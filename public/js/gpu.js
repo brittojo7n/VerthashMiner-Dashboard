@@ -10,7 +10,7 @@ const COUNT_KEY = "vmd:gpuCount";
 export const DEFAULT_SPEC = Object.freeze({
   tempLevels: Object.freeze({ warn: 72, hot: 80 }),
   metrics: Object.freeze([
-    { key: "pstate", label: "P-State", color: "var(--accent2)" },
+    { key: "pstate", label: "P-State", cls: "mvalue-accent" },
     { key: "temp", label: "GPU Temp", tempClass: true },
     { key: "power", label: "Power", unit: "W" },
     { key: "core", label: "Core Clock", unit: "MHz" },
@@ -41,7 +41,6 @@ function buildMetric(m) {
   const cell = make("div", "metric");
   cell.appendChild(make("div", "label", m.label));
   const value = make("div", ["mvalue", m.small && "mvalue-sm", m.cls].filter(Boolean).join(" "));
-  if (m.color) value.style.color = m.color;
   const refs = {};
   if (m.parts) {
     const used = make("span");

@@ -119,6 +119,7 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.5p
 .metric .mvalue#lastAccepted, #lastAccepted { font-size: 15px; font-weight: 500; white-space: nowrap; }
 .metric-util { margin-top: var(--gap); background: rgba(var(--black-rgb), 0.4); }
 .mvalue-sm { font-size: 14px; }
+.mvalue-accent { color: var(--accent2); }
 .gpu-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: var(--gap); margin-bottom: var(--gap); }
 .gpu-name { font-size: var(--fs-section); font-weight: 700; }
 .small { color: var(--muted); font-size: var(--fs-small); }
