@@ -94,7 +94,8 @@ button, input, select, textarea { font-family: inherit; }
   letter-spacing: -0.4px;
   line-height: 1.15;
   color: var(--text-emphasis);
-  overflow-wrap: anywhere;
+  word-break: normal;
+  white-space: normal;
 }
 .sub { color: var(--text-secondary); margin-top: 4px; font-size: var(--fs-sub); }
 
@@ -204,8 +205,9 @@ button, input, select, textarea { font-family: inherit; }
   transition: border-color 0.15s, background-color 0.15s;
 }
 .metric:hover { border-color: var(--border-strong); }
-.metric--card { background: var(--surface-1); border: 1px solid var(--border-l1); border-radius: var(--radius); padding: var(--pad); }
-.metric--tile { background: var(--surface-3); border: 1px solid var(--border-l3); border-radius: var(--radius-sm); padding: 14px; }
+.metric--card, .metric--tile { padding: var(--pad); }
+.metric--card { background: var(--surface-1); border-radius: var(--radius); }
+.metric--tile { background: var(--surface-2); border-radius: var(--radius-sm); }
 .metric--util { grid-column: 1 / -1; }
 
 .metric-label {
@@ -218,6 +220,7 @@ button, input, select, textarea { font-family: inherit; }
 }
 .metric-value {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 4px;
   min-width: 0;
@@ -229,7 +232,7 @@ button, input, select, textarea { font-family: inherit; }
 .metric--card .metric-value { font-size: var(--fs-value); }
 .metric--tile .metric-value { font-size: var(--fs-tile); }
 .metric--small .metric-value { font-size: 14px; font-weight: 600; letter-spacing: 0; }
-.metric-num { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
+.metric-num { font-variant-numeric: tabular-nums; min-width: 0; }
 .metric-unit { font-size: var(--fs-unit); font-weight: 500; opacity: 0.62; white-space: nowrap; }
 .metric--card .metric-unit { font-size: 14px; }
 
@@ -555,6 +558,12 @@ button, input, select, textarea { font-family: inherit; }
 
 @media (max-width: 1023.98px) {
   .grid, .metrics { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 767.98px) {
+  .topbar { flex-wrap: wrap; row-gap: 12px; }
+  .topbar-brand { flex: 1 1 100%; min-width: 0; }
+  .topbar-controls { flex: 1 1 100%; justify-content: space-between; min-width: 0; }
 }
 
 @media (max-width: 479.98px) {

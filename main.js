@@ -185,8 +185,6 @@ function main() {
   }
   for (const note of config.advisories(config)) console.warn(`[dashboard] ${note}`);
 
-  setInterval(() => { if (global.gc) global.gc(); }, 5000).unref();
-
   new Server().start();
 }
 
