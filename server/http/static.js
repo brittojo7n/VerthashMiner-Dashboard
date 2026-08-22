@@ -18,10 +18,10 @@ const COMPRESSIBLE = new Set([".html", ".css", ".js", ".svg"]);
 const MIN_COMPRESS_BYTES = 512;
 const PERMISSIONS = "camera=(), microphone=(), geolocation=(), interest-cohort=()";
 
-function buildCsp(scriptHash) {
+function buildCsp() {
   return [
     "default-src 'self'",
-    `script-src 'self' 'sha256-${scriptHash}'`,
+    "script-src 'self'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data:",
@@ -88,15 +88,12 @@ function makeAsset(name, buf, csp) {
 function buildAssets(webDir) {
   const root = webDir || path.resolve(__dirname, "..", "..", "web");
   const readScript = name => fs.readFileSync(path.join(root, `${name}.js`), "utf8");
-  const head = readScript("core/head").trim();
-  const scriptHash = crypto.createHash("sha256").update(head).digest("base64");
-  const csp = buildCsp(scriptHash);
+  const csp = buildCsp();
 
   const modules = {};
   const app = bundleModules(id => (modules[id] = readScript(id)));
 
   let html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  html = html.replace('<script src="/js/head.js"></script>', `<script>${head}</script>`);
   html = html.replace('<script type="module" src="/js/app.js"></script>', '<script src="/app.js"></script>');
 
   const css = fs.readFileSync(path.join(root, "style.css"), "utf8");

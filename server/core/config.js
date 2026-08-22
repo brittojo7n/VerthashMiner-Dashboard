@@ -107,4 +107,4 @@ function advisories(config) {
 loadEnvFile();
 const config = buildConfig(process.env);
 
-module.exports = Object.assign({}, config, { buildConfig, validateConfig, advisories, parseEnvFile, loadEnvFile, splitArgs, clampGpuPollMs });
+module.exports = Object.assign({}, config, { validateConfig, advisories, clampGpuPollMs });
