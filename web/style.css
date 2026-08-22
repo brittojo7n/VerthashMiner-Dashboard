@@ -84,7 +84,10 @@ button, input, select, textarea { font-family: inherit; }
 .wrap { max-width: 1200px; margin: 0 auto; padding: 32px 16px; }
 .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: var(--gap); padding: var(--pad) calc(var(--pad) + 4px); border-radius: var(--radius); box-shadow: var(--glass-edge); }
 .top-left { min-width: 0; flex: 1 1 auto; }
-.title-row { display: flex; align-items: center; justify-content: flex-start; gap: 12px; min-width: 0; }
+/* Title + refresh: keep the refresh button docked to the title line with a small gap.
+   width:fit-content prevents the row from stretching, so the button never drifts toward
+   the action controls or to the far edge at any viewport width. */
+.title-row { display: flex; align-items: center; gap: 10px; min-width: 0; width: fit-content; }
 .title-row h1 { min-width: 0; }
 .refresh-btn { flex-shrink: 0; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid rgba(var(--white-rgb), 0.14); background: rgba(var(--white-rgb), 0.08); color: var(--slate-200); cursor: pointer; padding: 0; -webkit-tap-highlight-color: transparent; transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease; }
 .refresh-btn:hover { background: rgba(var(--white-rgb), 0.16); border-color: rgba(var(--white-rgb), 0.28); color: var(--white); }
