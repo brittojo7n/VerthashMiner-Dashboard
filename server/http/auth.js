@@ -108,4 +108,4 @@ class SessionStore {
   clearFailures(ip) { this.attempts.delete(ip); }
 }
 
-module.exports = { SessionStore, safeEqual, MAX_SESSIONS, LOCKOUT_THRESHOLD, LOCKOUT_MS };
+module.exports = { SessionStore, safeEqual };

@@ -15,7 +15,7 @@ export function timestamp(ms, tz) {
   return tz ? `${base} (${tz})` : base;
 }
 export const stripLogPrefix = text => String(text).replace(/^\[[^\]]+\]\s*\w+\s*/, "");
-const tempClass = (t, levels) => (t == null ? "" : t >= levels.hot ? "red" : t >= levels.warn ? "yellow" : "green");
+const tempStatus = (t, levels) => (t == null ? null : t >= levels.hot ? "danger" : t >= levels.warn ? "warn" : "ok");
 export const IDLE_STATUS = new Set(["STOPPED", "CRASHED", "ERROR"]);
 export const LIVE_STATUS = new Set(["MINING", "CONNECTED", "WAITING", "DISCONNECTED"]);
 function effectiveStatus(snapshot, pendingStatus) {
@@ -55,7 +55,7 @@ export function presentGpu(gpu, opts = {}) {
     name: `GPU ${gpu.index} \u2022 ${gpu.name || "Unknown"}`,
     pstate: gpu.pstate || DASH,
     temp: gpu.temperatureC != null ? `${num(gpu.temperatureC, 0)}\u00b0C` : DASH,
-    tempClass: tempClass(gpu.temperatureC, levels),
+    tempStatus: tempStatus(gpu.temperatureC, levels),
     power: num(gpu.powerW, 1),
     core: num(gpu.coreMHz, 0),
     mem: num(gpu.memoryMHz, 0),

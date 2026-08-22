@@ -14,3 +14,6 @@ Thumbs.db
 logs/
 *.log
 node_modules/
+
+# transient UI test screenshots
+.arena/

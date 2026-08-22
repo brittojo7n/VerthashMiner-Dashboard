@@ -7,8 +7,8 @@ function focusables(root) {
 }
 
 export function createModal() {
-  const backdrop = make("div", "modal-backdrop glass-overlay");
-  const dialog = make("div", "modal glass-modal");
+  const backdrop = make("div", "modal-backdrop");
+  const dialog = make("div", "modal");
   dialog.setAttribute("role", "dialog");
   dialog.setAttribute("aria-modal", "true");
   backdrop.appendChild(dialog);
