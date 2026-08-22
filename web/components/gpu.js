@@ -49,8 +49,9 @@ export function buildCard(spec = DEFAULT_SPEC) {
     metricRefs.push({ m, metric });
   }
 
-  const util = createMetric({ label: spec.util.label, unit: spec.util.unit, surface: 2, bar: true, small: true });
-  panel.append(head, metrics, util.node);
+  const util = createMetric({ label: spec.util.label, unit: spec.util.unit, surface: 2, bar: true, small: true, cls: "metric--util" });
+  metrics.appendChild(util.node);
+  panel.append(head, metrics);
   refs.util = util;
 
   return { panel, refs, metricRefs };

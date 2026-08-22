@@ -139,22 +139,26 @@ button, input, select, textarea { font-family: inherit; }
 .topbar-controls { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .btn-group-header { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
-/* Status badge: fixed minimum width so state changes never shift layout. */
+/* Status badge: fixed width so state changes never shift layout. The longest
+   label (e.g. "RECONNECTING") still fits within the 135px minimum, so the
+   badge never grows past it and adjacent controls never move. */
 .status {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 135px;
+  max-width: 135px;
+  width: 135px;
   flex-shrink: 0;
-  padding: 10px 16px;
+  padding: 8px 12px;
   border-radius: var(--radius-pill);
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text-primary);
   font-weight: 700;
-  font-size: var(--fs-badge);
-  letter-spacing: 1px;
+  font-size: 10px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   white-space: nowrap;
   contain: layout;
@@ -226,6 +230,7 @@ button, input, select, textarea { font-family: inherit; }
 .metric:hover { border-color: var(--border-strong); }
 .metric--card { background: var(--surface-1); border-radius: var(--radius); padding: var(--pad); }
 .metric--tile { background: var(--surface-2); border-radius: var(--radius-sm); padding: 14px; }
+.metric--util { grid-column: 1 / -1; }
 
 .metric-label {
   color: var(--text-secondary);
@@ -578,47 +583,66 @@ button, input, select, textarea { font-family: inherit; }
 
 /* ============================================================================
    Responsive
+   ----------------------------------------------------------------------------
+   Column behaviour:
+     > 950px   — 4-column grids (desktop / 4K)
+     360–950px — 2-column grids (tablets and modern phones, incl. S22 Ultra)
+     < 360px   — single column (legacy ~320px phones only)
+   The header control bar (STOP/RESTART/status) stays on ONE horizontal row
+   for every 2+ column layout and only stacks below the single-column cut-off.
    ========================================================================== */
 @media (max-width: 950px) {
   .grid { grid-template-columns: repeat(2, 1fr); }
   .metrics { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Header wraps into two rows while STOP/RESTART/status stay on one line. */
+/* Header splits into two rows (title / controls) but STOP/RESTART/status
+   remain locked on a single horizontal line. */
 @media (max-width: 720px) {
   .topbar { flex-wrap: wrap; row-gap: 12px; }
   .topbar-brand { flex: 1 1 100%; }
   .topbar-controls { flex: 1 1 100%; justify-content: space-between; }
 }
 
-/* Single-column grid (< 480px): controls stack into a mobile layout. */
-@media (max-width: 479.98px) {
-  :root { --gap: 10px; --pad: 14px; }
-  .wrap { padding: 10px; }
-  .grid, .metrics { grid-template-columns: 1fr; }
-
-  .topbar-controls { flex-wrap: wrap; gap: 8px; }
-  .btn-group-header { flex: 1 1 100%; gap: 8px; }
-  #btnAction, #btnRestart { flex: 1 1 auto; min-width: 0; }
-  .status { flex: 1 1 100%; width: 100%; min-width: 135px; }
+/* Phone-friendly density — the two-column layout is preserved. */
+@media (max-width: 600px) {
+  :root { --gap: 10px; --pad: 14px; --radius: 14px; }
+  .wrap { padding: 12px 10px; }
+  .topbar { padding: 12px 16px; }
+  .metric--card { padding: 12px; }
+  .metric--card .metric-value { font-size: 20px; letter-spacing: -0.5px; }
+  .metric--card .metric-unit { font-size: 12px; }
+  .metric-label { font-size: 10.5px; letter-spacing: 0.5px; }
+  .metric--tile { padding: 12px; }
+  .metric--tile .metric-value { font-size: 14px; }
+  .metric--small .metric-value { font-size: 12px; }
 
   .refresh-btn { width: 32px; height: 32px; }
   .refresh-btn svg { width: 14px; height: 14px; }
 
-  .metric--tile { padding: 12px; }
   .gpu-head { flex-wrap: wrap; gap: 8px; }
 
   .console-topbar { flex-direction: column; align-items: flex-start; gap: 8px; }
   .console-actions { width: 100%; justify-content: space-between; }
   .console-counter { text-align: left; }
   .console-terminal { min-height: 200px; max-height: 350px; font-size: 11px; }
-}
 
-@media (max-width: 600px) {
   .toast-stack { bottom: 40px; right: 10px; left: 10px; align-items: stretch; }
   .toast { padding: 11px 13px; }
   .local-time-bar { padding: 4px 10px; border-top-left-radius: 8px; }
   .local-time-value { font-size: 10px; }
+}
+
+/* Legacy ~320px phones: collapse to a single column and stack the control
+   bar vertically (synchronized with the single-column grid). */
+@media (max-width: 359.98px) {
+  :root { --gap: 10px; --pad: 12px; }
+  .grid, .metrics { grid-template-columns: 1fr; }
+
+  .topbar-controls { flex-wrap: wrap; gap: 8px; }
+  .btn-group-header { flex: 1 1 100%; gap: 8px; }
+  #btnAction, #btnRestart { flex: 1 1 auto; min-width: 0; }
+  .status { flex: 1 1 100%; width: 100%; }
 }
 
 /* ============================================================================
