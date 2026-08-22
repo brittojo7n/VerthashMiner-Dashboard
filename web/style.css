@@ -61,29 +61,23 @@ html { overflow-y: scroll; }
 body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); -webkit-font-smoothing: antialiased; }
 body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(circle at 15% 50px, rgba(var(--accent2-rgb), 0.1), transparent 25%), radial-gradient(circle at 85% 30%, rgba(var(--purple-rgb), 0.1), transparent 25%); }
 button, input, select, textarea { font-family: inherit; }
-/* Borderless liquid-glass surfaces: tint comes from the glass itself (--tint-rgb / --glass-tint),
-   with depth carried by --glass-edge (soft bevel highlight) and the shared blur / shadow stack. */
 .glass-panel, .glass-modal { background: rgba(var(--tint-rgb, var(--glass-tint)), var(--tint-alpha, 0.55)); }
 .glass-pill { background: linear-gradient(180deg, rgba(var(--white-rgb), 0.05), rgba(var(--white-rgb), 0)), rgba(var(--bg-rgb), 0.55); }
 .glass-overlay { background: var(--overlay); }
-/* Semantic liquid-glass tint tokens — set --tint-rgb to tint any glass surface with a subtle, borderless accent. */
 .glass-red { --tint-rgb: var(--red-rgb); }
 .glass-green { --tint-rgb: var(--green-rgb); }
 .glass-blue { --tint-rgb: var(--accent2-rgb); }
 .glass-yellow { --tint-rgb: var(--yellow-rgb); }
 .glass-neutral { --tint-rgb: var(--slate-rgb); }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .fx .glass-panel, .fx .local-time-bar { backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
-  .fx .toast { backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); background: linear-gradient(135deg, rgba(var(--toast-rgb), 0.16), rgba(var(--toast-rgb), 0.04) 60%, transparent), rgba(var(--glass-tint), 0.6); }
+  .fx .glass-panel, .fx .local-time-bar { backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); will-change: transform; transform: translateZ(0); }
+  .fx .toast { backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); background: linear-gradient(135deg, rgba(var(--toast-rgb), 0.16), rgba(var(--toast-rgb), 0.04) 60%, transparent), rgba(var(--glass-tint), 0.6); will-change: transform; transform: translateZ(0); }
   .modal-backdrop { backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
 }
 @media (max-width: 700px) { :root { --glass-blur: blur(10px) saturate(140%); } }
 .wrap { max-width: 1200px; margin: 0 auto; padding: 32px 16px; }
 .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: var(--gap); padding: var(--pad) calc(var(--pad) + 4px); border-radius: var(--radius); box-shadow: var(--glass-edge); }
 .top-left { min-width: 0; flex: 1 1 auto; }
-/* Title + refresh: keep the refresh button docked to the title line with a small gap.
-   width:fit-content prevents the row from stretching, so the button never drifts toward
-   the action controls or to the far edge at any viewport width. */
 .title-row { display: flex; align-items: center; gap: 10px; min-width: 0; width: fit-content; }
 .title-row h1 { min-width: 0; }
 .refresh-btn { flex-shrink: 0; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid rgba(var(--white-rgb), 0.14); background: rgba(var(--white-rgb), 0.08); color: var(--slate-200); cursor: pointer; padding: 0; -webkit-tap-highlight-color: transparent; transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease; }
@@ -139,8 +133,8 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.5p
 .wallet-addr { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; opacity: 0.55; font-size: var(--fs-small); letter-spacing: 0.3px; min-width: 0; contain: layout; }
 .bar-bg { height: 6px; border-radius: 10px; background: rgba(var(--white-rgb), 0.1); margin-top: 12px; overflow: hidden; }
 .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); width: 100%; transform: scaleX(0); transform-origin: 0 50%; transition: transform 0.3s ease-out; box-shadow: 0 0 10px rgba(var(--accent2-rgb), 0.5); will-change: transform; }
-.errorbox { display: none; margin-top: var(--gap); padding: var(--pad); border-radius: 12px; background: linear-gradient(135deg, rgba(var(--red-rgb), 0.18), rgba(var(--red-rgb), 0.05) 60%, transparent), rgba(var(--glass-tint), 0.6); box-shadow: var(--glass-edge); color: var(--red-300); word-break: break-word; font-family: var(--mono); font-size: var(--fs-small); min-height: 0; transition: min-height 0.2s; contain: layout; }
-.errorbox.show { display: block; min-height: 48px; }
+.errorbox { display: none; margin-top: var(--gap); padding: var(--pad); border-radius: 12px; background: linear-gradient(135deg, rgba(var(--red-rgb), 0.18), rgba(var(--red-rgb), 0.05) 60%, transparent), rgba(var(--glass-tint), 0.6); box-shadow: var(--glass-edge); color: var(--red-300); word-break: break-word; font-family: var(--mono); font-size: var(--fs-small); contain: layout; }
+.errorbox.show { display: block; }
 .console-box { margin-top: var(--gap); background: var(--surface-sunken); border: 1px solid rgba(var(--white-rgb), 0.1); border-radius: calc(var(--radius) - 2px); overflow: hidden; box-shadow: var(--shadow-sunken); }
 .console-topbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: rgba(var(--white-rgb), 0.03); border-bottom: 1px solid rgba(var(--white-rgb), 0.07); flex-wrap: wrap; gap: 10px; }
 .console-title-group { display: flex; align-items: center; gap: 12px; }

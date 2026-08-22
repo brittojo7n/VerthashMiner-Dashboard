@@ -121,10 +121,9 @@ class Server {
   }
 
   stop(exitCode = 0) {
-    if (this._exiting) return;
+    if (this._exiting) return this._stopPromise || Promise.resolve();
     this._exiting = true;
 
-    this._detachSignalHandlers();
     this.gpuManager.stop();
     this.sseHub.closeAll();
 
@@ -142,7 +141,7 @@ class Server {
         this.httpServer.close(() => resolve());
       });
 
-    Promise.resolve()
+    this._stopPromise = Promise.resolve()
       .then(() => this.minerManager.stop())
       .catch(err => this._onFault("miner-stop", err))
       .then(() => {
@@ -152,8 +151,11 @@ class Server {
       .catch(err => this._onFault("http-close", err))
       .then(() => {
         clearTimeout(this._shutdownWatchdog);
+        this._detachSignalHandlers();
         process.exit(exitCode);
       });
+
+    return this._stopPromise;
   }
 
   _attachSignalHandlers() {
@@ -182,6 +184,8 @@ function main() {
     process.exit(1);
   }
   for (const note of config.advisories(config)) console.warn(`[dashboard] ${note}`);
+
+  setInterval(() => { if (global.gc) global.gc(); }, 5000).unref();
 
   new Server().start();
 }

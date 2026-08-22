@@ -135,7 +135,9 @@ export function render(container, gpus, gpuError, spec = DEFAULT_SPEC) {
     const frag = document.createDocumentFragment();
     for (const card of cards) frag.appendChild(card.panel);
     container.appendChild(frag);
-    try { localStorage.setItem("vmd:gpuH", String(container.offsetHeight)); document.documentElement.style.removeProperty("--gpus-min"); } catch { }
+    requestAnimationFrame(() => {
+      try { localStorage.setItem("vmd:gpuH", String(container.offsetHeight)); document.documentElement.style.removeProperty("--gpus-min"); } catch { }
+    });
   }
   for (let i = 0; i < gpus.length; i++) {
     const v = presentGpu(gpus[i], spec.tempLevels);

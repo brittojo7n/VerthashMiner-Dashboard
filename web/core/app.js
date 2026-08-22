@@ -201,50 +201,7 @@ function initDashboard() {
   els.btnAction.addEventListener("click", () => { const action = btnActionKind(); promptAction(action, action.toUpperCase()); });
   els.btnRestart.addEventListener("click", () => promptAction("restart", "RESTART"));
   els.btnAutoScroll.addEventListener("click", () => { consoleView.autoScroll = !consoleView.autoScroll; onAutoScroll(consoleView.autoScroll); });
-  const REFRESH_SETTLE_MS = 400;
-  const REFRESH_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
   let refreshing = false;
-
-  function refreshRotationDeg(svg) {
-    const t = getComputedStyle(svg).transform;
-    if (!t || t === "none") return 0;
-    const m = /matrix\(([^)]+)\)/.exec(t);
-    if (!m) return 0;
-    const p = m[1].split(",").map(Number);
-    const deg = Math.atan2(p[1], p[0]) * (180 / Math.PI);
-    return ((deg % 360) + 360) % 360;
-  }
-
-  function finishRefresh() {
-    if (!refreshing) return;
-    refreshing = false;
-    const svg = els.refresh.querySelector("svg");
-    if (svg) { svg.style.transition = ""; svg.style.transform = ""; }
-    els.refresh.classList.remove("spinning");
-    els.refresh.disabled = false;
-    els.refresh.removeAttribute("aria-busy");
-  }
-
-  function settleRefresh() {
-    const svg = els.refresh.querySelector("svg");
-    const reduceMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!svg || reduceMotion) { finishRefresh(); return; }
-    const angle = refreshRotationDeg(svg);
-    if (angle < 0.5) { finishRefresh(); return; }
-    els.refresh.classList.remove("spinning");
-    svg.style.transition = "none";
-    svg.style.transform = `rotate(${angle}deg)`;
-    void getComputedStyle(svg).transform;
-    svg.style.transition = `transform ${REFRESH_SETTLE_MS}ms ${REFRESH_EASE}`;
-    svg.style.transform = "rotate(0deg)";
-    const onEnd = e => {
-      if (e.propertyName !== "transform") return;
-      svg.removeEventListener("transitionend", onEnd);
-      finishRefresh();
-    };
-    svg.addEventListener("transitionend", onEnd);
-  }
-
   async function softRefresh() {
     if (refreshing) return;
     refreshing = true;
@@ -257,7 +214,12 @@ function initDashboard() {
     if (result === "ok") toast.info("Data Refreshed", "Pulled the latest stats from the dashboard API.", "soft-refresh");
     else if (result === "limited") toast.warn("Slow Down", "Refresh is rate limited. Please wait a moment and try again.", "soft-refresh");
     else if (result === "failed") toast.error("Refresh Failed", "Could not reach the dashboard API. Please try again.", "soft-refresh");
-    settleRefresh();
+    setTimeout(() => {
+      refreshing = false;
+      els.refresh.classList.remove("spinning");
+      els.refresh.disabled = false;
+      els.refresh.removeAttribute("aria-busy");
+    }, 400);
   }
   els.refresh.addEventListener("click", softRefresh);
   document.addEventListener("visibilitychange", () => { if (document.hidden) { stopClock(); connection.suspend(); } else { startClock(); if (connection.idle) connection.connect(); } });

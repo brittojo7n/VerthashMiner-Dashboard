@@ -343,16 +343,15 @@ class MinerManager {
 
       const forceKill = () => {
         if (child.exitCode !== null || child.signalCode !== null) return;
-        try { child.kill("SIGKILL"); } catch { }
+        if (process.platform === "win32") {
+          execFile("taskkill.exe", ["/pid", String(pid), "/T", "/F"], () => {});
+        } else {
+          try { child.kill("SIGKILL"); } catch { }
+        }
       };
 
-      if (process.platform === "win32") {
-        execFile("taskkill.exe", ["/pid", String(pid), "/T", "/F"], () => {});
-        this._forceKillTimer = timer(forceKill, this.timeouts.forceKill);
-      } else {
-        try { child.kill("SIGINT"); } catch { }
-        this._forceKillTimer = timer(forceKill, this.timeouts.forceKill);
-      }
+      try { child.kill("SIGINT"); } catch { }
+      this._forceKillTimer = timer(forceKill, this.timeouts.forceKill);
 
       watchdog = timer(() => {
         if (settled) return;
