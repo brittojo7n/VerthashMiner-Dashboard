@@ -1,36 +1,27 @@
-/* ============================================================================
-   VerthashMiner Dashboard — True AMOLED Material design system
-   Solid elevation surfaces, no card-level blur, consolidated tokens.
-   ========================================================================== */
-
 :root {
-  /* --- Surfaces: 3-tier opaque elevation scale --------------------------- */
-  --surface-0: #000000;                    /* Level 0 — app canvas          */
-  --surface-1: #121212;                    /* Level 1 — primary surface     */
-  --surface-2: #1E1E1E;                    /* Level 2 — nested surface      */
-  --surface-3: #242424;                    /* hover / raised detail         */
-  --border: rgba(255, 255, 255, 0.08);     /* uniform 1px surface stroke    */
+  --surface-0: #000000;
+  --surface-1: #121212;
+  --surface-2: #1E1E1E;
+  --surface-3: #242424;
+  --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.14);
 
-  /* --- Text --------------------------------------------------------------- */
-  --text-emphasis: #F4F4F5;                /* primary values / headings     */
-  --text-primary: #EDEDED;                 /* body text                     */
-  --text-secondary: #94A3B8;               /* secondary metric labels       */
-  --text-faint: #64748B;                   /* disabled / faint              */
+  --text-emphasis: #F4F4F5;
+  --text-primary: #EDEDED;
+  --text-secondary: #94A3B8;
+  --text-faint: #64748B;
 
-  /* --- Semantic accents ---------------------------------------------------- */
-  --cyan: #06B6D4;                         /* hashrate / progress / active  */
+  --cyan: #06B6D4;
   --cyan-bright: #22D3EE;
-  --green: #10B981;                        /* MINING / optimal / accepted   */
+  --green: #10B981;
   --green-bright: #34D399;
-  --red: #EF4444;                          /* STOP / rejected / hot         */
+  --red: #EF4444;
   --red-bright: #F87171;
-  --amber: #F59E0B;                        /* RESTART / warnings            */
+  --amber: #F59E0B;
   --amber-bright: #FBBF24;
-  --violet: #A855F7;                       /* difficulty / stratum logs     */
+  --violet: #A855F7;
   --violet-bright: #C084FC;
 
-  /* --- RGB triplets for translucent accent tints -------------------------- */
   --white-rgb: 255, 255, 255;
   --cyan-rgb: 6, 182, 212;
   --green-rgb: 16, 185, 129;
@@ -39,19 +30,16 @@
   --violet-rgb: 168, 85, 247;
   --text-secondary-rgb: 148, 163, 184;
 
-  /* --- Typography ---------------------------------------------------------- */
   --font: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --mono: 'JetBrains Mono', 'Consolas', monospace;
 
-  /* --- Spacing & shape ----------------------------------------------------- */
   --gap: 14px;
   --pad: 20px;
   --radius: 16px;
   --radius-sm: 10px;
   --radius-pill: 999px;
 
-  /* --- Type scale (fluid) --------------------------------------------------- */
-  --fs-h1: clamp(18px, 2.4vw, 24px);
+  --fs-h1: clamp(1rem, 4.5vw, 1.25rem);
   --fs-section: 17px;
   --fs-value: clamp(24px, 2.6vw, 30px);
   --fs-tile: clamp(15px, 1.6vw, 18px);
@@ -59,13 +47,10 @@
   --fs-sub: 13px;
   --fs-small: 12px;
   --fs-unit: 13px;
-  --fs-badge: 11px;
+  --fs-badge: 10px;
   --fs-btn: 11px;
 }
 
-/* ============================================================================
-   Base
-   ========================================================================== */
 *, *::before, *::after { box-sizing: border-box; }
 html { overflow-y: scroll; background: var(--surface-0); }
 body {
@@ -80,9 +65,6 @@ button, input, select, textarea { font-family: inherit; }
 
 .wrap { max-width: 1200px; margin: 0 auto; padding: 32px 16px; }
 
-/* ============================================================================
-   Header
-   ========================================================================== */
 .topbar {
   display: flex;
   align-items: center;
@@ -97,18 +79,16 @@ button, input, select, textarea { font-family: inherit; }
 }
 .topbar-brand { display: flex; flex-direction: column; min-width: 0; }
 
-/* Refresh button stays docked to the title inside this shared inline group. */
-.title-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .title-row h1 {
   margin: 0;
   min-width: 0;
   font-size: var(--fs-h1);
   font-weight: 800;
   letter-spacing: -0.4px;
+  line-height: 1.15;
   color: var(--text-emphasis);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 .sub { color: var(--text-secondary); margin-top: 4px; font-size: var(--fs-sub); }
 
@@ -135,48 +115,44 @@ button, input, select, textarea { font-family: inherit; }
 .refresh-btn.spinning svg { animation: refresh-spin 0.9s linear infinite; }
 @keyframes refresh-spin { to { transform: rotate(360deg); } }
 
-/* Unified right-hand control bar: action buttons + status badge. */
 .topbar-controls { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .btn-group-header { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
-/* Status badge: fixed width so state changes never shift layout. The longest
-   label (e.g. "RECONNECTING") still fits within the 135px minimum, so the
-   badge never grows past it and adjacent controls never move. */
 .status {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-width: 135px;
-  max-width: 135px;
-  width: 135px;
+  min-width: 120px;
+  width: 120px;
   flex-shrink: 0;
-  padding: 8px 12px;
+  padding: 8px 10px;
   border-radius: var(--radius-pill);
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text-primary);
   font-weight: 700;
-  font-size: 10px;
-  letter-spacing: 0.5px;
+  font-size: var(--fs-badge);
+  letter-spacing: 0.4px;
   text-transform: uppercase;
   white-space: nowrap;
   contain: layout;
 }
 #status { display: inline-block; min-width: 0; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-faint); flex-shrink: 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); flex-shrink: 0; }
 .dot.ok { background: var(--green); }
 .dot.err { background: var(--red); }
 .dot.warn { background: var(--amber); }
 
-/* ============================================================================
-   Buttons
-   ========================================================================== */
 .c-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  padding: 7px 12px;
+  padding: 6px 12px;
   border-radius: 8px;
   font-size: var(--fs-btn);
   font-weight: 700;
@@ -201,9 +177,6 @@ button, input, select, textarea { font-family: inherit; }
   color: var(--btn-fg-hover);
 }
 
-/* ============================================================================
-   Layout grid
-   ========================================================================== */
 .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap); }
 .summary { display: contents; }
 .panel {
@@ -219,12 +192,9 @@ button, input, select, textarea { font-family: inherit; }
 .mt-0 { margin-top: 0 !important; }
 .min-w-0 { min-width: 0; }
 
-/* ============================================================================
-   Reusable metric component
-   ========================================================================== */
 .metric {
   border: 1px solid var(--border);
-  contain: paint layout;          /* isolate numeric DOM updates */
+  contain: paint layout;
   transition: border-color 0.15s, background-color 0.15s;
 }
 .metric:hover { border-color: var(--border-strong); }
@@ -257,7 +227,6 @@ button, input, select, textarea { font-family: inherit; }
 .metric-unit { font-size: var(--fs-unit); font-weight: 500; opacity: 0.62; white-space: nowrap; }
 .metric--card .metric-unit { font-size: 14px; }
 
-/* Semantic accent roles (preserved palette). */
 .metric-value.accent-cyan { color: var(--cyan-bright); }
 .metric-value.accent-green { color: var(--green-bright); }
 .metric-value.accent-red { color: var(--red-bright); }
@@ -267,9 +236,6 @@ button, input, select, textarea { font-family: inherit; }
 .metric-bar { height: 6px; border-radius: var(--radius-pill); background: rgba(var(--white-rgb), 0.08); margin-top: 12px; overflow: hidden; }
 .metric-bar-fill { height: 100%; background: var(--cyan); width: 100%; transform: scaleX(0); transform-origin: 0 50%; transition: transform 0.3s ease-out; }
 
-/* ============================================================================
-   GPU telemetry
-   ========================================================================== */
 .gpu-panel {
   margin-top: var(--gap);
   background: var(--surface-2);
@@ -311,9 +277,6 @@ button, input, select, textarea { font-family: inherit; }
   min-width: 0;
 }
 
-/* ============================================================================
-   Console
-   ========================================================================== */
 .console-box {
   margin-top: var(--gap);
   background: var(--surface-2);
@@ -419,9 +382,6 @@ button, input, select, textarea { font-family: inherit; }
 }
 .errorbox.show { display: block; }
 
-/* ============================================================================
-   Modal — the only surfaces permitted to use backdrop blur
-   ========================================================================== */
 .modal-backdrop {
   position: fixed;
   top: 0;
@@ -472,6 +432,7 @@ button, input, select, textarea { font-family: inherit; }
 .btn-group { display: flex; gap: 12px; margin-top: 24px; }
 .modal-btn {
   width: 100%;
+  min-height: 44px;
   padding: 12px;
   margin-top: 16px;
   border-radius: 8px;
@@ -501,9 +462,6 @@ button, input, select, textarea { font-family: inherit; }
 }
 .modal-error { color: var(--red-bright); font-size: 13px; margin-top: 12px; display: none; }
 
-/* ============================================================================
-   Toasts — dynamic popups (blur permitted behind the fx gate)
-   ========================================================================== */
 .toast-stack {
   position: fixed;
   bottom: 46px;
@@ -559,9 +517,6 @@ button, input, select, textarea { font-family: inherit; }
 .toast-title { font-size: var(--fs-sub); font-weight: 600; letter-spacing: 0.2px; margin-bottom: 2px; color: var(--text-emphasis); }
 .toast-msg { font-size: var(--fs-small); line-height: 1.45; color: var(--text-secondary); overflow-wrap: anywhere; }
 
-/* ============================================================================
-   Local time bar
-   ========================================================================== */
 .local-time-bar {
   position: fixed;
   bottom: 0;
@@ -581,34 +536,21 @@ button, input, select, textarea { font-family: inherit; }
 }
 .local-time-value { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0.4px; font-variant-numeric: tabular-nums; }
 
-/* ============================================================================
-   Responsive
-   ----------------------------------------------------------------------------
-   Column behaviour:
-     > 950px   — 4-column grids (desktop / 4K)
-     360–950px — 2-column grids (tablets and modern phones, incl. S22 Ultra)
-     < 360px   — single column (legacy ~320px phones only)
-   The header control bar (STOP/RESTART/status) stays on ONE horizontal row
-   for every 2+ column layout and only stacks below the single-column cut-off.
-   ========================================================================== */
-@media (max-width: 950px) {
+@media (max-width: 1023.98px) {
   .grid { grid-template-columns: repeat(2, 1fr); }
   .metrics { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Header splits into two rows (title / controls) but STOP/RESTART/status
-   remain locked on a single horizontal line. */
-@media (max-width: 720px) {
+@media (max-width: 719.98px) {
   .topbar { flex-wrap: wrap; row-gap: 12px; }
   .topbar-brand { flex: 1 1 100%; }
   .topbar-controls { flex: 1 1 100%; justify-content: space-between; }
 }
 
-/* Phone-friendly density — the two-column layout is preserved. */
-@media (max-width: 600px) {
+@media (max-width: 599.98px) {
   :root { --gap: 10px; --pad: 14px; --radius: 14px; }
   .wrap { padding: 12px 10px; }
-  .topbar { padding: 12px 16px; }
+  .topbar { padding: 12px 14px; }
   .metric--card { padding: 12px; }
   .metric--card .metric-value { font-size: 20px; letter-spacing: -0.5px; }
   .metric--card .metric-unit { font-size: 12px; }
@@ -616,9 +558,6 @@ button, input, select, textarea { font-family: inherit; }
   .metric--tile { padding: 12px; }
   .metric--tile .metric-value { font-size: 14px; }
   .metric--small .metric-value { font-size: 12px; }
-
-  .refresh-btn { width: 32px; height: 32px; }
-  .refresh-btn svg { width: 14px; height: 14px; }
 
   .gpu-head { flex-wrap: wrap; gap: 8px; }
 
@@ -633,21 +572,18 @@ button, input, select, textarea { font-family: inherit; }
   .local-time-value { font-size: 10px; }
 }
 
-/* Legacy ~320px phones: collapse to a single column and stack the control
-   bar vertically (synchronized with the single-column grid). */
 @media (max-width: 359.98px) {
   :root { --gap: 10px; --pad: 12px; }
+  .wrap { padding: 10px 8px; }
   .grid, .metrics { grid-template-columns: 1fr; }
+  .metric--card, .metric--tile { padding: 12px; }
 
   .topbar-controls { flex-wrap: wrap; gap: 8px; }
   .btn-group-header { flex: 1 1 100%; gap: 8px; }
-  #btnAction, #btnRestart { flex: 1 1 auto; min-width: 0; }
-  .status { flex: 1 1 100%; width: 100%; }
+  #btnAction, #btnRestart { flex: 1 1 50%; min-width: 0; }
+  .status { flex: 1 1 100%; width: 100%; max-width: none; }
 }
 
-/* ============================================================================
-   Reduced motion
-   ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
   .toast, .metric-bar-fill, .c-btn, .modal-btn, .modal, .modal-backdrop { transition: none; }
   .toast.show, .toast.hide, .modal { transform: none; }

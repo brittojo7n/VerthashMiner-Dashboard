@@ -1,27 +1,6 @@
 import { make, text } from "../lib/dom.js";
 import { DASH } from "../lib/present.js";
 
-/**
- * Reusable telemetry metric component.
- *
- * Single source of truth for every numeric readout in the dashboard:
- * top-level summary cards (Hashrate / Shares / Acceptance / Uptime) and the
- * nested GPU + mining stat tiles (P-State, Temp, Power, Clocks, VRAM,
- * Efficiency, Rejected, Difficulty, ...).
- *
- * Options:
- *   label   - secondary metric label (uppercased via CSS)
- *   value   - initial value string
- *   unit    - optional unit suffix (rendered dimmed)
- *   accent  - semantic accent: "cyan" | "green" | "red" | "amber" | "violet"
- *   status  - dynamic semantic state: "ok" | "warn" | "danger" (overrides accent)
- *   surface - elevation level: 1 (primary card) | 2 (nested tile)
- *   bar     - render a progress bar (utilization) instead of a plain value row
- *   parts   - { used, total } split value rendering (VRAM)
- *   small   - compact value typography (Last Share, utilization)
- *   cls     - extra classes
- */
-
 const ACCENT_CLASS = {
   cyan: "accent-cyan",
   green: "accent-green",
