@@ -4,6 +4,7 @@ import { createModal } from "../components/modal.js";
 import { presentSnapshot, sharesPerMinute, dotClass, timestamp, uptime, stripLogPrefix, DASH, IDLE_STATUS as IDLE, LIVE_STATUS as LIVE } from "../lib/present.js";
 import * as toast from "../components/toast.js";
 import * as gpuView from "../components/gpu.js";
+import { createMetric } from "../components/metric.js";
 import { createConsole } from "../components/console.js";
 import { createConnection } from "./connection.js";
 const ACTION_META = {
@@ -39,18 +40,39 @@ function buildConfirmContent() {
   return { wrap, title, desc, cancel, yes };
 }
 
+function buildSummary(host) {
+  const cards = {
+    hashrate: createMetric({ label: "Total Hashrate", value: DASH, unit: "kH/s", accent: "cyan", surface: 1 }),
+    accepted: createMetric({ label: "Shares (Acc / Sub)", value: DASH, accent: "green", surface: 1 }),
+    ratio: createMetric({ label: "Acceptance Ratio", value: DASH, surface: 1 }),
+    uptime: createMetric({ label: "Uptime", value: DASH, surface: 1 })
+  };
+  for (const card of Object.values(cards)) host.appendChild(card.node);
+  return cards;
+}
+
+function buildMiningMetrics(host) {
+  const cards = {
+    rejected: createMetric({ label: "Rejected", value: "0", accent: "red", surface: 2 }),
+    spm: createMetric({ label: "Shares Per Minute", value: DASH, accent: "green", surface: 2 }),
+    difficulty: createMetric({ label: "Network Difficulty", value: DASH, accent: "violet", surface: 2 }),
+    lastAccepted: createMetric({ label: "Last Share", value: DASH, surface: 2, small: true })
+  };
+  for (const card of Object.values(cards)) host.appendChild(card.node);
+  return cards;
+}
+
 function initDashboard() {
   const els = {
     dot: el("dot"), status: el("status"), host: el("host"),
     btnAction: el("btnAction"), btnRestart: el("btnRestart"), error: el("error"),
     gpus: el("gpus"), localTime: el("localTime"),
     btnAutoScroll: el("btnAutoScroll"),
-    uptime: el("uptime"), spm: el("sharesPerMinute"),
-    hashrate: el("hashrate"), accepted: el("accepted"), ratio: el("ratio"),
-    rejected: el("rejected"), difficulty: el("difficulty"),
-    lastAccepted: el("lastAccepted"), wallet: el("walletAddress"),
+    wallet: el("walletAddress"),
     refresh: el("btnRefresh")
   };
+  const summary = buildSummary(el("summary"));
+  const mining = buildMiningMetrics(el("miningMetrics"));
   const modal = createModal();
   const auth = buildAuthContent();
   const confirm = buildConfirmContent();
@@ -65,9 +87,12 @@ function initDashboard() {
     text(els.localTime, timestamp(now, tz));
     if (startedAt) {
       const elapsed = Math.max(0, now - startedAt);
-      text(els.uptime, uptime(Math.floor(elapsed / 1000)));
-      text(els.spm, sharesPerMinute(accepted, elapsed));
-    } else { text(els.uptime, DASH); text(els.spm, DASH); }
+      summary.uptime.set({ value: uptime(Math.floor(elapsed / 1000)) });
+      mining.spm.set({ value: sharesPerMinute(accepted, elapsed) });
+    } else {
+      summary.uptime.set({ value: DASH });
+      mining.spm.set({ value: DASH });
+    }
   }
   const startClock = () => { ticker ||= setInterval(tick, 1000); };
   const stopClock = () => { clearInterval(ticker); ticker = null; };
@@ -105,12 +130,12 @@ function initDashboard() {
     announce(display.status);
     text(els.host, display.host);
     applyChrome(display.status, !!pendingStatus);
-    text(els.hashrate, display.hashrate);
-    text(els.accepted, display.accepted);
-    text(els.ratio, display.ratio);
-    text(els.rejected, display.rejected);
-    text(els.difficulty, display.difficulty);
-    text(els.lastAccepted, display.lastAccepted);
+    summary.hashrate.set({ value: display.hashrate });
+    summary.accepted.set({ value: display.accepted });
+    summary.ratio.set({ value: display.ratio });
+    mining.rejected.set({ value: display.rejected });
+    mining.difficulty.set({ value: display.difficulty });
+    mining.lastAccepted.set({ value: display.lastAccepted });
     text(els.wallet, display.wallet);
     consoleView.render(snapshot.miner.logs, { count: snapshot.logCount, seq: snapshot.logSeq });
     if (snapshot.miner.lastError) {

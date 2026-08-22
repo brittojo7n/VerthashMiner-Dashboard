@@ -17,8 +17,8 @@
 
 <body>
   <div class="wrap">
-    <div class="top glass-panel">
-      <div class="top-left">
+    <header class="topbar">
+      <div class="topbar-brand">
         <div class="title-row">
           <h1>VerthashMiner Dashboard</h1>
           <button type="button" class="refresh-btn" id="btnRefresh" title="Refresh data"
@@ -32,34 +32,19 @@
         </div>
         <div class="sub" id="host">Initializing connection...</div>
       </div>
-      <div class="top-actions">
+      <div class="topbar-controls">
         <div class="btn-group-header">
           <button class="c-btn btn-start" id="btnAction" disabled>START</button>
           <button class="c-btn btn-restart" id="btnRestart" disabled>RESTART</button>
         </div>
-        <div class="status glass-pill"><span class="dot" id="dot"></span><span id="status">CONNECTING</span></div>
+        <div class="status"><span class="dot" id="dot"></span><span id="status">CONNECTING</span></div>
       </div>
-    </div>
+    </header>
 
-    <div class="grid">
-      <div class="panel glass-panel">
-        <div class="label">Total Hashrate</div>
-        <div class="value gradient-text"><span id="hashrate">—</span><span class="unit">kH/s</span></div>
-      </div>
-      <div class="panel glass-panel">
-        <div class="label">SHARES (ACC / SUB)</div>
-        <div class="value green" id="accepted">—</div>
-      </div>
-      <div class="panel glass-panel">
-        <div class="label">Acceptance Ratio</div>
-        <div class="value" id="ratio">—</div>
-      </div>
-      <div class="panel glass-panel">
-        <div class="label">Uptime</div>
-        <div class="value" id="uptime">—</div>
-      </div>
+    <main class="grid">
+      <div class="summary" id="summary"></div>
 
-      <div class="panel wide glass-panel">
+      <section class="panel wide">
         <div class="gpu-head">
           <div>
             <div class="gpu-name">GPU Telemetry</div>
@@ -67,33 +52,16 @@
           </div>
         </div>
         <div id="gpus"></div>
-      </div>
+      </section>
 
-      <div class="panel wide glass-panel">
+      <section class="panel wide">
         <div class="gpu-head">
           <div class="min-w-0">
             <div class="gpu-name">Mining Metrics</div>
             <div class="small wallet-addr" id="walletAddress">—</div>
           </div>
         </div>
-        <div class="metrics">
-          <div class="metric">
-            <div class="label">Rejected</div>
-            <div class="mvalue red" id="rejected">0</div>
-          </div>
-          <div class="metric">
-            <div class="label">Shares Per Minute</div>
-            <div class="mvalue green" id="sharesPerMinute">—</div>
-          </div>
-          <div class="metric">
-            <div class="label">Network Difficulty</div>
-            <div class="mvalue purple" id="difficulty">—</div>
-          </div>
-          <div class="metric">
-            <div class="label">Last Share</div>
-            <div class="mvalue" id="lastAccepted">—</div>
-          </div>
-        </div>
+        <div class="metrics" id="miningMetrics"></div>
         <div class="console-box">
           <div class="console-topbar">
             <div class="console-title-group">
@@ -123,8 +91,8 @@
         </div>
 
         <div id="error" class="errorbox" role="alert" aria-live="assertive"></div>
-      </div>
-    </div>
+      </section>
+    </main>
   </div>
 
   <div class="local-time-bar" id="localTimeBar">
