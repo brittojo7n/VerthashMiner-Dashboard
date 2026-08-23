@@ -63,7 +63,7 @@ function getServerTz() {
 const SERVER_TZ = getServerTz();
 const HOSTNAME = os.hostname();
 
-function createState(wallet = "", maxLogs = 50) {
+function createState(wallet = "", maxLogs = 50, worker = null) {
   return {
     dirty: true,
     startedAt: Date.now(),
@@ -77,7 +77,8 @@ function createState(wallet = "", maxLogs = 50) {
       lastLine: "",
       lastError: "",
       logs: new CircularLogBuffer(maxLogs),
-      wallet
+      wallet,
+      worker: worker || null
     },
     mining: {
       hashrateKHs: null,
@@ -154,6 +155,7 @@ function formatStatsSnapshot(state, options) {
       lastLine: miner.lastLine,
       lastError: miner.lastError,
       wallet: miner.wallet,
+      worker: miner.worker || null,
       logs: entries
     },
     logsFrom,

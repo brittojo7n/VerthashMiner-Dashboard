@@ -43,7 +43,8 @@ export function presentSnapshot(snapshot, options = {}) {
     rejected: String(m.rejected),
     difficulty: m.difficulty == null ? DASH : String(m.difficulty),
     lastAccepted: m.lastAcceptedAt ? timestamp(m.lastAcceptedAt) : DASH,
-    wallet: snapshot.miner.wallet || DASH,
+    wallet: snapshot.miner.wallet || "",
+    worker: snapshot.miner.worker || null,
     host: `Host: ${snapshot.host.hostname}`
   };
 }

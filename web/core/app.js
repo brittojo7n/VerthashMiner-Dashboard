@@ -5,6 +5,7 @@ import { presentSnapshot, sharesPerMinute, dotClass, timestamp, uptime, stripLog
 import * as toast from "../components/toast.js";
 import * as gpuView from "../components/gpu.js";
 import { createMetric } from "../components/metric.js";
+import { createIdentity } from "../components/identity.js";
 import { createConsole } from "../components/console.js";
 import { createConnection } from "./connection.js";
 const ACTION_META = {
@@ -68,10 +69,11 @@ function initDashboard() {
     btnAction: el("btnAction"), btnRestart: el("btnRestart"), error: el("error"),
     gpus: el("gpus"), localTime: el("localTime"),
     btnAutoScroll: el("btnAutoScroll"),
-    wallet: el("walletAddress"),
     refresh: el("btnRefresh")
   };
   const summary = buildSummary(el("summary"));
+  const identity = createIdentity();
+  el("identity").appendChild(identity.node);
   const mining = buildMiningMetrics(el("miningMetrics"));
   const modal = createModal();
   const auth = buildAuthContent();

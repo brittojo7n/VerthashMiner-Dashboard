@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { parseMinerUser } = require("./user");
 
 const GPU_POLL_MIN_MS = 3000;
 const GPU_POLL_MAX_MS = 10000;
@@ -66,7 +67,7 @@ function deviceSelection(args) {
   return { cu: all("--all-cu-devices") ? null : parseIndexList(argValue(args, ["--cu-devices", "-D"])), cl: all("--all-cl-devices") ? null : parseIndexList(argValue(args, ["--cl-devices", "-d"])) };
 }
 
-function extractWallet(args) { const raw = argValue(args, ["-u", "--user"]); return raw ? String(raw).split(".")[0] : ""; }
+function extractIdentity(args) { return parseMinerUser(argValue(args, ["-u", "--user"])); }
 
 function buildConfig(env = process.env, opts = {}) {
   const platform = opts.platform || process.platform;
@@ -81,10 +82,11 @@ function buildConfig(env = process.env, opts = {}) {
   const MINER_EXE = env.MINER_EXE || (platform === "win32" ? "VerthashMiner.exe" : "VerthashMiner");
   const MINER_ARGS = splitArgs(env.MINER_ARGS);
   if (!MINER_ARGS.includes("-P") && !MINER_ARGS.includes("--protocol-dump")) MINER_ARGS.push("--protocol-dump");
+  const identity = extractIdentity(MINER_ARGS);
   return Object.freeze({
     PORT, HOST, GPU_POLL_MS, GPU_POLL_MIN_MS, GPU_POLL_MAX_MS, GPU_POLL_DEFAULT_MS, clampGpuPollMs,
     MINER_EXE, MINER_ARGS: Object.freeze(MINER_ARGS), MINER_CWD: env.MINER_CWD || "", PASSPHRASE: env.PASSPHRASE || "",
-    SESSION_SECRET: env.SESSION_SECRET || "", WALLET: extractWallet(MINER_ARGS),
+    SESSION_SECRET: env.SESSION_SECRET || "", WALLET: identity.wallet, WORKER: identity.worker,
     DEVICE_SELECTION: Object.freeze(deviceSelection(MINER_ARGS)), FORWARD_CONSOLE: env.FORWARD_CONSOLE === "true", warnings: Object.freeze(warnings)
   });
 }
