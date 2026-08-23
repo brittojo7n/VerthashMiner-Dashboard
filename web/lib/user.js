@@ -27,7 +27,7 @@ function resolveIdentity(flags) {
   return {
     wallet: parsed.wallet,
     worker,
-    user: formatMinerUser({ wallet: parsed.wallet, worker: parsed.worker })
+    user: formatMinerUser({ wallet: parsed.wallet, worker })
   };
 }
 

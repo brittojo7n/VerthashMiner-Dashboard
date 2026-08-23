@@ -71,7 +71,10 @@ class SseHub {
   _drop(res) {
     if (!this.clients.delete(res)) return;
     try { res.end(); } catch (err) { if (DEBUG) console.debug("[dashboard] sse end failed:", err.message); }
-    if (this.clients.size === 0) this._stopHeartbeat();
+    if (this.clients.size === 0) {
+      this._stopHeartbeat();
+      if (this.bcastTimer) { clearTimeout(this.bcastTimer); this.bcastTimer = null; }
+    }
     this._notifyChange();
   }
 
@@ -88,8 +91,8 @@ class SseHub {
       this.bcastTimer = null;
       if (this.clients.size === 0) return;
       const seq = this.state.miner.logs.seq;
-      const fullPayload = this._frame(formatStatsSnapshot(this.state));
-      const frames = new Map([[seq, fullPayload]]);
+      const deltaPayload = this._frame(formatStatsSnapshot(this.state, { logsSince: seq }));
+      const frames = new Map([[seq, deltaPayload]]);
       this.state.dirty = false;
       for (const [res, meta] of this.clients) {
         if (meta.blocked) {

@@ -243,7 +243,7 @@ button, input, select, textarea { font-family: inherit; }
 .metric-value.accent-violet { color: var(--violet-bright); }
 
 .metric-bar { height: 6px; border-radius: var(--radius-pill); background: rgba(var(--white-rgb), 0.08); margin-top: 12px; overflow: hidden; }
-.metric-bar-fill { height: 100%; background: var(--cyan); width: 100%; transform: scaleX(0); transform-origin: 0 50%; transition: transform 0.3s ease-out; }
+.metric-bar-fill { height: 100%; background: var(--cyan); width: 100%; transform: scaleX(0) translateZ(0); transform-origin: 0 50%; transition: transform 0.3s ease-out; will-change: transform; }
 
 .gpu-panel {
   margin-top: var(--gap);
@@ -473,11 +473,12 @@ button, input, select, textarea { font-family: inherit; }
   width: 100%;
   max-width: 360px;
   text-align: center;
-  transform: translateY(12px);
+  transform: translateY(12px) translateZ(0);
   transition: transform 0.25s ease;
+  will-change: transform;
   contain: layout;
 }
-.modal-backdrop.show .modal { transform: translateY(0); }
+.modal-backdrop.show .modal { transform: translateY(0) translateZ(0); }
 .modal h2 { margin: 0 0 8px; font-size: 20px; color: var(--text-emphasis); }
 .modal p { color: var(--text-secondary); font-size: 14px; margin: 0 0 24px; }
 .modal-input {
@@ -551,12 +552,13 @@ button, input, select, textarea { font-family: inherit; }
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   color: var(--text-primary);
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(10px) translateZ(0);
   transition: opacity 0.22s ease, transform 0.22s ease;
+  will-change: transform, opacity;
 }
 .fx .toast { backdrop-filter: blur(10px) saturate(140%); -webkit-backdrop-filter: blur(10px) saturate(140%); background: rgba(var(--surface-1-rgb), 0.78); }
-.toast.show { opacity: 1; transform: translateY(0); }
-.toast.hide { opacity: 0; transform: translateY(6px); }
+.toast.show { opacity: 1; transform: translateY(0) translateZ(0); }
+.toast.hide { opacity: 0; transform: translateY(6px) translateZ(0); }
 .toast-info { --toast-rgb: var(--cyan-rgb); }
 .toast-warn { --toast-rgb: var(--amber-rgb); }
 .toast-error { --toast-rgb: var(--red-rgb); }
@@ -666,7 +668,7 @@ button, input, select, textarea { font-family: inherit; }
   .metric--small .metric-value { font-size: 12px; }
 
   .identity { margin-top: 6px; }
-  .identity-field { height: 30px; padding: 0 10px; }
+  .identity-field, .identity-field:first-child { height: 30px; padding: 0 10px; width: 100%; max-width: 100%; box-sizing: border-box; }
   .identity-value { font-size: 11px; }
 
   .gpu-head { flex-wrap: wrap; gap: 8px; }

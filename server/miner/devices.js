@@ -52,6 +52,11 @@ function createStreamReader(onLine, onFlush, isEnabled, forward) {
   let buffer = "";
   return function handleChunk(chunk) {
     if (forward) forward(chunk);
+    const enabled = isEnabled();
+    if (!enabled) {
+      buffer = "";
+      return;
+    }
     buffer += chunk;
     const cut = buffer.lastIndexOf("\n");
     if (cut === -1) {
@@ -61,7 +66,6 @@ function createStreamReader(onLine, onFlush, isEnabled, forward) {
     const block = buffer.slice(0, cut);
     buffer = buffer.slice(cut + 1);
     if (buffer.length > LIMITS.STREAM_BUFFER_BYTES) buffer = buffer.slice(-LIMITS.STREAM_BUFFER_BYTES);
-    const enabled = isEnabled();
     let start = 0;
     for (;;) {
       const nl = block.indexOf("\n", start);
@@ -72,7 +76,7 @@ function createStreamReader(onLine, onFlush, isEnabled, forward) {
       if (nl === -1) break;
       start = nl + 1;
     }
-    if (enabled && typeof onFlush === "function") onFlush();
+    if (typeof onFlush === "function") onFlush();
   };
 }
 
