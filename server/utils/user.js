@@ -10,4 +10,11 @@ function parseMinerUser(raw) {
   return { wallet, worker: worker || null };
 }
 
-module.exports = { parseMinerUser };
+function formatMinerUser(identity) {
+  const wallet = identity && identity.wallet ? String(identity.wallet).trim() : "";
+  const worker = identity && identity.worker ? String(identity.worker).trim() : "";
+  if (!wallet) return "";
+  return worker ? `${wallet}.${worker}` : wallet;
+}
+
+module.exports = { parseMinerUser, formatMinerUser };

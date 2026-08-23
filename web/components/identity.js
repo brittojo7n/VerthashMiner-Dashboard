@@ -84,15 +84,11 @@ export function createIdentity() {
       text(wallet.value, address || DASH);
       wallet.value.title = address;
       copyBtn.disabled = !address;
-      if (parsed.worker) {
-        text(worker.value, parsed.worker);
-        worker.value.title = parsed.worker;
-        worker.row.hidden = false;
-      } else {
-        text(worker.value, "");
-        worker.value.title = "";
-        worker.row.hidden = true;
-      }
+      const hasWorker = Boolean(parsed.worker);
+      text(worker.value, hasWorker ? parsed.worker : "");
+      worker.value.title = hasWorker ? parsed.worker : "";
+      worker.row.hidden = !hasWorker;
+      worker.row.classList.toggle("is-empty", !hasWorker);
       return this;
     }
   };

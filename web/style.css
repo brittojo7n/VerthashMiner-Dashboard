@@ -295,6 +295,8 @@ button, input, select, textarea { font-family: inherit; }
   border-radius: 8px;
   background: var(--surface-2);
 }
+.identity-field[hidden],
+.identity-field.is-empty { display: none !important; }
 .identity-field:first-child { flex: 1 1 220px; }
 .identity-label {
   flex: 0 0 auto;

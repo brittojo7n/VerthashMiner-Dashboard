@@ -2,7 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { parseMinerUser } = require("./user");
+const { parseMinerUser, formatMinerUser } = require("./user");
 
 const GPU_POLL_MIN_MS = 3000;
 const GPU_POLL_MAX_MS = 10000;
@@ -67,9 +67,27 @@ function deviceSelection(args) {
   return { cu: all("--all-cu-devices") ? null : parseIndexList(argValue(args, ["--cu-devices", "-D"])), cl: all("--all-cl-devices") ? null : parseIndexList(argValue(args, ["--cl-devices", "-d"])) };
 }
 
+function applyUserArg(args, user) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "-u" || arg === "--user") {
+      if (i + 1 < args.length) args[i + 1] = user;
+      return;
+    }
+    if (arg.startsWith("-u=")) {
+      args[i] = `-u=${user}`;
+      return;
+    }
+    if (arg.startsWith("--user=")) {
+      args[i] = `--user=${user}`;
+      return;
+    }
+  }
+}
+
 function extractIdentity(args) {
-  const raw = argValue(args, ["-u", "--user"]);
-  return Object.assign({ user: raw ? String(raw).trim() : "" }, parseMinerUser(raw));
+  const parsed = parseMinerUser(argValue(args, ["-u", "--user"]));
+  return { user: formatMinerUser(parsed), wallet: parsed.wallet, worker: parsed.worker };
 }
 
 function buildConfig(env = process.env, opts = {}) {
@@ -86,6 +104,7 @@ function buildConfig(env = process.env, opts = {}) {
   const MINER_ARGS = splitArgs(env.MINER_ARGS);
   if (!MINER_ARGS.includes("-P") && !MINER_ARGS.includes("--protocol-dump")) MINER_ARGS.push("--protocol-dump");
   const identity = extractIdentity(MINER_ARGS);
+  if (identity.user) applyUserArg(MINER_ARGS, identity.user);
   return Object.freeze({
     PORT, HOST, GPU_POLL_MS, GPU_POLL_MIN_MS, GPU_POLL_MAX_MS, GPU_POLL_DEFAULT_MS, clampGpuPollMs,
     MINER_EXE, MINER_ARGS: Object.freeze(MINER_ARGS), MINER_CWD: env.MINER_CWD || "", PASSPHRASE: env.PASSPHRASE || "",
