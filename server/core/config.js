@@ -67,7 +67,10 @@ function deviceSelection(args) {
   return { cu: all("--all-cu-devices") ? null : parseIndexList(argValue(args, ["--cu-devices", "-D"])), cl: all("--all-cl-devices") ? null : parseIndexList(argValue(args, ["--cl-devices", "-d"])) };
 }
 
-function extractIdentity(args) { return parseMinerUser(argValue(args, ["-u", "--user"])); }
+function extractIdentity(args) {
+  const raw = argValue(args, ["-u", "--user"]);
+  return Object.assign({ user: raw ? String(raw).trim() : "" }, parseMinerUser(raw));
+}
 
 function buildConfig(env = process.env, opts = {}) {
   const platform = opts.platform || process.platform;
@@ -86,7 +89,7 @@ function buildConfig(env = process.env, opts = {}) {
   return Object.freeze({
     PORT, HOST, GPU_POLL_MS, GPU_POLL_MIN_MS, GPU_POLL_MAX_MS, GPU_POLL_DEFAULT_MS, clampGpuPollMs,
     MINER_EXE, MINER_ARGS: Object.freeze(MINER_ARGS), MINER_CWD: env.MINER_CWD || "", PASSPHRASE: env.PASSPHRASE || "",
-    SESSION_SECRET: env.SESSION_SECRET || "", WALLET: identity.wallet, WORKER: identity.worker,
+    SESSION_SECRET: env.SESSION_SECRET || "", USER: identity.user, WALLET: identity.wallet, WORKER: identity.worker,
     DEVICE_SELECTION: Object.freeze(deviceSelection(MINER_ARGS)), FORWARD_CONSOLE: env.FORWARD_CONSOLE === "true", warnings: Object.freeze(warnings)
   });
 }

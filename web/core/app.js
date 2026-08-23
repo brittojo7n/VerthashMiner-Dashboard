@@ -138,7 +138,11 @@ function initDashboard() {
     mining.rejected.set({ value: display.rejected });
     mining.difficulty.set({ value: display.difficulty });
     mining.lastAccepted.set({ value: display.lastAccepted });
-    text(els.wallet, display.wallet);
+    identity.set({
+      user: snapshot.miner.user,
+      wallet: snapshot.miner.wallet,
+      worker: snapshot.miner.worker
+    });
     consoleView.render(snapshot.miner.logs, { count: snapshot.logCount, seq: snapshot.logSeq });
     if (snapshot.miner.lastError) {
       className(els.error, "errorbox show");

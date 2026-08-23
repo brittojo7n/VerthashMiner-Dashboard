@@ -116,7 +116,7 @@ Session tokens are `HMAC-SHA256(SESSION_SECRET, 32 random bytes)`, stored server
 The backend holds application state in memory and emits normalized snapshots over HTTP and SSE:
 
 - **Clock & Lifetime:** `now` (Unix timestamp in ms), `uptimeSeconds` (calculated from `miner.startedAt` while the child is running; $0$ otherwise).
-- **Miner Process Status:** `miner.running` (boolean), `pid`, `startedAt`, `exitCode`, `signal`, `lastLine`, `lastError`, parsed wallet address `miner.wallet`, and optional worker name `miner.worker`. Both identity fields come from the `-u` / `--user` argument: text before the first `.` is the wallet; non-empty text after it is the worker. A trailing dot with no worker name is stripped and `miner.worker` is `null`.
+- **Miner Process Status:** `miner.running` (boolean), `pid`, `startedAt`, `exitCode`, `signal`, `lastLine`, `lastError`, raw user string `miner.user`, parsed wallet address `miner.wallet`, and optional worker name `miner.worker`. All three identity fields come from the `-u` / `--user` argument (for example `vtc1q….TUF_A15`): text before the first `.` is the wallet; non-empty text after it is the worker. A trailing dot with no worker name is stripped and `miner.worker` is `null`.
 - **Ring Logs:** `miner.logs[]` (last 25 log entries structured as `{ id, text, type }`), tracked with sequence markers `logsFrom`, `logSeq`, `logCount`, and `logCapacity`. SSE clients receive a delta via `logsSince` so they do not re-download the whole ring.
 - **Mining Metrics:**
   - `mining.status`: State enum (`STOPPED`, `STARTING`, `STOPPING`, `RESTARTING`, `CONNECTED`, `WAITING`, `MINING`, `DISCONNECTED`, `CRASHED`).

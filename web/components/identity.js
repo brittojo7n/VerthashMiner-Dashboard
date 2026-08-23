@@ -1,13 +1,14 @@
 import { make, text } from "../lib/dom.js";
 import { DASH } from "../lib/present.js";
 import { parseMinerUser, minerUserSource } from "../lib/user.js";
-import * as toast from "./toast.js";
 
 const COPY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>';
 
 function writeClipboard(value) {
-  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(value);
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    return navigator.clipboard.writeText(value);
+  }
   return new Promise((resolve, reject) => {
     const area = document.createElement("textarea");
     area.value = value;
@@ -27,28 +28,28 @@ function writeClipboard(value) {
   });
 }
 
+function field(labelText) {
+  const row = make("div", "identity-field");
+  const label = make("span", "identity-label", labelText);
+  const value = make("span", "identity-value");
+  row.append(label, value);
+  return { row, value };
+}
+
 export function createIdentity() {
   const node = make("div", "identity");
-  const walletRow = make("div", "identity-row");
-  const walletLabel = make("span", "identity-label", "Wallet");
-  const walletValue = make("span", "identity-value");
-  walletValue.title = "";
+  const wallet = field("Wallet");
   const copyBtn = make("button", "identity-copy");
   copyBtn.type = "button";
   copyBtn.title = "Copy wallet address";
   copyBtn.setAttribute("aria-label", "Copy wallet address");
   copyBtn.innerHTML = COPY_SVG;
-  walletRow.append(walletLabel, walletValue, copyBtn);
+  wallet.row.appendChild(copyBtn);
+  const worker = field("Worker");
+  worker.row.hidden = true;
+  node.append(wallet.row, worker.row);
 
-  const workerRow = make("div", "identity-row identity-worker");
-  workerRow.hidden = true;
-  const workerLabel = make("span", "identity-label", "Worker");
-  const workerValue = make("span", "identity-value identity-worker-value");
-  workerRow.append(workerLabel, workerValue);
-
-  node.append(walletRow, workerRow);
-
-  let wallet = "";
+  let address = "";
   let copiedTimer = 0;
 
   function markCopied(on) {
@@ -58,15 +59,14 @@ export function createIdentity() {
   }
 
   copyBtn.addEventListener("click", async () => {
-    if (!wallet) return;
+    if (!address) return;
     try {
-      await writeClipboard(wallet);
+      await writeClipboard(address);
       markCopied(true);
       clearTimeout(copiedTimer);
       copiedTimer = setTimeout(() => markCopied(false), 1600);
-      toast.success("Wallet Copied", "Address copied to clipboard.", "wallet-copy");
     } catch {
-      toast.error("Copy Failed", "Could not copy the wallet address.", "wallet-copy");
+      markCopied(false);
     }
   });
 
@@ -75,18 +75,19 @@ export function createIdentity() {
     set(next = {}) {
       const parsed = typeof next === "string"
         ? parseMinerUser(next)
-        : parseMinerUser(minerUserSource(next));
-      wallet = parsed.wallet || "";
-      const shown = wallet || DASH;
-      text(walletValue, shown);
-      walletValue.title = wallet;
-      copyBtn.disabled = !wallet;
+        : parseMinerUser(next.user || minerUserSource(next));
+      address = parsed.wallet || "";
+      text(wallet.value, address || DASH);
+      wallet.value.title = address;
+      copyBtn.disabled = !address;
       if (parsed.worker) {
-        text(workerValue, parsed.worker);
-        workerRow.hidden = false;
+        text(worker.value, parsed.worker);
+        worker.value.title = parsed.worker;
+        worker.row.hidden = false;
       } else {
-        text(workerValue, "");
-        workerRow.hidden = true;
+        text(worker.value, "");
+        worker.value.title = "";
+        worker.row.hidden = true;
       }
       return this;
     }

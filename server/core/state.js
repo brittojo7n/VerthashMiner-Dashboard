@@ -154,6 +154,7 @@ function formatStatsSnapshot(state, options) {
       signal: miner.signal,
       lastLine: miner.lastLine,
       lastError: miner.lastError,
+      user: miner.user || "",
       wallet: miner.wallet,
       worker: miner.worker || null,
       logs: entries

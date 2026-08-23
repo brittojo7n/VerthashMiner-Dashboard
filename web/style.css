@@ -277,28 +277,31 @@ button, input, select, textarea { font-family: inherit; }
 
 .identity {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: var(--pad);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  contain: layout;
-}
-.identity-row {
-  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  min-width: 0;
+  gap: 6px;
+  margin-top: 8px;
+  max-width: 100%;
 }
+.identity-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.identity-field:first-child { flex: 1 1 220px; }
 .identity-label {
   flex: 0 0 auto;
-  color: var(--text-secondary);
-  font-size: var(--fs-label);
-  font-weight: 500;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  min-width: 64px;
+  letter-spacing: 0.7px;
 }
 .identity-value {
   flex: 1 1 auto;
@@ -307,32 +310,31 @@ button, input, select, textarea { font-family: inherit; }
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.2px;
-  color: var(--text-emphasis);
+  letter-spacing: 0.15px;
+  color: var(--text-primary);
 }
-.identity-worker-value { font-family: var(--font); font-weight: 600; letter-spacing: 0; }
 .identity-copy {
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
+  width: 22px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface-3);
-  color: var(--text-secondary);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
-.identity-copy svg { width: 14px; height: 14px; }
-.identity-copy:hover:not(:disabled) { background: var(--surface-1); border-color: var(--border-strong); color: var(--text-emphasis); }
-.identity-copy:disabled { opacity: 0.35; cursor: not-allowed; }
-.identity-copy.copied { border-color: rgba(var(--green-rgb), 0.5); color: var(--green-bright); background: rgba(var(--green-rgb), 0.14); }
+.identity-copy svg { width: 13px; height: 13px; }
+.identity-copy:hover:not(:disabled) { color: var(--text-emphasis); background: rgba(var(--white-rgb), 0.06); }
+.identity-copy:disabled { opacity: 0.3; cursor: not-allowed; }
+.identity-copy.copied { color: var(--green-bright); background: rgba(var(--green-rgb), 0.12); }
 
 .console-box {
   margin-top: var(--gap);
@@ -655,10 +657,10 @@ button, input, select, textarea { font-family: inherit; }
   .metric--tile .metric-value { font-size: 14px; }
   .metric--small .metric-value { font-size: 12px; }
 
-  .identity { padding: 12px; gap: 8px; }
-  .identity-label { min-width: 56px; font-size: 10.5px; letter-spacing: 0.5px; }
-  .identity-value { font-size: 12px; }
-  .identity-copy { width: 30px; height: 30px; }
+  .identity { margin-top: 6px; }
+  .identity-field { padding: 3px 7px; }
+  .identity-field:first-child { flex-basis: 100%; }
+  .identity-value { font-size: 11px; }
 
   .gpu-head { flex-wrap: wrap; gap: 8px; }
 
