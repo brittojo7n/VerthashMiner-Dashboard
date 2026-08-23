@@ -1,9 +1,6 @@
-const hasDom =
-  typeof document !== "undefined" &&
-  typeof document.documentElement === "object";
+const hasDom = typeof document !== "undefined" && typeof document.documentElement === "object";
 const root = hasDom ? document.documentElement : null;
-const media = (query) =>
-  typeof matchMedia === "function" ? matchMedia(query).matches : false;
+const media = (query) => typeof matchMedia === "function" ? matchMedia(query).matches : false;
 const LOCK_KEY = "vmd:fxLock";
 
 function createPerfGate(env) {
@@ -61,15 +58,9 @@ function createPerfGate(env) {
 
 function initBrowserGate() {
   const storage = {
-    get(key) {
-      return window.sessionStorage.getItem(key);
-    },
-    set(key, value) {
-      window.sessionStorage.setItem(key, value);
-    },
-    remove(key) {
-      window.sessionStorage.removeItem(key);
-    },
+    get(key) { return window.sessionStorage.getItem(key); },
+    set(key, value) { window.sessionStorage.setItem(key, value); },
+    remove(key) { window.sessionStorage.removeItem(key); },
   };
   let gateApi = null;
   try {

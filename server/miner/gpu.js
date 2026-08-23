@@ -52,8 +52,7 @@ function sameTelemetry(a, b) {
   if (a === b) return true;
   if (!a || !b || a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
-    const x = a[i],
-      y = b[i];
+    const x = a[i], y = b[i];
     if (
       x.temperatureC !== y.temperatureC ||
       x.powerW !== y.powerW ||
@@ -71,12 +70,7 @@ function sameTelemetry(a, b) {
 }
 
 class GpuManager {
-  constructor({
-    state,
-    pollMs = GPU_POLL_DEFAULT_MS,
-    onUpdate,
-    exec = execFile,
-  } = {}) {
+  constructor({ state, pollMs = GPU_POLL_DEFAULT_MS, onUpdate, exec = execFile } = {}) {
     this.state = state;
     this.pollMs = clampGpuPollMs(pollMs);
     this.onUpdate = onUpdate;
@@ -151,8 +145,7 @@ class GpuManager {
             parsed = null;
           }
           if (parsed) {
-            const changed =
-              !sameTelemetry(this.state.gpu, parsed) || this.state.gpuError;
+            const changed = !sameTelemetry(this.state.gpu, parsed) || this.state.gpuError;
             this.state.gpu = parsed;
             this.state.gpuError = "";
             if (changed) this._notify();

@@ -57,9 +57,7 @@ function getServerTz() {
   const off = -new Date().getTimezoneOffset();
   const sign = off >= 0 ? "+" : "-";
   const abs = Math.abs(off);
-  return `UTC${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(
-    abs % 60,
-  ).padStart(2, "0")}`;
+  return `UTC${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
 }
 
 const SERVER_TZ = getServerTz();
@@ -100,20 +98,14 @@ function createState(wallet = "", maxLogs = 50, worker = null, user = "") {
       pciMap: Object.create(null),
     },
     gpu: [],
-    host: {
-      hostname: HOSTNAME,
-      tz: SERVER_TZ,
-    },
+    host: { hostname: HOSTNAME, tz: SERVER_TZ },
   };
 }
 
 function hashrateForGpu(state, gpu) {
-  if (!state || !state.mining || !gpu) return null;
-  const pciMap = state.mining.pciMap;
-  const mapped = pciMap && gpu.pciBusId ? pciMap[gpu.pciBusId] : undefined;
+  const mapped = state.mining.pciMap[gpu.pciBusId];
   const devIndex = mapped !== undefined ? mapped : gpu.index;
   const rates = state.mining.gpuHashrates;
-  if (!rates) return null;
   const cuda = rates[`cu_${devIndex}`];
   return cuda !== undefined ? cuda : rates[`cl_${devIndex}`];
 }
@@ -124,8 +116,7 @@ function formatStatsSnapshot(state, options) {
   const minerStart = miner.startedAt || state.startedAt;
   const logs = miner.logs;
 
-  const sinceId =
-    options && Number.isFinite(options.logsSince) ? options.logsSince : 0;
+  const sinceId = options && Number.isFinite(options.logsSince) ? options.logsSince : 0;
   const entries = sinceId > 0 ? logs.since(sinceId) : logs.toJSON();
   const logsFrom = entries.length ? entries[0].id : logs.seq + 1;
 
@@ -133,54 +124,31 @@ function formatStatsSnapshot(state, options) {
   for (let i = 0; i < state.gpu.length; i++) {
     const g = state.gpu[i];
     gpu[i] = {
-      index: g.index,
-      name: g.name,
-      temperatureC: g.temperatureC,
-      powerW: g.powerW,
-      utilizationPct: g.utilizationPct,
-      coreMHz: g.coreMHz,
-      memoryMHz: g.memoryMHz,
-      memoryUsedMB: g.memoryUsedMB,
-      memoryTotalMB: g.memoryTotalMB,
-      pstate: g.pstate,
-      pciBusId: g.pciBusId,
-      hashrate: hashrateForGpu(state, g),
+      index: g.index, name: g.name, temperatureC: g.temperatureC, powerW: g.powerW,
+      utilizationPct: g.utilizationPct, coreMHz: g.coreMHz, memoryMHz: g.memoryMHz,
+      memoryUsedMB: g.memoryUsedMB, memoryTotalMB: g.memoryTotalMB, pstate: g.pstate,
+      pciBusId: g.pciBusId, hashrate: hashrateForGpu(state, g),
     };
   }
 
   return {
     now,
-    uptimeSeconds:
-      miner.running && minerStart
-        ? Math.max(0, Math.floor((now - minerStart) / 1000))
-        : 0,
-    acceptedRatio:
-      mining.submitted > 0 ? (mining.accepted / mining.submitted) * 100 : null,
+    uptimeSeconds: miner.running && minerStart ? Math.max(0, Math.floor((now - minerStart) / 1000)) : 0,
+    acceptedRatio: mining.submitted > 0 ? (mining.accepted / mining.submitted) * 100 : null,
     startedAt: minerStart,
     miner: {
-      running: miner.running,
-      pid: miner.pid,
-      startedAt: miner.startedAt,
-      exitCode: miner.exitCode,
-      signal: miner.signal,
-      lastLine: miner.lastLine,
-      lastError: miner.lastError,
-      user: miner.user || "",
-      wallet: miner.wallet,
-      worker: miner.worker || null,
-      logs: entries,
+      running: miner.running, pid: miner.pid, startedAt: miner.startedAt,
+      exitCode: miner.exitCode, signal: miner.signal, lastLine: miner.lastLine,
+      lastError: miner.lastError, user: miner.user || "", wallet: miner.wallet,
+      worker: miner.worker || null, logs: entries,
     },
     logsFrom,
     logSeq: logs.seq,
     logCount: logs.length,
     logCapacity: logs.capacity,
     mining: {
-      hashrateKHs: mining.hashrateKHs,
-      accepted: mining.accepted,
-      submitted: mining.submitted,
-      rejected: mining.rejected,
-      difficulty: mining.difficulty,
-      status: mining.status,
+      hashrateKHs: mining.hashrateKHs, accepted: mining.accepted, submitted: mining.submitted,
+      rejected: mining.rejected, difficulty: mining.difficulty, status: mining.status,
       lastAcceptedAt: mining.lastAcceptedAt,
     },
     gpuError: state.gpuError || "",
@@ -189,7 +157,4 @@ function formatStatsSnapshot(state, options) {
   };
 }
 
-module.exports = {
-  createState,
-  formatStatsSnapshot,
-};
+module.exports = { createState, formatStatsSnapshot };

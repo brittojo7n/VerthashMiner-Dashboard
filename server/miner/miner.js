@@ -9,6 +9,12 @@ const { STATUS, LOG, LIMITS } = require("../utils/constants");
 const { parseCudaDeviceList, createStreamReader } = require("./devices");
 const { unrefTimer: timer } = require("../utils/timers");
 
+const SHELL_METACHAR_RE = /[;&|`$()\n\r<>]/;
+
+function containsShellMetachars(str) {
+  return SHELL_METACHAR_RE.test(str);
+}
+
 const ACTIONS = Object.freeze({
   start: STATUS.STARTING,
   stop: STATUS.STOPPING,
@@ -29,6 +35,10 @@ const CLEAN_STATS = Object.freeze({
 
 function resolveExe(exe, cwd) {
   if (!exe) return exe;
+  if (containsShellMetachars(exe)) {
+    console.error("[dashboard] rejected executable path with shell metacharacters:", exe);
+    return null;
+  }
   const looksLikePath = exe.includes("/") || exe.includes("\\");
   const candidate = path.resolve(cwd || ".", exe);
   if (looksLikePath) return candidate;
@@ -38,6 +48,19 @@ function resolveExe(exe, cwd) {
     console.error("[dashboard] resolveExe miss:", err.message);
   }
   return exe;
+}
+
+function sanitizeArgs(args) {
+  const sanitized = [];
+  for (const arg of args) {
+    if (typeof arg !== "string") continue;
+    if (containsShellMetachars(arg)) {
+      console.error("[dashboard] rejected argument with shell metacharacters:", arg);
+      continue;
+    }
+    sanitized.push(arg);
+  }
+  return sanitized;
 }
 
 class MinerManager {
@@ -128,9 +151,7 @@ class MinerManager {
 
     const { MINER_ARGS, MINER_CWD } = this.config;
     if (!MINER_CWD || !MINER_ARGS.length) {
-      const message = `${
-        MINER_CWD ? "MINER_ARGS" : "MINER_CWD"
-      } not configured in .env`;
+      const message = `${MINER_CWD ? "MINER_ARGS" : "MINER_CWD"} not configured in .env`;
       this.state.miner.lastError = message;
       this._setMining({ status: STATUS.STOPPED });
       this.pushLog(message, LOG.WARN);
@@ -155,6 +176,11 @@ class MinerManager {
   _probeDevices(done) {
     const { MINER_CWD } = this.config;
     const MINER_EXE = resolveExe(this.config.MINER_EXE, MINER_CWD);
+    if (!MINER_EXE) {
+      this._markDown(STATUS.CRASHED, "Invalid miner executable path");
+      done();
+      return;
+    }
     let finished = false;
     let watchdog = null;
 
@@ -200,10 +226,7 @@ class MinerManager {
 
     watchdog = timer(() => {
       if (finished) return;
-      this.pushLog(
-        "Device probe timed out; continuing without PCI mapping.",
-        LOG.WARN,
-      );
+      this.pushLog("Device probe timed out; continuing without PCI mapping.", LOG.WARN);
       try {
         probe.kill("SIGKILL");
       } catch (err) {
@@ -216,9 +239,15 @@ class MinerManager {
   _spawnMiner() {
     const { MINER_ARGS, MINER_CWD, FORWARD_CONSOLE } = this.config;
     const MINER_EXE = resolveExe(this.config.MINER_EXE, MINER_CWD);
+    if (!MINER_EXE) {
+      this._markDown(STATUS.CRASHED, "Invalid miner executable path");
+      this._emit();
+      return;
+    }
+    const safeArgs = sanitizeArgs(MINER_ARGS);
 
     try {
-      this.proc = spawn(MINER_EXE, MINER_ARGS, {
+      this.proc = spawn(MINER_EXE, safeArgs, {
         cwd: MINER_CWD,
         windowsHide: false,
         shell: false,
@@ -253,14 +282,10 @@ class MinerManager {
     this._bindLifecycle(child);
   }
 
-  _bindStreams(child, FORWARD_CONSOLE) {
+  _bindStreams(child, forwardConsole) {
     const onLine = (line) => {
       try {
-        parseMinerLine(
-          line,
-          this.state,
-          this._boundPushLog(),
-        );
+        parseMinerLine(line, this.state, this._boundPushLog());
       } catch (err) {
         console.error("[dashboard] parse failed:", err.message);
         this.state.dirty = true;
@@ -268,31 +293,22 @@ class MinerManager {
     };
     const onFlush = () => this._emit();
     const alwaysEnabled = () => true;
-    const mirror = (stream) =>
-      FORWARD_CONSOLE
-        ? (chunk) => {
-            try {
-              stream.write(chunk);
-            } catch (err) {
-              console.error("[dashboard] mirror write failed:", err.message);
-            }
-          }
-        : null;
+    const mirror = forwardConsole
+      ? (stream) => (chunk) => {
+          try { stream.write(chunk); } catch (err) { console.error("[dashboard] console forward failed:", err.message); }
+        }
+      : null;
 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
-    child.stdout.on(
-      "data",
-      createStreamReader(onLine, onFlush, alwaysEnabled, mirror(process.stdout)),
-    );
-    child.stderr.on(
-      "data",
-      createStreamReader(onLine, onFlush, alwaysEnabled, mirror(process.stderr)),
-    );
+    child.stdout.on("data", createStreamReader(onLine, onFlush, alwaysEnabled, mirror(process.stdout)));
+    child.stderr.on("data", createStreamReader(onLine, onFlush, alwaysEnabled, mirror(process.stderr)));
     child.stdout.on("error", (err) => {
+      if (err.code === "EPIPE" || err.code === "ECONNRESET") return;
       console.error("[dashboard] stdout error:", err.message);
     });
     child.stderr.on("error", (err) => {
+      if (err.code === "EPIPE" || err.code === "ECONNRESET") return;
       console.error("[dashboard] stderr error:", err.message);
     });
   }
@@ -313,21 +329,13 @@ class MinerManager {
       if (settled) return;
       settled = true;
       const { status } = this.state.mining;
-      const deliberate =
-        status === STATUS.STOPPING || status === STATUS.STOPPED;
-      const next = deliberate
-        ? status
-        : code === 0 && !signal
-        ? STATUS.STOPPED
-        : STATUS.CRASHED;
+      const deliberate = status === STATUS.STOPPING || status === STATUS.STOPPED;
+      const next = deliberate ? status : code === 0 && !signal ? STATUS.STOPPED : STATUS.CRASHED;
       this._markDown(next);
       this.state.miner.exitCode = code;
       this.state.miner.signal = signal;
       this.state.miner.pid = null;
-      this.pushLog(
-        `Exited (code: ${code}${signal ? `, sig: ${signal}` : ""})`,
-        LOG.SYSTEM,
-      );
+      this.pushLog(`Exited (code: ${code}${signal ? `, sig: ${signal}` : ""})`, LOG.SYSTEM);
       if (this.proc === child) this.proc = null;
       this._emit();
     };
@@ -343,12 +351,7 @@ class MinerManager {
   _clearScheduledAction() {
     clearTimeout(this._actionTimer);
     this._actionTimer = null;
-    if (
-      this._pendingAction &&
-      this._statusRollback &&
-      this.proc &&
-      this.state.miner.running
-    ) {
+    if (this._pendingAction && this._statusRollback && this.proc && this.state.miner.running) {
       this._setMining({ status: this._statusRollback });
       this._emit();
     }
@@ -365,10 +368,7 @@ class MinerManager {
   requestAction(action) {
     if (!Object.prototype.hasOwnProperty.call(ACTIONS, action)) return;
     if (this._pendingAction === action) return;
-    const idle =
-      !this.state.miner.running &&
-      !this.proc &&
-      this._pendingAction !== "start";
+    const idle = !this.state.miner.running && !this.proc && this._pendingAction !== "start";
     if (action === "start" && this._alive) return this._clearScheduledAction();
     if (action === "stop" && idle) {
       if (this.state.mining.status !== STATUS.STOPPED) this._markStopped();
@@ -391,10 +391,7 @@ class MinerManager {
         Promise.resolve()
           .then(() => this[pending]())
           .catch((err) => {
-            this.pushLog(
-              `Action "${pending}" failed: ${err && err.message}`,
-              LOG.ERROR,
-            );
+            this.pushLog(`Action "${pending}" failed: ${err && err.message}`, LOG.ERROR);
             this._emit();
           });
       }
@@ -441,23 +438,12 @@ class MinerManager {
       const forceKill = () => {
         if (child.exitCode !== null || child.signalCode !== null) return;
         if (process.platform === "win32") {
-          execFile(
-            "taskkill.exe",
-            ["/pid", String(pid), "/T", "/F"],
-            (err, stdout, stderr) => {
-              if (err) {
-                this.pushLog(
-                  `taskkill failed for pid ${pid}: ${err.message}`,
-                  LOG.WARN,
-                );
-                console.error(
-                  "[dashboard] taskkill failed:",
-                  err.message,
-                  stderr,
-                );
-              }
-            },
-          );
+          execFile("taskkill.exe", ["/pid", String(pid), "/T", "/F"], { shell: false }, (err) => {
+            if (err) {
+              this.pushLog(`taskkill failed for pid ${pid}: ${err.message}`, LOG.WARN);
+              console.error("[dashboard] taskkill failed:", err.message);
+            }
+          });
         } else {
           try {
             child.kill("SIGKILL");
@@ -476,10 +462,7 @@ class MinerManager {
 
       watchdog = timer(() => {
         if (settled) return;
-        this.pushLog(
-          "Miner did not exit in time; giving up on a clean stop.",
-          LOG.WARN,
-        );
+        this.pushLog("Miner did not exit in time; giving up on a clean stop.", LOG.WARN);
         forceKill();
         finish();
       }, this.timeouts.stop);

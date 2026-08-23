@@ -30,12 +30,7 @@ class SessionStore {
 
   prune(force = false) {
     const now = this.now();
-    if (
-      !force &&
-      this.sessions.size < MAX_SESSIONS &&
-      now - this.lastSweep < SWEEP_INTERVAL_MS
-    )
-      return;
+    if (!force && this.sessions.size < MAX_SESSIONS && now - this.lastSweep < SWEEP_INTERVAL_MS) return;
     this.lastSweep = now;
     for (const [token, expiry] of this.sessions) {
       if (now > expiry) this.sessions.delete(token);
@@ -43,21 +38,15 @@ class SessionStore {
   }
 
   issue() {
-    const token = crypto
-      .createHmac("sha256", this.secret)
-      .update(crypto.randomBytes(32))
-      .digest("hex");
+    const token = crypto.createHmac("sha256", this.secret).update(crypto.randomBytes(32)).digest("hex");
     this.prune(true);
-    while (this.sessions.size >= MAX_SESSIONS)
-      this.sessions.delete(this.sessions.keys().next().value);
+    while (this.sessions.size >= MAX_SESSIONS) this.sessions.delete(this.sessions.keys().next().value);
     this.sessions.set(token, this.now() + this.ttlMs);
     return token;
   }
 
   cookieFor(token, secure = false) {
-    return `vm_session=${token}; HttpOnly; Path=/; Max-Age=${Math.floor(
-      this.ttlMs / 1000,
-    )}; SameSite=Strict${secure ? "; Secure" : ""}`;
+    return `vm_session=${token}; HttpOnly; Path=/; Max-Age=${Math.floor(this.ttlMs / 1000)}; SameSite=Strict${secure ? "; Secure" : ""}`;
   }
 
   static tokenFrom(cookieHeader) {
@@ -90,19 +79,13 @@ class SessionStore {
       let live = 0;
       for (const t of entry.failures) if (now - t < FAILURE_WINDOW_MS) live++;
       if (live === 0) this.attempts.delete(key);
-      else if (live !== entry.failures.length)
-        entry.failures = entry.failures.filter(
-          (t) => now - t < FAILURE_WINDOW_MS,
-        );
+      else if (live !== entry.failures.length) entry.failures = entry.failures.filter((t) => now - t < FAILURE_WINDOW_MS);
     }
   }
 
   lockoutMs(ip) {
     const now = this.now();
-    if (
-      now - this.lastSweep >= SWEEP_INTERVAL_MS ||
-      this.attempts.size >= MAX_TRACKED_IPS
-    ) {
+    if (now - this.lastSweep >= SWEEP_INTERVAL_MS || this.attempts.size >= MAX_TRACKED_IPS) {
       this.lastSweep = now;
       this._sweepAttempts(now);
     }
@@ -116,18 +99,15 @@ class SessionStore {
     if (!entry) {
       if (this.attempts.size >= MAX_TRACKED_IPS) {
         this._sweepAttempts(now);
-        while (this.attempts.size >= MAX_TRACKED_IPS)
-          this.attempts.delete(this.attempts.keys().next().value);
+        while (this.attempts.size >= MAX_TRACKED_IPS) this.attempts.delete(this.attempts.keys().next().value);
       }
       entry = { failures: [], blockedUntil: 0 };
       this.attempts.set(ip, entry);
     }
     entry.failures.push(now);
-    if (entry.failures.length > LOCKOUT_THRESHOLD * 2)
-      entry.failures = entry.failures.slice(-LOCKOUT_THRESHOLD);
+    if (entry.failures.length > LOCKOUT_THRESHOLD * 2) entry.failures = entry.failures.slice(-LOCKOUT_THRESHOLD);
     const recent = entry.failures.filter((t) => now - t < FAILURE_WINDOW_MS);
-    if (recent.length >= LOCKOUT_THRESHOLD)
-      entry.blockedUntil = now + LOCKOUT_MS;
+    if (recent.length >= LOCKOUT_THRESHOLD) entry.blockedUntil = now + LOCKOUT_MS;
   }
 
   clearFailures(ip) {

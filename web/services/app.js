@@ -1,17 +1,7 @@
 import "./perf.js";
 import { el, text, className, make } from "../lib/dom.js";
 import { createModal } from "../components/modal.js";
-import {
-  presentSnapshot,
-  sharesPerMinute,
-  dotClass,
-  timestamp,
-  uptime,
-  stripLogPrefix,
-  DASH,
-  IDLE_STATUS as IDLE,
-  LIVE_STATUS as LIVE,
-} from "../lib/present.js";
+import { presentSnapshot, sharesPerMinute, dotClass, timestamp, uptime, stripLogPrefix, DASH, IDLE_STATUS as IDLE, LIVE_STATUS as LIVE } from "../lib/present.js";
 import * as toast from "../components/toast.js";
 import * as gpuView from "../components/gpu.js";
 import { createMetric } from "../components/metric.js";
@@ -20,32 +10,15 @@ import { createConsole } from "../components/console.js";
 import { createConnection } from "./connection.js";
 
 const ACTION_META = {
-  start: {
-    status: "STARTING",
-    label: "START",
-    toast: ["Starting Miner", "Launching the VerthashMiner process."],
-  },
-  stop: {
-    status: "STOPPING",
-    label: "STOP",
-    toast: ["Stopping Miner", "Shutting down the VerthashMiner process."],
-  },
-  restart: {
-    status: "RESTARTING",
-    label: "RESTART",
-    toast: [
-      "Restarting Miner",
-      "Stopping and relaunching the VerthashMiner process.",
-    ],
-  },
+  start: { status: "STARTING", label: "START", toast: ["Starting Miner", "Launching the VerthashMiner process."] },
+  stop: { status: "STOPPING", label: "STOP", toast: ["Stopping Miner", "Shutting down the VerthashMiner process."] },
+  restart: { status: "RESTARTING", label: "RESTART", toast: ["Restarting Miner", "Stopping and relaunching the VerthashMiner process."] },
 };
 
 function buildAuthContent() {
   const wrap = make("div");
   wrap.appendChild(make("h2", null, "Login"));
-  wrap.appendChild(
-    make("p", null, "Enter your passphrase to access the dashboard."),
-  );
+  wrap.appendChild(make("p", null, "Enter your passphrase to access the dashboard."));
   const input = make("input", "modal-input");
   input.type = "password";
   input.placeholder = "Passphrase";
@@ -72,19 +45,8 @@ function buildConfirmContent() {
 
 function buildSummary(host) {
   const cards = {
-    hashrate: createMetric({
-      label: "Total Hashrate",
-      value: DASH,
-      unit: "kH/s",
-      accent: "cyan",
-      surface: 1,
-    }),
-    accepted: createMetric({
-      label: "Shares (Acc / Sub)",
-      value: DASH,
-      accent: "green",
-      surface: 1,
-    }),
+    hashrate: createMetric({ label: "Total Hashrate", value: DASH, unit: "kH/s", accent: "cyan", surface: 1 }),
+    accepted: createMetric({ label: "Shares (Acc / Sub)", value: DASH, accent: "green", surface: 1 }),
     ratio: createMetric({ label: "Acceptance Ratio", value: DASH, surface: 1 }),
     uptime: createMetric({ label: "Uptime", value: DASH, surface: 1 }),
   };
@@ -94,30 +56,10 @@ function buildSummary(host) {
 
 function buildMiningMetrics(host) {
   const cards = {
-    rejected: createMetric({
-      label: "Rejected",
-      value: "0",
-      accent: "red",
-      surface: 2,
-    }),
-    spm: createMetric({
-      label: "Shares Per Minute",
-      value: DASH,
-      accent: "green",
-      surface: 2,
-    }),
-    difficulty: createMetric({
-      label: "Network Difficulty",
-      value: DASH,
-      accent: "violet",
-      surface: 2,
-    }),
-    lastAccepted: createMetric({
-      label: "Last Share",
-      value: DASH,
-      surface: 2,
-      small: true,
-    }),
+    rejected: createMetric({ label: "Rejected", value: "0", accent: "red", surface: 2 }),
+    spm: createMetric({ label: "Shares Per Minute", value: DASH, accent: "green", surface: 2 }),
+    difficulty: createMetric({ label: "Network Difficulty", value: DASH, accent: "violet", surface: 2 }),
+    lastAccepted: createMetric({ label: "Last Share", value: DASH, surface: 2, small: true }),
   };
   for (const card of Object.values(cards)) host.appendChild(card.node);
   return cards;
@@ -126,18 +68,10 @@ function buildMiningMetrics(host) {
 class Dashboard {
   constructor() {
     this.els = {
-      dot: el("dot"),
-      status: el("status"),
-      host: el("host"),
-      btnAction: el("btnAction"),
-      btnRestart: el("btnRestart"),
-      error: el("error"),
-      gpus: el("gpus"),
-      localTime: el("localTime"),
-      btnAutoScroll: el("btnAutoScroll"),
-      refresh: el("btnRefresh"),
+      dot: el("dot"), status: el("status"), host: el("host"), btnAction: el("btnAction"),
+      btnRestart: el("btnRestart"), error: el("error"), gpus: el("gpus"),
+      localTime: el("localTime"), btnAutoScroll: el("btnAutoScroll"), refresh: el("btnRefresh"),
     };
-
     this.summary = buildSummary(el("summary"));
     this.identity = createIdentity();
     el("identity").appendChild(this.identity.node);
@@ -145,28 +79,22 @@ class Dashboard {
     this.modal = createModal();
     this.auth = buildAuthContent();
     this.confirm = buildConfirmContent();
-
     this.consoleView = createConsole({
-      terminal: el("terminal"),
-      lines: el("logLines"),
-      counter: el("logCount"),
+      terminal: el("terminal"), lines: el("logLines"), counter: el("logCount"),
       onAutoScrollChange: this.onAutoScroll.bind(this),
     });
-
     this.serverNow = null;
     this.capturedAt = 0;
     this.startedAt = null;
     this.tz = null;
     this.accepted = 0;
     this.ticker = null;
-    
     this.pendingStatus = null;
     this.lastError = null;
     this.lastGpuError = null;
     this.lastStatus = null;
     this.armedAction = null;
     this.refreshing = false;
-
     this.connection = createConnection({
       onSnapshot: this.render.bind(this),
       onUnauthorized: this.showAuth.bind(this),
@@ -174,7 +102,6 @@ class Dashboard {
       onCountdown: (message) => text(this.els.host, message),
       onStatusText: this.onStatusText.bind(this),
     });
-
     this.bindEvents();
     gpuView.render(this.els.gpus, [], "");
     this.connection.connect();
@@ -184,7 +111,6 @@ class Dashboard {
     if (this.serverNow == null) return;
     const now = this.serverNow + (Date.now() - this.capturedAt);
     text(this.els.localTime, timestamp(now, this.tz));
-    
     if (this.startedAt) {
       const elapsed = Math.max(0, now - this.startedAt);
       this.summary.uptime.set({ value: uptime(Math.floor(elapsed / 1000)) });
@@ -224,7 +150,6 @@ class Dashboard {
     if (this.lastStatus !== null && status !== this.lastStatus) {
       const wasIdle = IDLE.has(this.lastStatus);
       const wasLive = LIVE.has(this.lastStatus);
-      
       if (status === "CRASHED") {
         toast.error("Miner Crashed", "The VerthashMiner process exited unexpectedly.", "miner-state");
       } else if (status === "STOPPED" && !wasIdle) {
@@ -244,37 +169,20 @@ class Dashboard {
     this.startedAt = snapshot.miner.running ? snapshot.startedAt : null;
     this.tz = snapshot.host.tz;
     this.accepted = snapshot.mining.accepted;
-    
     this.tick();
     this.startClock();
-    
-    const display = presentSnapshot(snapshot, {
-      now: this.serverNow,
-      pendingStatus: this.pendingStatus,
-    });
-    
+    const display = presentSnapshot(snapshot, { now: this.serverNow, pendingStatus: this.pendingStatus });
     this.announce(display.status);
     text(this.els.host, display.host);
     this.applyChrome(display.status, !!this.pendingStatus);
-    
     this.summary.hashrate.set({ value: display.hashrate });
     this.summary.accepted.set({ value: display.accepted });
     this.summary.ratio.set({ value: display.ratio });
     this.mining.rejected.set({ value: display.rejected });
     this.mining.difficulty.set({ value: display.difficulty });
     this.mining.lastAccepted.set({ value: display.lastAccepted });
-    
-    this.identity.set({
-      user: snapshot.miner.user,
-      wallet: snapshot.miner.wallet,
-      worker: snapshot.miner.worker,
-    });
-    
-    this.consoleView.render(snapshot.miner.logs, {
-      count: snapshot.logCount,
-      seq: snapshot.logSeq,
-    });
-    
+    this.identity.set({ user: snapshot.miner.user, wallet: snapshot.miner.wallet, worker: snapshot.miner.worker });
+    this.consoleView.render(snapshot.miner.logs, { count: snapshot.logCount, seq: snapshot.logSeq });
     if (snapshot.miner.lastError) {
       className(this.els.error, "errorbox show");
       text(this.els.error, `CRITICAL ERROR: ${snapshot.miner.lastError}`);
@@ -291,7 +199,6 @@ class Dashboard {
       className(this.els.error, "errorbox");
       this.lastError = null;
     }
-    
     if (snapshot.gpuError && snapshot.gpuError !== this.lastGpuError) {
       this.lastGpuError = snapshot.gpuError;
       toast.error(
@@ -304,7 +211,6 @@ class Dashboard {
     } else if (!snapshot.gpuError) {
       this.lastGpuError = null;
     }
-    
     gpuView.render(this.els.gpus, snapshot.gpu, snapshot.gpuError);
   }
 
@@ -328,29 +234,18 @@ class Dashboard {
     try {
       const res = await fetch("/api/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Requested-With": "XMLHttpRequest",
-        },
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
         body: JSON.stringify({ passphrase: this.auth.input.value }),
       });
       if (res.ok) {
         this.modal.close();
-        toast.success(
-          "Login Successful",
-          "Welcome to the VerthashMiner Dashboard.",
-          "login-success",
-        );
+        toast.success("Login Successful", "Welcome to the VerthashMiner Dashboard.", "login-success");
         this.connection.restart();
         return;
       }
       if (res.status === 429) {
         this.auth.err.textContent = "Too many attempts. Please wait a moment and try again.";
-        toast.warn(
-          "Too Many Requests",
-          "Too many failed attempts. Please wait before trying again.",
-          "rate-limit-login",
-        );
+        toast.warn("Too Many Requests", "Too many failed attempts. Please wait before trying again.", "rate-limit-login");
       } else {
         this.auth.err.textContent = "Invalid passphrase";
       }
@@ -367,7 +262,6 @@ class Dashboard {
     this.pendingStatus = meta.status;
     this.applyChrome(this.pendingStatus, true);
     toast.info(meta.toast[0], meta.toast[1], `miner-${action}`);
-    
     try {
       const res = await fetch(`/api/miner/${action}`, {
         method: "POST",
@@ -383,11 +277,7 @@ class Dashboard {
             const data = await res.clone().json();
             if (Number.isFinite(data.retryAfterSeconds)) seconds = data.retryAfterSeconds;
           } catch {}
-          toast.warn(
-            "Too Many Requests",
-            `Miner controls are rate limited. Please wait ${seconds} second${seconds === 1 ? "" : "s"} before trying again.`,
-            "rate-limit-action",
-          );
+          toast.warn("Too Many Requests", `Miner controls are rate limited. Please wait ${seconds} second${seconds === 1 ? "" : "s"} before trying again.`, "rate-limit-action");
         } else {
           toast.error("Action Failed", `The dashboard rejected the request (HTTP ${res.status}).`, "action-failed");
         }
@@ -397,7 +287,6 @@ class Dashboard {
       toast.dismiss(`miner-${action}`);
       toast.error("Action Failed", "Could not reach the dashboard host. Please try again.", "action-failed");
     }
-    
     this.pendingStatus = null;
   }
 
@@ -410,9 +299,7 @@ class Dashboard {
     text(this.confirm.yes, label);
     this.modal.open(this.confirm.wrap, {
       dismissable: true,
-      onClose: () => {
-        this.armedAction = null;
-      },
+      onClose: () => { this.armedAction = null; },
     });
   }
 
@@ -422,7 +309,6 @@ class Dashboard {
     this.els.refresh.disabled = true;
     this.els.refresh.setAttribute("aria-busy", "true");
     this.els.refresh.classList.add("spinning");
-    
     let result;
     try {
       result = await this.connection.refresh();
@@ -430,7 +316,6 @@ class Dashboard {
       console.error("[dashboard] refresh failed:", err.message);
       result = "failed";
     }
-    
     if (result === "ok") {
       toast.info("Data Refreshed", "Pulled the latest stats from the dashboard API.", "soft-refresh");
     } else if (result === "limited") {
@@ -438,7 +323,6 @@ class Dashboard {
     } else if (result === "failed") {
       toast.error("Refresh Failed", "Could not reach the dashboard API. Please try again.", "soft-refresh");
     }
-    
     setTimeout(() => {
       this.refreshing = false;
       this.els.refresh.classList.remove("spinning");
@@ -449,31 +333,23 @@ class Dashboard {
 
   bindEvents() {
     this.auth.submit.addEventListener("click", this.login.bind(this));
-    this.auth.input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") this.login();
-    });
-    
+    this.auth.input.addEventListener("keydown", (e) => { if (e.key === "Enter") this.login(); });
     this.confirm.cancel.addEventListener("click", () => this.modal.close());
     this.confirm.yes.addEventListener("click", () => {
       const action = this.armedAction;
       this.modal.close();
       if (action) this.runAction(action);
     });
-    
     this.els.btnAction.addEventListener("click", () => {
       const action = this.els.btnAction.textContent === "START" ? "start" : "stop";
       this.promptAction(action, action.toUpperCase());
     });
-    
     this.els.btnRestart.addEventListener("click", () => this.promptAction("restart", "RESTART"));
-    
     this.els.btnAutoScroll.addEventListener("click", () => {
       this.consoleView.autoScroll = !this.consoleView.autoScroll;
       this.onAutoScroll(this.consoleView.autoScroll);
     });
-    
     this.els.refresh.addEventListener("click", this.softRefresh.bind(this));
-    
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
         this.stopClock();

@@ -16,8 +16,7 @@ const MIME = {
 
 const COMPRESSIBLE = new Set([".html", ".css", ".js", ".svg"]);
 const MIN_COMPRESS_BYTES = 512;
-const PERMISSIONS =
-  "camera=(), microphone=(), geolocation=(), interest-cohort=()";
+const PERMISSIONS = "camera=(), microphone=(), geolocation=(), interest-cohort=()";
 
 function buildCsp() {
   return [
@@ -28,17 +27,13 @@ function buildCsp() {
     "img-src 'self' data:",
     "connect-src 'self'",
     "object-src 'none'",
-    "base-uri 'none'",
-    "form-action 'none'",
+    "base-uri 'none",
+    "form-action 'none",
   ].join("; ");
 }
 
 function etagOf(buf) {
-  return `"${crypto
-    .createHash("sha1")
-    .update(buf)
-    .digest("base64url")
-    .slice(0, 22)}"`;
+  return `"${crypto.createHash("sha1").update(buf).digest("base64url").slice(0, 22)}"`;
 }
 
 function headersFor(name, length, etag, encoding, csp) {
@@ -49,6 +44,7 @@ function headersFor(name, length, etag, encoding, csp) {
     ETag: etag,
     Vary: "Accept-Encoding",
     "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
   };
   if (encoding) headers["Content-Encoding"] = encoding;
@@ -80,9 +76,7 @@ function makeAsset(name, buf, csp) {
   };
   if (asset.compressible && buf.length >= MIN_COMPRESS_BYTES) {
     try {
-      const gzip = zlib.gzipSync(buf, {
-        level: zlib.constants.Z_BEST_COMPRESSION,
-      });
+      const gzip = zlib.gzipSync(buf, { level: zlib.constants.Z_BEST_COMPRESSION });
       if (gzip.length < buf.length) {
         asset.gzip = gzip;
         asset.gzipHdr = headersFor(name, gzip.length, etag, "gzip", csp);
@@ -99,8 +93,7 @@ function makeAsset(name, buf, csp) {
 
 function buildAssets(webDir) {
   const root = webDir || path.resolve(__dirname, "..", "..", "web");
-  const readScript = (name) =>
-    fs.readFileSync(path.join(root, `${name}.js`), "utf8");
+  const readScript = (name) => fs.readFileSync(path.join(root, `${name}.js`), "utf8");
   const csp = buildCsp();
 
   const modules = {};
@@ -131,11 +124,7 @@ function negotiate(asset, req) {
   let headers = asset.hdr;
   let body = asset.buf;
   const encodings = req.headers["accept-encoding"];
-  if (
-    asset.gzip &&
-    typeof encodings === "string" &&
-    encodings.includes("gzip")
-  ) {
+  if (asset.gzip && typeof encodings === "string" && encodings.includes("gzip")) {
     headers = asset.gzipHdr;
     body = asset.gzip;
   }

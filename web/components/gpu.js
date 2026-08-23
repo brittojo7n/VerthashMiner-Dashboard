@@ -12,12 +12,7 @@ const DEFAULT_SPEC = Object.freeze({
     { key: "power", label: "Power", unit: "W" },
     { key: "core", label: "Core Clock", unit: "MHz" },
     { key: "mem", label: "Memory Clock", unit: "MHz" },
-    {
-      key: "vram",
-      label: "VRAM",
-      unit: "MB",
-      parts: ["vramUsed", "vramTotal"],
-    },
+    { key: "vram", label: "VRAM", unit: "MB", parts: ["vramUsed", "vramTotal"] },
     { key: "hashrate", label: "Hashrate", unit: "kH/s", accent: "cyan" },
     { key: "eff", label: "Efficiency", unit: "kH/s/W" },
   ]),

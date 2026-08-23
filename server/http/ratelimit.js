@@ -15,8 +15,7 @@ function createRateLimiter(max, windowMs, penaltyMs = 0) {
     if (!bucket || now >= bucket.resetAt) {
       if (!bucket && buckets.size >= MAX_BUCKETS) {
         sweep(now);
-        while (buckets.size >= MAX_BUCKETS)
-          buckets.delete(buckets.keys().next().value);
+        while (buckets.size >= MAX_BUCKETS) buckets.delete(buckets.keys().next().value);
       }
       bucket = { count: 0, resetAt: now + windowMs, penalised: false };
       buckets.set(key, bucket);

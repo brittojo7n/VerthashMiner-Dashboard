@@ -78,4 +78,5 @@ function parseMinerArgs(args) {
   return out;
 }
 
-module.exports = { parseMinerArgs, VALUE_FLAGS, BOOL_FLAGS };
+module.exports = { parseMinerArgs };
+

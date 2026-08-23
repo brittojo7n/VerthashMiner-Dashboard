@@ -18,19 +18,14 @@ function yieldCpuToMiner() {
     return true;
   } catch (err) {
     console.error("[dashboard] yieldCpuToMiner failed:", err.message);
-    return false;
   }
+  return false;
 }
 
 class Server {
   constructor(options = {}) {
     this.config = options.config || config;
-    this.state = createState(
-      this.config.WALLET,
-      LIMITS.MAX_LOGS,
-      this.config.WORKER,
-      this.config.USER,
-    );
+    this.state = createState(this.config.WALLET, LIMITS.MAX_LOGS, this.config.WORKER, this.config.USER);
     this._exiting = false;
     this._shutdownWatchdog = null;
 
@@ -69,9 +64,7 @@ class Server {
 
   _onSubscriberChange(count) {
     this.gpuManager.updateSubscribers(count);
-    if (count > 0) {
-      this.minerManager.enableParsing();
-    }
+    if (count > 0) this.minerManager.enableParsing();
     this.minerManager.updateSubscribers(count);
   }
 
@@ -79,10 +72,7 @@ class Server {
     const message = `[dashboard] ${scope}: ${(err && err.stack) || err}`;
     try {
       console.error(message);
-      this.minerManager.pushLog(
-        `Dashboard internal error (${scope}): ${(err && err.message) || err}`,
-        LOG.ERROR,
-      );
+      this.minerManager.pushLog(`Dashboard internal error (${scope}): ${(err && err.message) || err}`, LOG.ERROR);
       this.sseHub.broadcast();
     } catch (logErr) {
       console.error("[dashboard] fault handler failed:", logErr.message);
@@ -91,24 +81,16 @@ class Server {
 
   start() {
     this._attachSignalHandlers();
-    if (yieldCpuToMiner())
-      console.log("[dashboard] running at below-normal priority");
+    if (yieldCpuToMiner()) console.log("[dashboard] running at below-normal priority");
 
     this._listening = false;
 
     this.httpServer.on("error", (err) => {
       if (!this._listening) {
         if (err && err.code === "EADDRINUSE") {
-          console.error(
-            `[FATAL] Port ${this.config.PORT} is already in use. ` +
-              "Another dashboard instance is probably running.",
-          );
+          console.error(`[FATAL] Port ${this.config.PORT} is already in use. Another dashboard instance is probably running.`);
         } else {
-          console.error(
-            `[FATAL] Could not bind ${this.config.HOST}:${this.config.PORT} - ${
-              err && err.message
-            }`,
-          );
+          console.error(`[FATAL] Could not bind ${this.config.HOST}:${this.config.PORT} - ${err && err.message}`);
         }
         process.exit(1);
       }
@@ -118,10 +100,7 @@ class Server {
     this.httpServer.listen(this.config.PORT, this.config.HOST, () => {
       this._listening = true;
       const port = this.httpServer.address().port;
-      console.log(
-        `[dashboard] http://${this.config.HOST}:${port}\n` +
-          `[dashboard] LAN: http://${getLanIp()}:${port}`,
-      );
+      console.log(`[dashboard] http://${this.config.HOST}:${port}\n[dashboard] LAN: http://${getLanIp()}:${port}`);
     });
 
     this.minerManager.start();
@@ -143,9 +122,7 @@ class Server {
     const closeHttpServer = () =>
       new Promise((resolve) => {
         if (!this.httpServer.listening) return resolve();
-        if (typeof this.httpServer.closeAllConnections === "function") {
-          this.httpServer.closeAllConnections();
-        }
+        if (typeof this.httpServer.closeAllConnections === "function") this.httpServer.closeAllConnections();
         this.httpServer.close(() => resolve());
       });
 
@@ -179,10 +156,8 @@ class Server {
   _detachSignalHandlers() {
     process.removeListener("SIGINT", this.handleSigint);
     process.removeListener("SIGTERM", this.boundExit);
-    if (this._onUncaught)
-      process.removeListener("uncaughtException", this._onUncaught);
-    if (this._onRejection)
-      process.removeListener("unhandledRejection", this._onRejection);
+    if (this._onUncaught) process.removeListener("uncaughtException", this._onUncaught);
+    if (this._onRejection) process.removeListener("unhandledRejection", this._onRejection);
   }
 }
 
@@ -193,8 +168,7 @@ function main() {
     console.error("[FATAL] The dashboard will now shut down.");
     process.exit(1);
   }
-  for (const note of config.advisories(config))
-    console.warn(`[dashboard] ${note}`);
+  for (const note of config.advisories(config)) console.warn(`[dashboard] ${note}`);
 
   new Server().start();
 }
@@ -202,17 +176,12 @@ function main() {
 function generateSecret() {
   const secret = crypto.randomBytes(32).toString("hex");
   console.log(secret);
-  console.log(
-    `\n[+] ${secret.length}-character cryptographic secret generated.`,
-  );
+  console.log(`\n[+] ${secret.length}-character cryptographic secret generated.`);
   console.log("    Paste this into your .env as SESSION_SECRET=<value>");
 }
 
 if (require.main === module) {
-  if (
-    process.argv.includes("--generate-secret") ||
-    process.argv.includes("--gen-secret")
-  ) {
+  if (process.argv.includes("--generate-secret") || process.argv.includes("--gen-secret")) {
     generateSecret();
     process.exit(0);
   }
@@ -220,4 +189,3 @@ if (require.main === module) {
 }
 
 module.exports = { Server };
-

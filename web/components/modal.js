@@ -1,12 +1,9 @@
 import { make } from "../lib/dom.js";
 
-const FOCUSABLE =
-  'button:not([disabled]), input:not([disabled]), textarea, select, [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), textarea, select, [tabindex]:not([tabindex="-1"])';
 
 function focusables(root) {
-  return [...root.querySelectorAll(FOCUSABLE)].filter(
-    (el) => el.offsetParent !== null,
-  );
+  return [...root.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null);
 }
 
 export function createModal() {
@@ -39,8 +36,7 @@ export function createModal() {
     if (e.key !== "Tab") return;
     const list = focusables(dialog);
     if (!list.length) return;
-    const first = list[0],
-      last = list[list.length - 1];
+    const first = list[0], last = list[list.length - 1];
     const active = document.activeElement;
     if (e.shiftKey) {
       if (active === first || !dialog.contains(active)) {

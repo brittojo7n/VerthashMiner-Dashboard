@@ -48,30 +48,15 @@ export function createMetric(opts = {}) {
   const refs = { node, label: labelEl, value: valueBox };
 
   if (parts) {
-    const used = make(
-      "span",
-      "metric-num",
-      parts.used != null ? parts.used : DASH,
-    );
-    const total = make(
-      "span",
-      "metric-num",
-      parts.total != null ? parts.total : DASH,
-    );
+    const used = make("span", "metric-num", parts.used != null ? parts.used : DASH);
+    const total = make("span", "metric-num", parts.total != null ? parts.total : DASH);
     valueBox.append(used, document.createTextNode(" / "), total);
     if (unit)
-      valueBox.append(
-        document.createTextNode(" "),
-        make("span", "metric-unit", unit),
-      );
+      valueBox.append(document.createTextNode(" "), make("span", "metric-unit", unit));
     refs.used = used;
     refs.total = total;
   } else {
-    const num = make(
-      "span",
-      "metric-num",
-      value != null ? String(value) : DASH,
-    );
+    const num = make("span", "metric-num", value != null ? String(value) : DASH);
     valueBox.appendChild(num);
     if (unit) {
       if (unit !== "%") valueBox.append(document.createTextNode(" "));

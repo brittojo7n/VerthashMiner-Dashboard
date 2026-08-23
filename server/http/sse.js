@@ -2,7 +2,6 @@
 
 const { formatStatsSnapshot } = require("../utils/state");
 const { LIMITS } = require("../utils/constants");
-const { unrefTimer, unrefInterval } = require("../utils/timers");
 
 const HEARTBEAT_FRAME = ": hb\n\n";
 const OPEN_FRAME = ": stream established\n\n";
@@ -31,13 +30,9 @@ class SseHub {
 
   _startHeartbeat() {
     if (this.heartbeatTimer) return;
-    this.heartbeatTimer = unrefInterval(() => {
-      try {
-        for (const [res] of this.clients) {
-          if (!this._write(res, HEARTBEAT_FRAME)) this._drop(res);
-        }
-      } catch (err) {
-        console.error("[dashboard] heartbeat failed:", err.message);
+    this.heartbeatTimer = setInterval(() => {
+      for (const [res] of this.clients) {
+        if (!this._write(res, HEARTBEAT_FRAME)) this._drop(res);
       }
     }, LIMITS.HEARTBEAT_MS);
   }
@@ -66,7 +61,7 @@ class SseHub {
       }
       return true;
     } catch (err) {
-      console.error("[dashboard] sse write failed:", err.message);
+      this._drop(res);
       return false;
     }
   }
@@ -76,14 +71,11 @@ class SseHub {
     try {
       res.end();
     } catch (err) {
-      console.error("[dashboard] sse end failed:", err.message);
+      console.error("[dashboard] sse drop failed:", err.message);
     }
     if (this.clients.size === 0) {
       this._stopHeartbeat();
-      if (this.bcastTimer) {
-        clearTimeout(this.bcastTimer);
-        this.bcastTimer = null;
-      }
+      if (this.bcastTimer) { clearTimeout(this.bcastTimer); this.bcastTimer = null; }
     }
     this._notifyChange();
   }
@@ -92,51 +84,38 @@ class SseHub {
     const size = this.clients.size;
     if (size === this.lastNotified) return;
     this.lastNotified = size;
-    if (typeof this.onSubscriberChange === "function")
-      this.onSubscriberChange(size);
+    if (typeof this.onSubscriberChange === "function") this.onSubscriberChange(size);
   }
 
   broadcast() {
     if (this.clients.size === 0 || !this.state.dirty || this.bcastTimer) return;
-    this.bcastTimer = unrefTimer(() => {
+    this.bcastTimer = setTimeout(() => {
       this.bcastTimer = null;
       if (this.clients.size === 0) return;
-      try {
-        const seq = this.state.miner.logs.seq;
-        const deltaPayload = this._frame(
-          formatStatsSnapshot(this.state, { logsSince: seq }),
-        );
-        const frames = new Map([[seq, deltaPayload]]);
-        this.state.dirty = false;
-        for (const [res, meta] of this.clients) {
-          if (meta.blocked) {
-            meta.blockedCount++;
-            if (meta.blockedCount >= LIMITS.SSE_MAX_BLOCKED_TICKS)
-              this._drop(res);
-            continue;
-          }
-          let payload = frames.get(meta.lastLogSeq);
-          if (payload === undefined) {
-            payload = this._frame(
-              formatStatsSnapshot(this.state, { logsSince: meta.lastLogSeq }),
-            );
-            frames.set(meta.lastLogSeq, payload);
-          }
-          if (this._write(res, payload)) meta.lastLogSeq = seq;
-          else this._drop(res);
+      const seq = this.state.miner.logs.seq;
+      const deltaPayload = this._frame(formatStatsSnapshot(this.state, { logsSince: seq }));
+      const frames = new Map([[seq, deltaPayload]]);
+      this.state.dirty = false;
+      for (const [res, meta] of this.clients) {
+        if (meta.blocked) {
+          meta.blockedCount++;
+          if (meta.blockedCount >= LIMITS.SSE_MAX_BLOCKED_TICKS) this._drop(res);
+          continue;
         }
-      } catch (err) {
-        console.error("[dashboard] broadcast failed:", err.message);
+        let payload = frames.get(meta.lastLogSeq);
+        if (payload === undefined) {
+          payload = this._frame(formatStatsSnapshot(this.state, { logsSince: meta.lastLogSeq }));
+          frames.set(meta.lastLogSeq, payload);
+        }
+        if (this._write(res, payload)) meta.lastLogSeq = seq;
+        else this._drop(res);
       }
     }, LIMITS.BROADCAST_MS);
   }
 
   _reapDeadClients() {
     for (const [res] of this.clients) {
-      const dead =
-        res.writableEnded ||
-        res.destroyed ||
-        (res.socket && (res.socket.destroyed || !res.socket.writable));
+      const dead = res.writableEnded || res.destroyed || (res.socket && (res.socket.destroyed || !res.socket.writable));
       if (dead) this._drop(res);
     }
   }
@@ -144,22 +123,13 @@ class SseHub {
   handleConnection(req, res) {
     if (this.clients.size >= LIMITS.MAX_SSE_CLIENTS) this._reapDeadClients();
     if (this.clients.size >= LIMITS.MAX_SSE_CLIENTS) {
-      try {
-        res.write("event: rejected\ndata: too_many_clients\n\n");
-        res.end();
-      } catch (err) {
-        console.error("[dashboard] sse reject failed:", err.message);
-      }
+      try { res.write("event: rejected\ndata: too_many_clients\n\n"); res.end(); } catch (err) { console.error("[dashboard] sse reject failed:", err.message); }
       return false;
     }
     const meta = { lastLogSeq: 0, blocked: false, blockedCount: 0 };
     this.clients.set(res, meta);
     let frame;
-    try {
-      frame = this._fullFrame();
-    } catch (err) {
-      frame = this._frame({ now: Date.now(), error: "snapshot_failed" });
-    }
+    try { frame = this._fullFrame(); } catch (err) { frame = this._frame({ now: Date.now(), error: "snapshot_failed" }); }
     if (!this._write(res, OPEN_FRAME) || !this._write(res, frame)) {
       this._drop(res);
       return false;
@@ -174,10 +144,7 @@ class SseHub {
       this.clients.delete(res);
       if (this.clients.size === 0) {
         this._stopHeartbeat();
-        if (this.bcastTimer) {
-          clearTimeout(this.bcastTimer);
-          this.bcastTimer = null;
-        }
+        if (this.bcastTimer) { clearTimeout(this.bcastTimer); this.bcastTimer = null; }
       }
       this._notifyChange();
     };
@@ -189,18 +156,9 @@ class SseHub {
   }
 
   closeAll() {
-    if (this.bcastTimer) {
-      clearTimeout(this.bcastTimer);
-      this.bcastTimer = null;
-    }
+    if (this.bcastTimer) { clearTimeout(this.bcastTimer); this.bcastTimer = null; }
     this._stopHeartbeat();
-    for (const [res] of this.clients) {
-      try {
-        res.end();
-      } catch (err) {
-        console.error("[dashboard] sse close failed:", err.message);
-      }
-    }
+    for (const [res] of this.clients) { try { res.end(); } catch (err) { console.error("[dashboard] sse close failed:", err.message); } }
     this.clients.clear();
     this._notifyChange();
   }

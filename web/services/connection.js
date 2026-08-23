@@ -12,10 +12,8 @@ const paceStore = {
   rapidRefresh: 0,
   read() {
     try {
-      this.lastRefreshAt =
-        Number(sessionStorage.getItem(LAST_REFRESH_KEY)) || 0;
-      this.rapidRefresh =
-        Number(sessionStorage.getItem(RAPID_REFRESH_KEY)) || 0;
+      this.lastRefreshAt = Number(sessionStorage.getItem(LAST_REFRESH_KEY)) || 0;
+      this.rapidRefresh = Number(sessionStorage.getItem(RAPID_REFRESH_KEY)) || 0;
     } catch (err) {
       console.error("[dashboard] pace store read failed:", err.message);
     }
@@ -41,10 +39,7 @@ function getPaceDelay(now) {
   }
   paceStore.rapidRefresh += 1;
   paceStore.write();
-  return Math.min(
-    PENALTY_DELAY_MS,
-    BASE_DELAY_MS + (paceStore.rapidRefresh - 1) * PACE_STEP_MS,
-  );
+  return Math.min(PENALTY_DELAY_MS, BASE_DELAY_MS + (paceStore.rapidRefresh - 1) * PACE_STEP_MS);
 }
 async function retryDelay(response) {
   try {
@@ -56,13 +51,7 @@ async function retryDelay(response) {
   const header = Number.parseInt(response.headers.get("Retry-After") || "", 10);
   return Number.isFinite(header) && header > 0 ? header * 1000 : 5000;
 }
-export function createConnection({
-  onSnapshot,
-  onUnauthorized,
-  onStatusText,
-  onCountdown,
-  onLive,
-}) {
+export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onCountdown, onLive }) {
   let source = null;
   let retryTimer = null;
   let countdownTimer = null;
@@ -84,20 +73,14 @@ export function createConnection({
       const target = Date.now() + delay;
       const paint = () => {
         const left = Math.max(0, Math.ceil((target - Date.now()) / 1000));
-        onCountdown?.(
-          left > 0 ? `${label} in ${left}s\u2026` : `${label}\u2026`,
-        );
+        onCountdown?.(left > 0 ? `${label} in ${left}s\u2026` : `${label}\u2026`);
       };
       paint();
       countdownTimer = setInterval(paint, 500);
     }
     retryTimer = setTimeout(connect, delay);
   };
-  const nextBackoff = () =>
-    (backoff = Math.min(
-      BACKOFF_MAX_MS,
-      backoff ? backoff * 2 : BACKOFF_START_MS,
-    ));
+  const nextBackoff = () => (backoff = Math.min(BACKOFF_MAX_MS, backoff ? backoff * 2 : BACKOFF_START_MS));
   function rateLimited(wait) {
     onStatusText?.("CONNECTING");
     schedule(wait, "Resuming");
@@ -109,11 +92,7 @@ export function createConnection({
       if (res.status === 429) return { limited: await retryDelay(res) };
       if (res.ok) {
         const snapshot = await res.json().catch(() => null);
-        return {
-          ok: true,
-          snapshot,
-          streamWait: Number(snapshot?.streamRetryAfterMs) || 0,
-        };
+        return { ok: true, snapshot, streamWait: Number(snapshot?.streamRetryAfterMs) || 0 };
       }
       return {};
     } catch {
@@ -146,11 +125,7 @@ export function createConnection({
       connected = false;
       source?.close();
       source = null;
-      toast.warn(
-        "Viewer Limit Reached",
-        "This dashboard already has the maximum number of live viewers. Retrying in 30 seconds.",
-        "sse-limit",
-      );
+      toast.warn("Viewer Limit Reached", "This dashboard already has the maximum number of live viewers. Retrying in 30 seconds.", "sse-limit");
       onStatusText?.("VIEWER LIMIT");
       schedule(30000, "Retrying");
     });
@@ -169,11 +144,7 @@ export function createConnection({
       if (r.snapshot) onSnapshot(r.snapshot);
       if (r.streamWait > 0) return rateLimited(r.streamWait);
       onStatusText?.("OFFLINE", !wasConnected);
-      toast.error(
-        "Connection Lost",
-        "Lost contact with the dashboard host. Retrying automatically.",
-        "offline",
-      );
+      toast.error("Connection Lost", "Lost contact with the dashboard host. Retrying automatically.", "offline");
       schedule(nextBackoff() + Math.floor(Math.random() * 400), "Reconnecting");
     };
   }
@@ -226,12 +197,8 @@ export function createConnection({
         if (!snapshot) return "failed";
         onSnapshot(snapshot);
         const dead = !source || source.readyState === EventSource.CLOSED;
-        const behind =
-          Number.isFinite(snapshot.logSeq) &&
-          lastSeq >= 0 &&
-          snapshot.logSeq - lastSeq >= 2;
-        const silent =
-          lastFrameAt > 0 && Date.now() - lastFrameAt > STREAM_STALE_MS;
+        const behind = Number.isFinite(snapshot.logSeq) && lastSeq >= 0 && snapshot.logSeq - lastSeq >= 2;
+        const silent = lastFrameAt > 0 && Date.now() - lastFrameAt > STREAM_STALE_MS;
         if (dead || behind || silent) {
           connected = false;
           clearTimers();

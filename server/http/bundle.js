@@ -1,16 +1,10 @@
 "use strict";
 
 function parseSpecs(raw) {
-  return raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((spec) => {
-      const m = /^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/.exec(spec);
-      return m
-        ? { local: m[1], exported: m[2] }
-        : { local: spec, exported: spec };
-    });
+  return raw.split(",").map((s) => s.trim()).filter(Boolean).map((spec) => {
+    const m = /^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/.exec(spec);
+    return m ? { local: m[1], exported: m[2] } : { local: spec, exported: spec };
+  });
 }
 
 function dirOf(id) {
@@ -31,18 +25,12 @@ function resolveSpec(dir, spec) {
 
 function collapseStatements(rawSrc) {
   return rawSrc
-    .replace(
-      /(import|export)\s*\{([^}]*)\}(?:\s*from\s*(["'][^"']+["']))?;?/g,
-      (m, kw, items, fromVal) => {
-        const flat = items.replace(/\s+/g, " ").trim();
-        if (fromVal) return `${kw} { ${flat} } from ${fromVal};`;
-        return `${kw} { ${flat} };`;
-      }
-    )
-    .replace(
-      /module\.exports\s*=\s*\{([^}]*)\};?/g,
-      (m, items) => `module.exports = { ${items.replace(/\s+/g, " ").trim()} };`
-    );
+    .replace(/(import|export)\s*\{([^}]*)\}(?:\s*from\s*(["'][^"']+["']))?;?/g, (m, kw, items, fromVal) => {
+      const flat = items.replace(/\s+/g, " ").trim();
+      if (fromVal) return `${kw} { ${flat} } from ${fromVal};`;
+      return `${kw} { ${flat} };`;
+    })
+    .replace(/module\.exports\s*=\s*\{([^}]*)\};?/g, (m, items) => `module.exports = { ${items.replace(/\s+/g, " ").trim()} };`);
 }
 
 function parseImports(rawSrc) {
@@ -51,19 +39,9 @@ function parseImports(rawSrc) {
   for (const raw of src.split("\n")) {
     const line = raw.trim();
     let m;
-    if ((m = /^import\s+["']([^"']+)["'];?\s*$/.exec(line)))
-      deps.push({ form: "side", spec: m[1] });
-    else if (
-      (m =
-        /^import\s+\*\s*as\s+([A-Za-z_$][\w$]*)\s+from\s+["']([^"']+)["'];?\s*$/.exec(
-          line,
-        ))
-    )
-      deps.push({ form: "namespace", local: m[1], spec: m[2] });
-    else if (
-      (m = /^import\s+\{([^}]*)\}\s+from\s+["']([^"']+)["'];?\s*$/.exec(line))
-    )
-      deps.push({ form: "named", raw: m[1], spec: m[2] });
+    if ((m = /^import\s+["']([^"']+)["'];?\s*$/.exec(line))) deps.push({ form: "side", spec: m[1] });
+    else if ((m = /^import\s+\*\s*as\s+([A-Za-z_$][\w$]*)\s+from\s+["']([^"']+)["'];?\s*$/.exec(line))) deps.push({ form: "namespace", local: m[1], spec: m[2] });
+    else if ((m = /^import\s+\{([^}]*)\}\s+from\s+["']([^"']+)["'];?\s*$/.exec(line))) deps.push({ form: "named", raw: m[1], spec: m[2] });
   }
   return deps;
 }
@@ -74,22 +52,10 @@ function dependencyIds(src, dir) {
 
 function transformExport(line, exportMap) {
   let m;
-  if ((m = /^export\s+(async\s+)?function\s+([A-Za-z_$][\w$]*)\b/.exec(line))) {
-    exportMap.push({ local: m[2], exported: m[2] });
-    return line.replace(/^export\s+/, "");
-  }
-  if ((m = /^export\s+class\s+([A-Za-z_$][\w$]*)\b/.exec(line))) {
-    exportMap.push({ local: m[1], exported: m[1] });
-    return line.replace(/^export\s+/, "");
-  }
-  if ((m = /^export\s+(const|let|var)\s+([A-Za-z_$][\w$]*)\b/.exec(line))) {
-    exportMap.push({ local: m[2], exported: m[2] });
-    return line.replace(/^export\s+/, "");
-  }
-  if ((m = /^export\s+\{([^}]*)\}\s*;?\s*$/.exec(line))) {
-    for (const s of parseSpecs(m[1])) exportMap.push(s);
-    return "";
-  }
+  if ((m = /^export\s+(async\s+)?function\s+([A-Za-z_$][\w$]*)\b/.exec(line))) { exportMap.push({ local: m[2], exported: m[2] }); return line.replace(/^export\s+/, ""); }
+  if ((m = /^export\s+class\s+([A-Za-z_$][\w$]*)\b/.exec(line))) { exportMap.push({ local: m[1], exported: m[1] }); return line.replace(/^export\s+/, ""); }
+  if ((m = /^export\s+(const|let|var)\s+([A-Za-z_$][\w$]*)\b/.exec(line))) { exportMap.push({ local: m[2], exported: m[2] }); return line.replace(/^export\s+/, ""); }
+  if ((m = /^export\s+\{([^}]*)\}\s*;?\s*$/.exec(line))) { for (const s of parseSpecs(m[1])) exportMap.push(s); return ""; }
   return line;
 }
 
@@ -103,26 +69,11 @@ function transformModule(rawSrc, id, idMap) {
     let m;
     if ((m = /^import\s+["']([^"']+)["'];?\s*$/.exec(line))) {
       lines.push(`__require(${idMap.get(resolveSpec(dir, m[1]))});`);
-    } else if (
-      (m =
-        /^import\s+\*\s*as\s+([A-Za-z_$][\w$]*)\s+from\s+["']([^"']+)["'];?\s*$/.exec(
-          line,
-        ))
-    ) {
-      lines.push(
-        `const ${m[1]} = __require(${idMap.get(resolveSpec(dir, m[2]))});`,
-      );
-    } else if (
-      (m = /^import\s+\{([^}]*)\}\s+from\s+["']([^"']+)["'];?\s*$/.exec(line))
-    ) {
-      const names = parseSpecs(m[1])
-        .map((s) =>
-          s.local === s.exported ? s.local : `${s.local}: ${s.exported}`,
-        )
-        .join(", ");
-      lines.push(
-        `const { ${names} } = __require(${idMap.get(resolveSpec(dir, m[2]))});`,
-      );
+    } else if ((m = /^import\s+\*\s*as\s+([A-Za-z_$][\w$]*)\s+from\s+["']([^"']+)["'];?\s*$/.exec(line))) {
+      lines.push(`const ${m[1]} = __require(${idMap.get(resolveSpec(dir, m[2]))});`);
+    } else if ((m = /^import\s+\{([^}]*)\}\s+from\s+["']([^"']+)["'];?\s*$/.exec(line))) {
+      const names = parseSpecs(m[1]).map((s) => s.local === s.exported ? s.local : `${s.local}: ${s.exported}`).join(", ");
+      lines.push(`const { ${names} } = __require(${idMap.get(resolveSpec(dir, m[2]))});`);
     } else {
       lines.push(transformExport(line, exportMap));
     }
@@ -151,8 +102,7 @@ function bundleModules(read, entry = "services/app") {
     const src = read(id);
     sources[id] = src;
     order.push(id);
-    for (const dep of dependencyIds(src, dirOf(id)))
-      if (!seen.has(dep)) queue.push(dep);
+    for (const dep of dependencyIds(src, dirOf(id))) if (!seen.has(dep)) queue.push(dep);
   }
   const idMap = new Map(order.map((id, i) => [id, i]));
   const lines = [
@@ -168,12 +118,7 @@ function bundleModules(read, entry = "services/app") {
     const { body, exportMap } = transformModule(sources[id], id, idMap);
     lines.push(`__register(${idMap.get(id)}, (__require, __exports) => {`);
     lines.push(body);
-    if (exportMap.length)
-      lines.push(
-        `__assign(__exports, { ${exportMap
-          .map((e) => `${e.exported}: ${e.local}`)
-          .join(", ")} });`,
-      );
+    if (exportMap.length) lines.push(`__assign(__exports, { ${exportMap.map((e) => `${e.exported}: ${e.local}`).join(", ")} });`);
     lines.push("});");
   }
   lines.push(`__require(${idMap.get(entry)});`);

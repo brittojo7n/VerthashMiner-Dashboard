@@ -25,13 +25,7 @@ export function dismiss(key, immediate = false) {
   entry.node.addEventListener("transitionend", remove, { once: true });
   setTimeout(remove, 400);
 }
-export function show({
-  key,
-  title,
-  message,
-  variant = "info",
-  duration = DEFAULT_MS,
-}) {
+export function show({ key, title, message, variant = "info", duration = DEFAULT_MS }) {
   const host = container();
   if (!host) return;
   const id = key || `t${Date.now()}${Math.random()}`;
