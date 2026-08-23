@@ -1,9 +1,10 @@
 "use strict";
 
 const { LIMITS } = require("../utils/constants");
+const { DEBUG } = require("../utils/config");
 
 const RX_ANSI = /\x1b\[[0-?]*[ -/]*[@-~]/g;
-const RX_SECTION = /(cuda|opencl)\s.*(devices:|device config)/i;
+const RX_SECTION = /(cuda|opencl)\s.*?(devices:|device config)/i;
 const RX_INLINE = /index:\s*(\d+).*?pcieid:\s*([0-9a-fA-F:.]+)/i;
 const RX_INDEX = /deviceindex:\s*(\d+)/i;
 const RX_PCI_LINE = /pcieid:\s*([0-9a-fA-F:.]+)/i;
@@ -31,11 +32,18 @@ function parseCudaDeviceList(output, pciMap) {
     if (section) { inCuda = section[1].toLowerCase() === "cuda"; pendingIndex = null; continue; }
     if (!inCuda) continue;
     const inline = RX_INLINE.exec(line);
-    if (inline) { if (!RX_UNAVAILABLE.test(line)) pciMap[normalizePci(inline[2])] = inline[1]; pendingIndex = null; continue; }
+    if (inline) {
+      if (!RX_UNAVAILABLE.test(line)) pciMap[normalizePci(inline[2])] = inline[1];
+      pendingIndex = null;
+      continue;
+    }
     const index = RX_INDEX.exec(line);
     if (index) { pendingIndex = index[1]; continue; }
     const pci = RX_PCI_LINE.exec(line);
-    if (pci && pendingIndex != null && !RX_UNAVAILABLE.test(line)) { pciMap[normalizePci(pci[1])] = pendingIndex; pendingIndex = null; }
+    if (pci && pendingIndex != null && !RX_UNAVAILABLE.test(line)) {
+      pciMap[normalizePci(pci[1])] = pendingIndex;
+      pendingIndex = null;
+    }
   }
   return pciMap;
 }
@@ -46,7 +54,10 @@ function createStreamReader(onLine, onFlush, isEnabled, forward) {
     if (forward) forward(chunk);
     buffer += chunk;
     const cut = buffer.lastIndexOf("\n");
-    if (cut === -1) { if (buffer.length > LIMITS.STREAM_BUFFER_BYTES) buffer = buffer.slice(-LIMITS.STREAM_BUFFER_BYTES); return; }
+    if (cut === -1) {
+      if (buffer.length > LIMITS.STREAM_BUFFER_BYTES) buffer = buffer.slice(-LIMITS.STREAM_BUFFER_BYTES);
+      return;
+    }
     const block = buffer.slice(0, cut);
     buffer = buffer.slice(cut + 1);
     if (buffer.length > LIMITS.STREAM_BUFFER_BYTES) buffer = buffer.slice(-LIMITS.STREAM_BUFFER_BYTES);

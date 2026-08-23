@@ -2,6 +2,7 @@
 
 const { STATUS, LOG } = require("../utils/constants");
 const { stripAnsi } = require("./devices");
+const { DEBUG } = require("../utils/config");
 
 const RX_DEV_HASH = /(cu|cl)_device\((\d+)\).*?hashrate:\s*([\d.]+)/i;
 const RX_DIFF = /difficulty(?:\s*(?:set|is))?\s*(?:to|:)?\s*([+-]?[\d.]+(?:[eE][+-]?\d+)?)/i;
@@ -45,18 +46,19 @@ function classifyLine(line, lc, level) {
   }
   if (RX_NZERR.test(line)) return { isFatal: false, isPoolDown: false, type: LOG.ERROR };
   if (RX_DEV_MEMERR.test(line)) return { isFatal: false, isPoolDown: false, type: LOG.WARN };
-  if (lc.includes("accepted:") || lc.includes("share accepted") || lc.includes("loaded succes") || lc.includes("verified succes") || lc.includes("successfully configured")) {
-    return { isFatal: false, isPoolDown: false, type: LOG.SUCCESS };
-  }
-  if (lc.includes("stratum") || lc.includes("difficulty") || lc.includes("hashrate:") || lc.includes("device") || lc.includes("mining.set_difficulty")) {
-    return { isFatal: false, isPoolDown: false, type: LOG.ACCENT };
-  }
+  const successPrefixes = ["accepted:", "share accepted", "loaded succes", "verified succes", "successfully configured"];
+  if (successPrefixes.some(prefix => lc.includes(prefix))) return { isFatal: false, isPoolDown: false, type: LOG.SUCCESS };
+  const accentPrefixes = ["stratum", "difficulty", "hashrate:", "device", "mining.set_difficulty"];
+  if (accentPrefixes.some(prefix => lc.includes(prefix))) return { isFatal: false, isPoolDown: false, type: LOG.ACCENT };
   return { isFatal: false, isPoolDown: false, type: LOG.INFO };
 }
 
 function sumDeviceHashrates(rates) {
   let total = 0;
-  for (const key in rates) { const value = rates[key]; if (Number.isFinite(value)) total += value; }
+  for (const key in rates) {
+    const value = rates[key];
+    if (Number.isFinite(value)) total += value;
+  }
   return Math.round(total * 1e6) / 1e6;
 }
 
@@ -64,15 +66,25 @@ function hashratesReady(state, deviceKey) {
   const mining = state.mining;
   if (mining.hashratesReady) return true;
   const known = Object.keys(mining.gpuHashrates).length;
-  if (mining.expectedWorkers > 0) { if (known >= mining.expectedWorkers) mining.hashratesReady = true; return mining.hashratesReady; }
+  if (mining.expectedWorkers > 0) {
+    if (known >= mining.expectedWorkers) mining.hashratesReady = true;
+    return mining.hashratesReady;
+  }
   if (mining.seenDevices.includes(deviceKey)) mining.hashratesReady = true;
   else mining.seenDevices.push(deviceKey);
   return mining.hashratesReady;
 }
 
 function emitLog(state, pushLog, text, type) {
-  if (typeof pushLog === "function") { pushLog(text, type); return; }
-  if (state.miner.logs) { state.miner.logs.push(text, type); state.miner.lastLine = text; state.dirty = true; }
+  if (typeof pushLog === "function") {
+    pushLog(text, type);
+    return;
+  }
+  if (state.miner.logs) {
+    state.miner.logs.push(text, type);
+    state.miner.lastLine = text;
+    state.dirty = true;
+  }
 }
 
 function parseMinerLine(raw, state, pushLog) {
@@ -123,17 +135,30 @@ function parseMinerLine(raw, state, pushLog) {
 
   if (mining.expectedWorkers === 0) {
     const workers = RX_WORKERS.exec(line);
-    if (workers) { mining.expectedWorkers = Number(workers[1] || 0) + Number(workers[2] || 0); state.dirty = true; }
-    else if (level !== null) {
+    if (workers) {
+      mining.expectedWorkers = Number(workers[1] || 0) + Number(workers[2] || 0);
+      state.dirty = true;
+    } else if (level !== null) {
       const threads = RX_THREADS.exec(line);
-      if (threads) { mining.expectedWorkers = Number(threads[1]); state.dirty = true; }
+      if (threads) {
+        mining.expectedWorkers = Number(threads[1]);
+        state.dirty = true;
+      }
     }
   }
 
   let diffValue = null;
-  if (lc.includes("mining.set_difficulty")) { const jsonDiff = RX_JSON_DIFF.exec(line); if (jsonDiff) diffValue = Number(jsonDiff[1]); }
-  else if (lc.includes("difficulty")) { const diff = RX_DIFF.exec(line); if (diff) diffValue = Number(diff[1]); }
-  if (diffValue !== null && Number.isFinite(diffValue) && mining.difficulty !== diffValue) { mining.difficulty = diffValue; state.dirty = true; }
+  if (lc.includes("mining.set_difficulty")) {
+    const jsonDiff = RX_JSON_DIFF.exec(line);
+    if (jsonDiff) diffValue = Number(jsonDiff[1]);
+  } else if (lc.includes("difficulty")) {
+    const diff = RX_DIFF.exec(line);
+    if (diff) diffValue = Number(diff[1]);
+  }
+  if (diffValue !== null && Number.isFinite(diffValue) && mining.difficulty !== diffValue) {
+    mining.difficulty = diffValue;
+    state.dirty = true;
+  }
 
   if (lc.includes("accepted:")) {
     const acc = RX_ACC.exec(line);
@@ -150,8 +175,14 @@ function parseMinerLine(raw, state, pushLog) {
         }
         mining.rejected = rejected;
         mining.lastAcceptedAt = Date.now();
-        if (canSetRunStatus(state)) { mining.status = STATUS.MINING; state.miner.lastError = ""; }
-        if (acc[3] && acc[3] !== "(pending...)") { const total = Number(acc[3]); if (Number.isFinite(total)) mining.hashrateKHs = total; }
+        if (canSetRunStatus(state)) {
+          mining.status = STATUS.MINING;
+          state.miner.lastError = "";
+        }
+        if (acc[3] && acc[3] !== "(pending...)") {
+          const total = Number(acc[3]);
+          if (Number.isFinite(total)) mining.hashrateKHs = total;
+        }
         state.dirty = true;
       }
     }
@@ -161,7 +192,10 @@ function parseMinerLine(raw, state, pushLog) {
     let next = null;
     if (lc.includes("starting stratum") || (lc.includes("stratum") && lc.includes("connect"))) next = STATUS.CONNECTED;
     else if (lc.includes("waiting") || lc.includes("paused") || lc.includes("no work")) next = STATUS.WAITING;
-    if (next && mining.status !== next) { mining.status = next; state.dirty = true; }
+    if (next && mining.status !== next) {
+      mining.status = next;
+      state.dirty = true;
+    }
   }
 }
 

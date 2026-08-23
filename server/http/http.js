@@ -6,6 +6,7 @@ const { formatStatsSnapshot } = require("../utils/state");
 const { buildAssets, negotiate } = require("./static");
 const { SessionStore, safeEqual } = require("./auth");
 const { createRateLimiter } = require("./ratelimit");
+const { DEBUG } = require("../utils/config");
 
 const NO_STORE = "no-store";
 const NOSNIFF = "nosniff";
@@ -43,7 +44,7 @@ const SERVER_TIMEOUTS = Object.freeze({
 
 function send(res, status, headers, body) {
   if (res.writableEnded || res.destroyed) return;
-  try { res.writeHead(status, headers); res.end(body); } catch { }
+  try { res.writeHead(status, headers); res.end(body); } catch (err) { if (DEBUG) console.debug("[dashboard] response write failed:", err.message); }
 }
 function sendText(res, status, body) { send(res, status, HDR_TEXT, body); }
 function sendJson(res, status, payload) { send(res, status, HDR_JSON, JSON.stringify(payload)); }
@@ -167,7 +168,20 @@ function createHttpServer({ config, state, sseHub, minerManager, webDir }) {
     });
   });
 
-  routes.set("GET /health", (req, res) => sendText(res, 200, "ok"));
+  routes.set("GET /health", (req, res) => {
+    const snapshot = formatStatsSnapshot(state);
+    sendJson(res, 200, {
+      status: "ok",
+      miner: {
+        running: snapshot.miner.running,
+        pid: snapshot.miner.pid,
+        status: snapshot.mining.status
+      },
+      gpu: snapshot.gpuError ? { error: snapshot.gpuError } : { count: snapshot.gpu.length },
+      sse: { clients: sseHub.size },
+      uptime: snapshot.uptimeSeconds
+    });
+  });
 
   const minerControl = action => (req, res, ip) => {
     if (!passesXhrGuard(req)) return sendText(res, 403, "Forbidden: CSRF check failed");

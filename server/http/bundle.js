@@ -78,6 +78,15 @@ function transformModule(src, id, idMap) {
       lines.push(transformExport(line, exportMap));
     }
   }
+  const cjsExport = /^module\.exports\s*=\s*\{([^}]*)\}\s*;?\s*$/;
+  for (let i = lines.length - 1; i >= Math.max(0, lines.length - 10); i--) {
+    const m = cjsExport.exec(lines[i]);
+    if (m) {
+      for (const s of parseSpecs(m[1])) exportMap.push(s);
+      lines.splice(i, 1);
+      break;
+    }
+  }
   return { body: lines.join("\n"), exportMap };
 }
 

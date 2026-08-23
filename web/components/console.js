@@ -15,29 +15,35 @@ function cacheUsable() {
     window.sessionStorage.setItem(probe, "1");
     window.sessionStorage.removeItem(probe);
     storageUsable = true;
-  } catch { storageUsable = false; }
+  } catch (err) {
+    if (typeof console !== "undefined" && console.debug) console.debug("[dashboard] storage probe failed:", err.message);
+    storageUsable = false;
+  }
   return storageUsable;
 }
 function isReloadNavigation() {
   try {
-    if (typeof performance !== "undefined") {
-      if (typeof performance.getEntriesByType === "function") {
-        const nav = performance.getEntriesByType("navigation");
-        if (nav && nav.length) return nav[0].type === "reload";
-      }
-      if (performance.navigation) return performance.navigation.type === 1;
+    if (typeof performance !== "undefined" && typeof performance.getEntriesByType === "function") {
+      const nav = performance.getEntriesByType("navigation");
+      if (nav && nav.length) return nav[0].type === "reload";
     }
-  } catch { }
+  } catch (err) {
+    if (typeof console !== "undefined" && console.debug) console.debug("[dashboard] navigation check failed:", err.message);
+  }
   return false;
 }
-function cacheClear() { try { window.sessionStorage.removeItem(CACHE_KEY); } catch { } }
+function cacheClear() {
+  try { window.sessionStorage.removeItem(CACHE_KEY); }
+  catch (err) { if (typeof console !== "undefined" && console.debug) console.debug("[dashboard] cache clear failed:", err.message); }
+}
 function sanitize(entries) {
   const clean = [];
   let lastId = 0;
   for (const entry of entries) {
     if (!entry || typeof entry.id !== "number" || !Number.isFinite(entry.id)) continue;
     if (entry.id <= lastId || typeof entry.text !== "string") continue;
-    clean.push({ id: entry.id, text: entry.text.slice(0, MAX_TEXT_LENGTH), type: typeof entry.type === "string" ? entry.type : "info" });
+    const type = typeof entry.type === "string" ? entry.type : "info";
+    clean.push({ id: entry.id, text: entry.text.slice(0, MAX_TEXT_LENGTH), type });
     lastId = entry.id;
   }
   return clean.slice(-MAX_LINES);
@@ -51,13 +57,21 @@ function cacheLoad() {
     const parsed = JSON.parse(raw);
     if (!parsed || parsed.v !== CACHE_VERSION || !Array.isArray(parsed.entries)) { cacheClear(); return []; }
     return sanitize(parsed.entries);
-  } catch { cacheClear(); return []; }
+  } catch (err) {
+    if (typeof console !== "undefined" && console.debug) console.debug("[dashboard] cache load failed:", err.message);
+    cacheClear();
+    return [];
+  }
 }
 function cacheSave(entries) {
   if (!cacheUsable() || !Array.isArray(entries)) return;
   try {
     window.sessionStorage.setItem(CACHE_KEY, JSON.stringify({ v: CACHE_VERSION, entries: entries.slice(-MAX_LINES) }));
-  } catch { storageBroken = true; cacheClear(); }
+  } catch (err) {
+    storageBroken = true;
+    cacheClear();
+    if (typeof console !== "undefined" && console.debug) console.debug("[dashboard] cache save failed:", err.message);
+  }
 }
 const RULES = [
   [/(\b[\d.]+\s*(?:kH|MH|GH|TH)\/s\b)/gi, "hl-hash"],
@@ -99,14 +113,21 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
     if (atBottom !== autoScroll) { autoScroll = atBottom; onAutoScrollChange?.(autoScroll); }
   }, { passive: true });
   const updateCounter = () => text(counter, `${history.length} log${history.length === 1 ? "" : "s"}`);
-  const persistNow = () => { if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; } cacheSave(history); };
-  const persistSoon = () => { if (persistTimer || !cacheUsable()) return; persistTimer = setTimeout(() => { persistTimer = null; cacheSave(history); }, PERSIST_DELAY_MS); };
+  const persistNow = () => {
+    if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
+    cacheSave(history);
+  };
+  const persistSoon = () => {
+    if (persistTimer || !cacheUsable()) return;
+    persistTimer = setTimeout(() => { persistTimer = null; cacheSave(history); }, PERSIST_DELAY_MS);
+  };
   window.addEventListener("pagehide", persistNow);
   document.addEventListener("visibilitychange", () => { if (document.hidden) persistNow(); });
   const buildRow = entry => {
     const row = make("div", `log-entry log-type-${entry.type || "info"}`);
     row.dataset.id = entry.id;
-    row.innerHTML = `<span class="log-prompt">&gt;</span><span class="log-msg">${highlight(entry.text)}</span>`;
+    const msg = highlight(entry.text);
+    row.innerHTML = `<span class="log-prompt">&gt;</span><span class="log-msg">${msg}</span>`;
     return row;
   };
   const reset = clearStorage => {
@@ -152,7 +173,9 @@ export function createConsole({ terminal, lines, counter, onAutoScrollChange }) 
         updateCounter();
         persistSoon();
         if (autoScroll) scrollToBottom();
-      } catch (err) { try { console.error("[dashboard] console render failed", err); } catch { } }
+      } catch (err) {
+        if (typeof console !== "undefined" && console.error) console.error("[dashboard] console render failed", err);
+      }
     }
   };
 }

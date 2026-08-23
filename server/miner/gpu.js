@@ -2,7 +2,7 @@
 
 const { execFile } = require("node:child_process");
 const { LIMITS } = require("../utils/constants");
-const { clampGpuPollMs, GPU_POLL_DEFAULT_MS } = require("../utils/config");
+const { clampGpuPollMs, GPU_POLL_DEFAULT_MS, DEBUG } = require("../utils/config");
 const { normalizePci } = require("./devices");
 const { unrefTimer } = require("../utils/timers");
 
@@ -108,7 +108,7 @@ class GpuManager {
       if (!err && stdout) {
         this.failures = 0;
         let parsed;
-        try { parsed = parseSmiOutput(String(stdout)); } catch { parsed = null; }
+        try { parsed = parseSmiOutput(String(stdout)); } catch (err) { if (DEBUG) console.debug("[dashboard] gpu parse failed:", err.message); parsed = null; }
         if (parsed) {
           const changed = !sameTelemetry(this.state.gpu, parsed) || this.state.gpuError;
           this.state.gpu = parsed;

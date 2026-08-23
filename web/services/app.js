@@ -189,9 +189,16 @@ function initDashboard() {
         connection.restart();
         return;
       }
-      if (res.status === 429) { auth.err.textContent = "Too many attempts. Please wait a moment and try again."; toast.warn("Too Many Requests", "Too many failed attempts. Please wait before trying again.", "rate-limit-login"); }
-      else auth.err.textContent = "Invalid passphrase";
-    } catch { auth.err.textContent = "Invalid passphrase"; }
+      if (res.status === 429) {
+        auth.err.textContent = "Too many attempts. Please wait a moment and try again.";
+        toast.warn("Too Many Requests", "Too many failed attempts. Please wait before trying again.", "rate-limit-login");
+      } else {
+        auth.err.textContent = "Invalid passphrase";
+      }
+    } catch (err) {
+      if (typeof console !== "undefined" && console.debug) console.debug("[dashboard] login failed:", err.message);
+      auth.err.textContent = "Invalid passphrase";
+    }
     auth.err.style.display = "block";
   }
   async function runAction(action) {
@@ -207,11 +214,18 @@ function initDashboard() {
         toast.dismiss(`miner-${action}`);
         if (res.status === 429) {
           let seconds = 5;
-          try { const data = await res.clone().json(); if (Number.isFinite(data.retryAfterSeconds)) seconds = data.retryAfterSeconds; } catch { }
+          try { const data = await res.clone().json(); if (Number.isFinite(data.retryAfterSeconds)) seconds = data.retryAfterSeconds; }
+          catch { }
           toast.warn("Too Many Requests", `Miner controls are rate limited. Please wait ${seconds} second${seconds === 1 ? "" : "s"} before trying again.`, "rate-limit-action");
-        } else toast.error("Action Failed", `The dashboard rejected the request (HTTP ${res.status}).`, "action-failed");
+        } else {
+          toast.error("Action Failed", `The dashboard rejected the request (HTTP ${res.status}).`, "action-failed");
+        }
       }
-    } catch { toast.dismiss(`miner-${action}`); toast.error("Action Failed", "Could not reach the dashboard host. Please try again.", "action-failed"); }
+    } catch (err) {
+      if (typeof console !== "undefined" && console.debug) console.debug("[dashboard] action failed:", err.message);
+      toast.dismiss(`miner-${action}`);
+      toast.error("Action Failed", "Could not reach the dashboard host. Please try again.", "action-failed");
+    }
     pendingStatus = null;
   }
   let armedAction = null;
@@ -241,7 +255,10 @@ function initDashboard() {
     els.refresh.classList.add("spinning");
     let result;
     try { result = await connection.refresh(); }
-    catch { result = "failed"; }
+    catch (err) {
+      if (typeof console !== "undefined" && console.debug) console.debug("[dashboard] refresh failed:", err.message);
+      result = "failed";
+    }
     if (result === "ok") toast.info("Data Refreshed", "Pulled the latest stats from the dashboard API.", "soft-refresh");
     else if (result === "limited") toast.warn("Slow Down", "Refresh is rate limited. Please wait a moment and try again.", "soft-refresh");
     else if (result === "failed") toast.error("Refresh Failed", "Could not reach the dashboard API. Please try again.", "soft-refresh");
@@ -253,7 +270,10 @@ function initDashboard() {
     }, 400);
   }
   els.refresh.addEventListener("click", softRefresh);
-  document.addEventListener("visibilitychange", () => { if (document.hidden) { stopClock(); connection.suspend(); } else { startClock(); if (connection.idle) connection.connect(); } });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { stopClock(); connection.suspend(); }
+    else { startClock(); if (connection.idle) connection.connect(); }
+  });
   gpuView.render(els.gpus, [], "");
   connection.connect();
 }

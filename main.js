@@ -1,6 +1,7 @@
 "use strict";
 
 const config = require("./server/utils/config");
+const { DEBUG } = config;
 const { createState } = require("./server/utils/state");
 const { GpuManager } = require("./server/miner/gpu");
 const { SseHub } = require("./server/http/sse");
@@ -16,7 +17,8 @@ function yieldCpuToMiner() {
   try {
     os.setPriority(process.pid, os.constants.priority.PRIORITY_BELOW_NORMAL);
     return true;
-  } catch {
+  } catch (err) {
+    if (DEBUG) console.debug("[dashboard] yieldCpuToMiner failed:", err.message);
     return false;
   }
 }
@@ -80,7 +82,8 @@ class Server {
         LOG.ERROR
       );
       this.sseHub.broadcast();
-    } catch {
+    } catch (logErr) {
+      if (DEBUG) console.debug("[dashboard] fault handler failed:", logErr.message);
     }
   }
 
@@ -95,7 +98,7 @@ class Server {
         if (err && err.code === "EADDRINUSE") {
           console.error(
             `[FATAL] Port ${this.config.PORT} is already in use. ` +
-              "Another dashboard instance is probably running."
+            "Another dashboard instance is probably running."
           );
         } else {
           console.error(
@@ -112,7 +115,7 @@ class Server {
       const port = this.httpServer.address().port;
       console.log(
         `[dashboard] http://${this.config.HOST}:${port}\n` +
-          `[dashboard] LAN: http://${getLanIp()}:${port}`
+        `[dashboard] LAN: http://${getLanIp()}:${port}`
       );
     });
 

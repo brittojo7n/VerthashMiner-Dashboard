@@ -5,6 +5,7 @@ const path = require("node:path");
 const zlib = require("node:zlib");
 const crypto = require("node:crypto");
 const { bundleModules } = require("./bundle");
+const { DEBUG } = require("../utils/config");
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -78,8 +79,9 @@ function makeAsset(name, buf, csp) {
       } else {
         asset.gzip = false;
       }
-    } catch {
+    } catch (err) {
       asset.gzip = false;
+      if (DEBUG) console.debug("[dashboard] gzip failed:", err.message);
     }
   }
   return asset;

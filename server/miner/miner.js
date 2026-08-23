@@ -8,6 +8,7 @@ const { parseMinerLine } = require("./parser");
 const { STATUS, LOG, LIMITS } = require("../utils/constants");
 const { parseCudaDeviceList, createStreamReader } = require("./devices");
 const { unrefTimer: timer } = require("../utils/timers");
+const { DEBUG } = require("../utils/config");
 
 const ACTIONS = Object.freeze({
   start: STATUS.STARTING,
@@ -32,7 +33,7 @@ function resolveExe(exe, cwd) {
   const looksLikePath = exe.includes("/") || exe.includes("\\");
   const candidate = path.resolve(cwd || ".", exe);
   if (looksLikePath) return candidate;
-  try { if (fs.statSync(candidate).isFile()) return candidate; } catch { }
+  try { if (fs.statSync(candidate).isFile()) return candidate; } catch (err) { if (DEBUG) console.debug("[dashboard] resolveExe miss:", err.message); }
   return exe;
 }
 
@@ -152,7 +153,7 @@ class MinerManager {
         detached: false,
         stdio: ["ignore", "pipe", "pipe"]
       });
-    } catch { once(); return; }
+    } catch (err) { if (DEBUG) console.debug("[dashboard] probe spawn failed:", err.message); once(); return; }
 
     this._probe = probe;
     let buffer = "";
@@ -162,7 +163,7 @@ class MinerManager {
     probe.stdout.on("data", collect);
     probe.stderr.on("data", collect);
     probe.on("close", () => {
-      try { parseCudaDeviceList(buffer, this.state.mining.pciMap); } catch { }
+      try { parseCudaDeviceList(buffer, this.state.mining.pciMap); } catch (err) { if (DEBUG) console.debug("[dashboard] probe parse failed:", err.message); }
       once();
     });
     probe.on("error", once);
@@ -170,7 +171,7 @@ class MinerManager {
     watchdog = timer(() => {
       if (finished) return;
       this.pushLog("Device probe timed out; continuing without PCI mapping.", LOG.WARN);
-      try { probe.kill("SIGKILL"); } catch { }
+      try { probe.kill("SIGKILL"); } catch (err) { if (DEBUG) console.debug("[dashboard] probe kill failed:", err.message); }
       once();
     }, this.timeouts.probe);
   }
@@ -197,7 +198,7 @@ class MinerManager {
     const child = this.proc;
     let settled = false;
 
-    try { os.setPriority(child.pid, os.constants.priority.PRIORITY_NORMAL); } catch { }
+    try { os.setPriority(child.pid, os.constants.priority.PRIORITY_NORMAL); } catch (err) { if (DEBUG) console.debug("[dashboard] setPriority failed:", err.message); }
 
     this._spawning = false;
     this.state.miner.running = true;
@@ -209,7 +210,7 @@ class MinerManager {
     this._emit();
 
     const onLine = (line, enabled) => {
-      try { parseMinerLine(line, this.state, enabled ? this._boundPushLog() : undefined); } catch { this.state.dirty = true; }
+      try { parseMinerLine(line, this.state, enabled ? this._boundPushLog() : undefined); } catch (err) { if (DEBUG) console.debug("[dashboard] parse failed:", err.message); this.state.dirty = true; }
     };
     const onFlush = () => this._emit();
     const enabled = () => this.parsingEnabled;
@@ -219,8 +220,8 @@ class MinerManager {
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", createStreamReader(onLine, onFlush, enabled, mirror(process.stdout)));
     child.stderr.on("data", createStreamReader(onLine, onFlush, enabled, mirror(process.stderr)));
-    child.stdout.on("error", () => {});
-    child.stderr.on("error", () => {});
+    child.stdout.on("error", err => { if (DEBUG) console.debug("[dashboard] stdout error:", err.message); });
+    child.stderr.on("error", err => { if (DEBUG) console.debug("[dashboard] stderr error:", err.message); });
 
     child.on("error", err => {
       if (settled) return;
@@ -344,13 +345,18 @@ class MinerManager {
       const forceKill = () => {
         if (child.exitCode !== null || child.signalCode !== null) return;
         if (process.platform === "win32") {
-          execFile("taskkill.exe", ["/pid", String(pid), "/T", "/F"], () => {});
+          execFile("taskkill.exe", ["/pid", String(pid), "/T", "/F"], (err, stdout, stderr) => {
+            if (err) {
+              this.pushLog(`taskkill failed for pid ${pid}: ${err.message}`, LOG.WARN);
+              if (DEBUG) console.debug("[dashboard] taskkill failed:", err.message, stderr);
+            }
+          });
         } else {
-          try { child.kill("SIGKILL"); } catch { }
+          try { child.kill("SIGKILL"); } catch (err) { if (DEBUG) console.debug("[dashboard] sigkill failed:", err.message); }
         }
       };
 
-      try { child.kill("SIGINT"); } catch { }
+      try { child.kill("SIGINT"); } catch (err) { if (DEBUG) console.debug("[dashboard] sigint failed:", err.message); }
       this._forceKillTimer = timer(forceKill, this.timeouts.forceKill);
 
       watchdog = timer(() => {
@@ -376,7 +382,7 @@ class MinerManager {
     clearTimeout(this._forceKillTimer);
     this._forceKillTimer = null;
     if (this._probe) {
-      try { this._probe.kill("SIGKILL"); } catch { }
+      try { this._probe.kill("SIGKILL"); } catch (err) { if (DEBUG) console.debug("[dashboard] probe kill failed:", err.message); }
       this._probe = null;
     }
   }

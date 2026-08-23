@@ -2,7 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { resolveIdentity } = require("./user");
+const { resolveIdentity } = require("../../web/lib/user");
 const { parseMinerArgs } = require("./args");
 
 const GPU_POLL_MIN_MS = 3000;
@@ -21,8 +21,14 @@ function parseEnvFile(text) {
     if (!match) continue;
     let val = match[2] || "";
     const quote = val[0];
-    if (quote === '"' || quote === "'") { const end = val.lastIndexOf(quote); val = end > 0 ? val.slice(1, end) : val.slice(1); }
-    else { const comment = val.indexOf(" #"); if (comment !== -1) val = val.slice(0, comment); val = val.trim(); }
+    if (quote === '"' || quote === "'") {
+      const end = val.lastIndexOf(quote);
+      val = end > 0 ? val.slice(1, end) : val.slice(1);
+    } else {
+      const comment = val.indexOf(" #");
+      if (comment !== -1) val = val.slice(0, comment);
+      val = val.trim();
+    }
     out[match[1]] = val;
   }
   return out;
@@ -30,7 +36,15 @@ function parseEnvFile(text) {
 
 function loadEnvFile(envPath, env = process.env) {
   const target = envPath || env.ENV_FILE || path.join(path.resolve(__dirname, "..", ".."), ".env");
-  try { if (!fs.existsSync(target)) return env; const parsed = parseEnvFile(fs.readFileSync(target, "utf8")); for (const key of Object.keys(parsed)) { if (env[key] === undefined) env[key] = parsed[key]; } } catch { }
+  try {
+    if (!fs.existsSync(target)) return env;
+    const parsed = parseEnvFile(fs.readFileSync(target, "utf8"));
+    for (const key of Object.keys(parsed)) {
+      if (env[key] === undefined) env[key] = parsed[key];
+    }
+  } catch (err) {
+    if (process.env.NODE_ENV === "development") console.debug("[dashboard] env load failed:", err.message);
+  }
   return env;
 }
 
@@ -96,10 +110,25 @@ function buildConfig(env = process.env, opts = {}) {
   const identity = resolveIdentity(flags);
   if (identity.user) applyUserArg(MINER_ARGS, identity.user);
   return Object.freeze({
-    PORT, HOST, GPU_POLL_MS, GPU_POLL_MIN_MS, GPU_POLL_MAX_MS, GPU_POLL_DEFAULT_MS, clampGpuPollMs,
-    MINER_EXE, MINER_ARGS: Object.freeze(MINER_ARGS), MINER_CWD: env.MINER_CWD || "", PASSPHRASE: env.PASSPHRASE || "",
-    SESSION_SECRET: env.SESSION_SECRET || "", USER: identity.user, WALLET: identity.wallet, WORKER: identity.worker,
-    DEVICE_SELECTION: Object.freeze(deviceSelection(flags)), FORWARD_CONSOLE: env.FORWARD_CONSOLE === "true", warnings: Object.freeze(warnings)
+    PORT,
+    HOST,
+    GPU_POLL_MS,
+    GPU_POLL_MIN_MS,
+    GPU_POLL_MAX_MS,
+    GPU_POLL_DEFAULT_MS,
+    clampGpuPollMs,
+    MINER_EXE,
+    MINER_ARGS: Object.freeze(MINER_ARGS),
+    MINER_CWD: env.MINER_CWD || "",
+    PASSPHRASE: env.PASSPHRASE || "",
+    SESSION_SECRET: env.SESSION_SECRET || "",
+    USER: identity.user,
+    WALLET: identity.wallet,
+    WORKER: identity.worker,
+    DEVICE_SELECTION: Object.freeze(deviceSelection(flags)),
+    FORWARD_CONSOLE: env.FORWARD_CONSOLE === "true",
+    DEBUG: env.NODE_ENV === "development",
+    warnings: Object.freeze(warnings)
   });
 }
 

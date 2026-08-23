@@ -41,7 +41,8 @@ function createPerfGate(env) {
       return;
     }
     let locked = false;
-    try { locked = storage && storage.get(LOCK_KEY) === "1"; } catch { }
+    try { locked = storage && storage.get(LOCK_KEY) === "1"; }
+    catch (err) { if (typeof console !== "undefined" && console.debug) console.debug("[dashboard] perf gate lock check failed:", err.message); }
     if (locked) { lockLite("session lock"); return; }
     probe();
   }

@@ -2,6 +2,7 @@
 
 const { formatStatsSnapshot } = require("../utils/state");
 const { LIMITS } = require("../utils/constants");
+const { DEBUG } = require("../utils/config");
 const { unrefTimer, unrefInterval } = require("../utils/timers");
 
 const HEARTBEAT_FRAME = ": hb\n\n";
@@ -61,14 +62,15 @@ class SseHub {
         }
       }
       return true;
-    } catch {
+    } catch (err) {
+      if (DEBUG) console.debug("[dashboard] sse write failed:", err.message);
       return false;
     }
   }
 
   _drop(res) {
     if (!this.clients.delete(res)) return;
-    try { res.end(); } catch { }
+    try { res.end(); } catch (err) { if (DEBUG) console.debug("[dashboard] sse end failed:", err.message); }
     if (this.clients.size === 0) this._stopHeartbeat();
     this._notifyChange();
   }
@@ -86,7 +88,8 @@ class SseHub {
       this.bcastTimer = null;
       if (this.clients.size === 0) return;
       const seq = this.state.miner.logs.seq;
-      const frames = new Map();
+      const fullPayload = this._frame(formatStatsSnapshot(this.state));
+      const frames = new Map([[seq, fullPayload]]);
       this.state.dirty = false;
       for (const [res, meta] of this.clients) {
         if (meta.blocked) {
@@ -115,13 +118,13 @@ class SseHub {
   handleConnection(req, res) {
     if (this.clients.size >= LIMITS.MAX_SSE_CLIENTS) this._reapDeadClients();
     if (this.clients.size >= LIMITS.MAX_SSE_CLIENTS) {
-      try { res.write("event: rejected\ndata: too_many_clients\n\n"); res.end(); } catch { }
+      try { res.write("event: rejected\ndata: too_many_clients\n\n"); res.end(); } catch (err) { if (DEBUG) console.debug("[dashboard] sse reject failed:", err.message); }
       return false;
     }
     const meta = { lastLogSeq: 0, blocked: false, blockedCount: 0 };
     this.clients.set(res, meta);
     let frame;
-    try { frame = this._fullFrame(); } catch { frame = this._frame({ now: Date.now(), error: "snapshot_failed" }); }
+    try { frame = this._fullFrame(); } catch (err) { frame = this._frame({ now: Date.now(), error: "snapshot_failed" }); }
     if (!this._write(res, OPEN_FRAME) || !this._write(res, frame)) {
       this._drop(res);
       return false;
@@ -150,7 +153,7 @@ class SseHub {
   closeAll() {
     if (this.bcastTimer) { clearTimeout(this.bcastTimer); this.bcastTimer = null; }
     this._stopHeartbeat();
-    for (const [res] of this.clients) { try { res.end(); } catch { } }
+    for (const [res] of this.clients) { try { res.end(); } catch (err) { if (DEBUG) console.debug("[dashboard] sse close failed:", err.message); } }
     this.clients.clear();
     this._notifyChange();
   }

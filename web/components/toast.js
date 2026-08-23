@@ -30,7 +30,17 @@ export function show({ key, title, message, variant = "info", duration = DEFAULT
     existing.timer = setTimeout(() => dismiss(id), duration);
     return;
   }
-  while (live.size >= MAX_VISIBLE) dismiss(live.keys().next().value, true);
+  let overflow = [];
+  while (live.size >= MAX_VISIBLE) {
+    const [oldestKey] = live.keys();
+    const entry = live.get(oldestKey);
+    overflow.push(entry);
+    live.delete(oldestKey);
+  }
+  for (const entry of overflow) {
+    clearTimeout(entry.timer);
+    entry.node.remove();
+  }
   const node = make("div", `toast toast-${variant}`);
   node.setAttribute("role", variant === "error" ? "alert" : "status");
   const icon = make("div", "toast-icon", ICONS[variant] || ICONS.info);
