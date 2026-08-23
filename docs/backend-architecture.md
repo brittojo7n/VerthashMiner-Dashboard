@@ -76,8 +76,8 @@ Subscriber count is reported by the SSE hub into `Server._onSubscriberChange`, w
 After the file is merged, `buildConfig` derives the frozen runtime object:
 
 - **`PORT`** is clamped to $0$–$65535$ (default $4067$). **`GPU_POLL_MS`** is clamped to $3000$–$10000$ (default $5000$). Out-of-range values produce a startup advisory rather than a crash.
-- **`MINER_ARGS`** is split with a quote-aware tokenizer. If neither `-P` nor `--protocol-dump` is present, `--protocol-dump` is appended so share rejects and `mining.set_difficulty` appear on stdio.
-- **`WALLET`** is the `-u` / `--user` token up to the first worker-separator `.`.
+- **`MINER_ARGS`** is split with a quote-aware tokenizer and then classified by `parseMinerArgs` against official VerthashMiner 0.7.2 flags (and a few aliases such as `--password` $\rightarrow$ pass and `--server` $\rightarrow$ url). If neither `-P` nor `--protocol-dump` is present, `--protocol-dump` is appended so share rejects and `mining.set_difficulty` appear on stdio.
+- **`WALLET` / `WORKER` / `USER`** come from `-u` / `--user`. Text before the first `.` is the wallet. Non-empty text after it is the worker. A trailing dot is stripped before the miner is spawned. If `-u` has no worker, a `-p` / `--pass` / `--password` value that is not a typical pool password (`x`, or anything containing `=`) is treated as the worker for display only.
 - **`DEVICE_SELECTION`** is built from `--all-cu-devices` / `--all-cl-devices` and the index lists on `--cu-devices` / `-D` and `--cl-devices` / `-d`. Prefixed tokens such as `0:w131072` parse as index $0$ via `parseInt`. An `--all-*` flag stores `null` on that side, meaning worker index equals hardware index.
 - **`MINER_EXE`** defaults to `VerthashMiner.exe` on Windows and `VerthashMiner` elsewhere. **`FORWARD_CONSOLE`** is true only when the env value is the literal string `true`.
 

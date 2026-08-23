@@ -2,7 +2,8 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { parseMinerUser, formatMinerUser } = require("./user");
+const { resolveIdentity } = require("./user");
+const { parseMinerArgs } = require("./args");
 
 const GPU_POLL_MIN_MS = 3000;
 const GPU_POLL_MAX_MS = 10000;

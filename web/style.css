@@ -278,33 +278,35 @@ button, input, select, textarea { font-family: inherit; }
 .identity {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+  align-items: stretch;
+  gap: 8px;
   margin-top: 8px;
   max-width: 100%;
-  min-height: 30px;
+  min-height: 32px;
 }
 .identity-field {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
+  height: 32px;
   max-width: 100%;
-  padding: 4px 8px;
+  padding: 0 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   background: var(--surface-2);
+  box-sizing: border-box;
 }
 .identity-field[hidden],
 .identity-field.is-empty { display: none !important; }
-.identity-field:first-child { flex: 1 1 220px; }
+.identity-field:first-child { flex: 1 1 240px; }
 .identity-label {
   flex: 0 0 auto;
   color: var(--text-faint);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.7px;
+  letter-spacing: 0.8px;
 }
 .identity-value {
   flex: 1 1 auto;
@@ -327,7 +329,7 @@ button, input, select, textarea { font-family: inherit; }
   justify-content: center;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: 50%;
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
@@ -617,6 +619,9 @@ button, input, select, textarea { font-family: inherit; }
   .topbar { flex-wrap: wrap; row-gap: 12px; }
   .topbar-brand { flex: 1 1 100%; min-width: 0; }
   .topbar-controls { flex: 1 1 100%; justify-content: space-between; min-width: 0; }
+  .identity { flex-direction: column; align-items: stretch; }
+  .identity-field,
+  .identity-field:first-child { width: 100%; max-width: 100%; flex: 1 1 auto; }
 }
 
 @media (max-width: 479.98px) {
@@ -661,8 +666,7 @@ button, input, select, textarea { font-family: inherit; }
   .metric--small .metric-value { font-size: 12px; }
 
   .identity { margin-top: 6px; }
-  .identity-field { padding: 3px 7px; }
-  .identity-field:first-child { flex-basis: 100%; }
+  .identity-field { height: 30px; padding: 0 10px; }
   .identity-value { font-size: 11px; }
 
   .gpu-head { flex-wrap: wrap; gap: 8px; }

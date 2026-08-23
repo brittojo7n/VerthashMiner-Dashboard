@@ -17,4 +17,20 @@ function formatMinerUser(identity) {
   return worker ? `${wallet}.${worker}` : wallet;
 }
 
-module.exports = { parseMinerUser, formatMinerUser };
+function workerFromPass(pass) {
+  const value = pass == null ? "" : String(pass).trim();
+  if (!value || /^x$/i.test(value) || value.includes("=")) return null;
+  return value;
+}
+
+function resolveIdentity(flags) {
+  const parsed = parseMinerUser(flags && flags.user);
+  const worker = parsed.worker || workerFromPass(flags && flags.pass);
+  return {
+    wallet: parsed.wallet,
+    worker,
+    user: formatMinerUser({ wallet: parsed.wallet, worker: parsed.worker })
+  };
+}
+
+module.exports = { parseMinerUser, formatMinerUser, workerFromPass, resolveIdentity };
