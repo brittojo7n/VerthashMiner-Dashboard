@@ -4,7 +4,7 @@ import { DASH, presentGpu } from "../lib/present.js";
 
 const COUNT_KEY = "vmd:gpuCount";
 
-export const DEFAULT_SPEC = Object.freeze({
+const DEFAULT_SPEC = Object.freeze({
   tempLevels: Object.freeze({ warn: 72, hot: 80 }),
   metrics: Object.freeze([
     { key: "pstate", label: "P-State" },
@@ -27,7 +27,7 @@ function knownGpuCount() {
 }
 function rememberGpuCount(n) { try { if (Number.isInteger(n) && n >= 1 && n <= 8) localStorage.setItem(COUNT_KEY, String(n)); } catch { } }
 
-export function buildCard(spec = DEFAULT_SPEC) {
+function buildCard(spec = DEFAULT_SPEC) {
   const panel = make("div", "gpu-panel");
   const head = make("div", "gpu-head");
   const name = make("div", "gpu-name");

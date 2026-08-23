@@ -1,6 +1,6 @@
 "use strict";
 
-const { STATUS, LOG } = require("../core/constants");
+const { STATUS, LOG } = require("../utils/constants");
 const { stripAnsi } = require("./devices");
 
 const RX_DEV_HASH = /(cu|cl)_device\((\d+)\).*?hashrate:\s*([\d.]+)/i;
@@ -165,4 +165,4 @@ function parseMinerLine(raw, state, pushLog) {
   }
 }
 
-module.exports = { parseMinerLine, classifyLine, levelOf, sumDeviceHashrates, RX_POOL_DOWN, RX_FATAL };
+module.exports = { parseMinerLine };

@@ -51,6 +51,7 @@ export function createIdentity() {
 
   let address = "";
   let copiedTimer = 0;
+  let lastKey = "";
 
   function markCopied(on) {
     copyBtn.classList.toggle("copied", on);
@@ -76,6 +77,9 @@ export function createIdentity() {
       const parsed = typeof next === "string"
         ? parseMinerUser(next)
         : parseMinerUser(next.user || minerUserSource(next));
+      const nextKey = `${parsed.wallet}\0${parsed.worker || ""}`;
+      if (nextKey === lastKey) return this;
+      lastKey = nextKey;
       address = parsed.wallet || "";
       text(wallet.value, address || DASH);
       wallet.value.title = address;

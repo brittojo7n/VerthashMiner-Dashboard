@@ -1,15 +1,15 @@
 "use strict";
 
-const config = require("./server/core/config");
-const { createState } = require("./server/core/state");
+const config = require("./server/utils/config");
+const { createState } = require("./server/utils/state");
 const { GpuManager } = require("./server/miner/gpu");
 const { SseHub } = require("./server/http/sse");
 const { MinerManager } = require("./server/miner/miner");
 const os = require("node:os");
 const crypto = require("node:crypto");
 const { createHttpServer, getLanIp } = require("./server/http/http");
-const { LIMITS, LOG } = require("./server/core/constants");
-const { unrefTimer } = require("./server/core/timers");
+const { LIMITS, LOG } = require("./server/utils/constants");
+const { unrefTimer } = require("./server/utils/timers");
 
 function yieldCpuToMiner() {
   if (process.platform !== "win32") return false;
@@ -203,4 +203,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { Server, main, yieldCpuToMiner };
+module.exports = { Server };

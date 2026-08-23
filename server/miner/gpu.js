@@ -1,10 +1,10 @@
 "use strict";
 
 const { execFile } = require("node:child_process");
-const { LIMITS } = require("../core/constants");
-const { clampGpuPollMs, GPU_POLL_DEFAULT_MS } = require("../core/config");
+const { LIMITS } = require("../utils/constants");
+const { clampGpuPollMs, GPU_POLL_DEFAULT_MS } = require("../utils/config");
 const { normalizePci } = require("./devices");
-const { unrefTimer } = require("../core/timers");
+const { unrefTimer } = require("../utils/timers");
 
 const SMI_QUERY = Object.freeze([
   "--query-gpu=name,temperature.gpu,power.draw,utilization.gpu,clocks.gr,clocks.mem,memory.used,memory.total,pstate,pci.bus_id",
@@ -142,4 +142,4 @@ class GpuManager {
   }
 }
 
-module.exports = { GpuManager, parseSmiOutput, sameTelemetry, SMI_BIN, SMI_QUERY };
+module.exports = { GpuManager };

@@ -179,8 +179,6 @@ function formatStatsSnapshot(state, options) {
 }
 
 module.exports = {
-  CircularLogBuffer,
   createState,
-  formatStatsSnapshot,
-  hashrateForGpu
+  formatStatsSnapshot
 };

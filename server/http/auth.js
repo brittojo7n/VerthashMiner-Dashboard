@@ -1,7 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
-const { LIMITS } = require("../core/constants");
+const { LIMITS } = require("../utils/constants");
 
 const MAX_SESSIONS = 50;
 const MAX_TRACKED_IPS = 100;

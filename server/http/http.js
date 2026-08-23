@@ -2,7 +2,7 @@
 
 const http = require("node:http");
 const os = require("node:os");
-const { formatStatsSnapshot } = require("../core/state");
+const { formatStatsSnapshot } = require("../utils/state");
 const { buildAssets, negotiate } = require("./static");
 const { SessionStore, safeEqual } = require("./auth");
 const { createRateLimiter } = require("./ratelimit");
@@ -220,4 +220,4 @@ function createHttpServer({ config, state, sseHub, minerManager, webDir }) {
   return server;
 }
 
-module.exports = { getLanIp, createHttpServer, isSameOrigin, passesXhrGuard, MAX_BODY_BYTES };
+module.exports = { getLanIp, createHttpServer };

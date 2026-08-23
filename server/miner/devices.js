@@ -1,6 +1,6 @@
 "use strict";
 
-const { LIMITS } = require("../core/constants");
+const { LIMITS } = require("../utils/constants");
 
 const RX_ANSI = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 const RX_SECTION = /(cuda|opencl)\s.*(devices:|device config)/i;

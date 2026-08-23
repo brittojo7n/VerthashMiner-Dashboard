@@ -81,7 +81,7 @@ function transformModule(src, id, idMap) {
   return { body: lines.join("\n"), exportMap };
 }
 
-function bundleModules(read, entry = "core/app") {
+function bundleModules(read, entry = "services/app") {
   const sources = {};
   const order = [];
   const queue = [entry];

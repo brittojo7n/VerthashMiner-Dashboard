@@ -122,4 +122,4 @@ function negotiate(asset, req) {
   return { status: 200, headers, body };
 }
 
-module.exports = { buildAssets, negotiate, MIME };
+module.exports = { buildAssets, negotiate };

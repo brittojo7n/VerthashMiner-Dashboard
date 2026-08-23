@@ -5,9 +5,9 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, execFile } = require("node:child_process");
 const { parseMinerLine } = require("./parser");
-const { STATUS, LOG, LIMITS } = require("../core/constants");
+const { STATUS, LOG, LIMITS } = require("../utils/constants");
 const { parseCudaDeviceList, createStreamReader } = require("./devices");
-const { unrefTimer: timer } = require("../core/timers");
+const { unrefTimer: timer } = require("../utils/timers");
 
 const ACTIONS = Object.freeze({
   start: STATUS.STARTING,
@@ -382,4 +382,4 @@ class MinerManager {
   }
 }
 
-module.exports = { MinerManager, parseCudaDeviceList, resolveExe };
+module.exports = { MinerManager };
