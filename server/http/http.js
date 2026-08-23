@@ -131,10 +131,10 @@ function createHttpServer({ config, state, sseHub, minerManager, webDir }) {
   const sessions = new SessionStore({ secret: config.SESSION_SECRET });
   const streamBlocks = new Map();
 
-  const limitMiner = createRateLimiter(2, 2000, 3000);
-  const limitStatus = createRateLimiter(3, 2000, 3000);
-  const limitEvents = createRateLimiter(3, 2000, 3000);
-  const limitLogin = createRateLimiter(10, 10000, 10000);
+  const limitMiner = createRateLimiter(30, 60000, 2000);
+  const limitStatus = createRateLimiter(120, 60000, 2000);
+  const limitEvents = createRateLimiter(30, 60000, 2000);
+  const limitLogin = createRateLimiter(20, 60000, 5000);
 
   const routes = new Map();
 

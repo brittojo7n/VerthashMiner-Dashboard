@@ -3,8 +3,8 @@ const REFRESH_WINDOW_MS = 2000;
 const BASE_DELAY_MS = 500;
 const PENALTY_DELAY_MS = 3000;
 const PACE_STEP_MS = 850;
-const BACKOFF_START_MS = 2000;
-const BACKOFF_MAX_MS = 30000;
+const BACKOFF_START_MS = 1000;
+const BACKOFF_MAX_MS = 10000;
 const LAST_REFRESH_KEY = "vmd:lastRefreshAt";
 const RAPID_REFRESH_KEY = "vmd:rapidRefresh";
 const paceStore = {
@@ -174,7 +174,7 @@ export function createConnection({ onSnapshot, onUnauthorized, onStatusText, onC
     if (r.streamWait > 0) return rateLimited(r.streamWait);
     if (r.ok) return openStream();
     onStatusText?.("OFFLINE", r.unreachable);
-    schedule(nextBackoff(), "Retrying");
+    schedule(nextBackoff() + Math.floor(Math.random() * 400), "Retrying");
   }
   return {
     connect,
