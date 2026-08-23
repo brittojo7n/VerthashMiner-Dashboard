@@ -79,7 +79,6 @@ class GpuManager {
     this.busy = false;
     this.active = false;
     this.lastPollAt = 0;
-    this.failures = 0;
   }
 
   get intervalMs() {
@@ -136,7 +135,6 @@ class GpuManager {
       (err, stdout) => {
         this.busy = false;
         if (!err && stdout) {
-          this.failures = 0;
           let parsed;
           try {
             parsed = parseSmiOutput(String(stdout));
@@ -151,7 +149,6 @@ class GpuManager {
             if (changed) this._notify();
           }
         } else if (err) {
-          this.failures++;
           const message = err.message || String(err);
           if (this.state.gpuError !== message) {
             this.state.gpuError = message;

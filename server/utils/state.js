@@ -19,10 +19,6 @@ class CircularLogBuffer {
     return this.seq;
   }
 
-  get firstId() {
-    return this.count === 0 ? 0 : this.seq - this.count + 1;
-  }
-
   get length() {
     return this.count;
   }
@@ -44,12 +40,6 @@ class CircularLogBuffer {
       out[i] = this.buf[idx];
     }
     return out;
-  }
-
-  clear() {
-    this.buf.fill(undefined);
-    this.head = 0;
-    this.count = 0;
   }
 }
 

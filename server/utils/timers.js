@@ -6,10 +6,4 @@ function unrefTimer(fn, ms) {
   return handle;
 }
 
-function unrefInterval(fn, ms) {
-  const handle = setInterval(fn, ms);
-  if (typeof handle.unref === "function") handle.unref();
-  return handle;
-}
-
-module.exports = { unrefTimer, unrefInterval };
+module.exports = { unrefTimer };

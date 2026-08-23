@@ -68,11 +68,6 @@ class SessionStore {
     return true;
   }
 
-  revoke(cookieHeader) {
-    const token = SessionStore.tokenFrom(cookieHeader);
-    if (token) this.sessions.delete(token);
-  }
-
   _sweepAttempts(now) {
     for (const [key, entry] of this.attempts) {
       if (entry.blockedUntil > now) continue;
