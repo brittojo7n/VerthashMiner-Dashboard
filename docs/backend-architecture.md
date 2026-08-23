@@ -1,237 +1,142 @@
 # Backend Architecture
 
-The dashboard is a single Node process that owns three things: a child miner, a
-read-only `nvidia-smi` poller, and an HTTP/SSE control plane. It never opens a
-Stratum or `getblocktemplate` socket. Mining, pool auth, share submit, and
-`verthash.dat` handling stay inside VerthashMiner; this process only launches
-it, reads its stdio, and publishes a derived snapshot.
+Single Node process. Owns a VerthashMiner child, a read-only `nvidia-smi`
+poller, and an HTTP/SSE control plane. Does not speak Stratum or
+`getblocktemplate`. Operator setup lives in `README.md` and `.env.example`.
 
-Operator setup, env keys, and the on-disk layout live in `README.md` and
-`.env.example`. This note is the runtime contract.
+## Architectural routing map
 
-## Process composition
+| Component | Path | Responsibility | Interface |
+| --- | --- | --- | --- |
+| Entry / composition | `main.js` | Validate config, build `Server`, bind HTTP, auto-start miner, ordered shutdown | CLI: `node main.js`, `--generate-secret` |
+| Config | `server/core/config.js` | Load `.env` (OS env wins), clamp, tokenize `MINER_ARGS`, inject `--protocol-dump`, derive wallet + device map | Env file / `process.env` |
+| Constants | `server/core/constants.js` | Status enum, log types, numeric limits | In-process |
+| State | `server/core/state.js` | `createState`, circular logs, `formatStatsSnapshot`, PCI→hashrate join | In-memory object |
+| Timers | `server/core/timers.js` | `unref` setTimeout / setInterval | In-process |
+| HTTP router | `server/http/http.js` | Method+path map, CSRF, body cap 4 KiB | TCP `HOST:PORT` (default `127.0.0.1:4067`) |
+| SSE hub | `server/http/sse.js` | Snapshot fan-out, log deltas, heartbeat, 4-client cap | `GET /events` `text/event-stream` |
+| Auth | `server/http/auth.js` | HMAC session cookie, timing-safe passphrase, IP lockout | Cookie `vm_session` |
+| Rate limit | `server/http/ratelimit.js` | Per-route token buckets | `429` + `Retry-After` |
+| Static + CSP | `server/http/static.js` | Allowlist assets, gzip, ETag | `GET / /index.html /app.js /style.css /favicon.svg` |
+| Bundler | `server/http/bundle.js` | ESM → numbered IIFE from `web/core/app` | Build-once at listen |
+| Miner manager | `server/miner/miner.js` | Probe, spawn, action debounce, SIGINT/kill | Child process stdio |
+| Line parser | `server/miner/parser.js` | Status, shares, hashrate, difficulty, rejects | VerthashMiner applog + `--protocol-dump` |
+| Device / PCI | `server/miner/devices.js` | `--device-list` parse, PCI normalize, stream splitter | Probe stdout |
+| GPU poller | `server/miner/gpu.js` | Subscriber-gated `nvidia-smi` | Exec `nvidia-smi` / `nvidia-smi.exe` |
 
-`main.js` validates config, then constructs one `Server`. That object is the
-composition root:
+Demand gate: `SseHub` subscriber count > 0 enables parser + GPU poll. Zero
+subscribers: miner keeps running, stdio is not tokenized, smi is idle.
 
-```
-                    ┌─────────────┐
-   SIGINT/TERM ───► │   Server    │
-                    └──────┬──────┘
-           ┌───────────────┼────────────────┐
-           ▼               ▼                ▼
-     MinerManager     GpuManager         SseHub
-      spawn/stdio      nvidia-smi      snapshot fan-out
-           │               │                ▲
-           └──────► state.dirty ────────────┘
-                           │
-                     createHttpServer
-                    routes + static bundle
-```
+## HTTP contract
 
-Shared mutable state is a single object from `createState()`:
+| Method | Path | Auth | Body / query | Success payload |
+| --- | --- | --- | --- | --- |
+| GET | `/health` | none | — | `ok` text |
+| GET | `/api/status` | cookie if `PASSPHRASE` | — | Snapshot JSON; may add `streamRetryAfterMs` |
+| GET | `/events` | cookie if `PASSPHRASE` | — | SSE `event: stats` then `: hb` every 15s |
+| POST | `/api/login` | CSRF header | `{ passphrase: string }` ≤4 KiB | `{ status: "ok" }` + `Set-Cookie` |
+| POST | `/api/miner/start` | CSRF + cookie if set | — | `{ status: "ok" }` (action queued 2s) |
+| POST | `/api/miner/stop` | same | — | `{ status: "ok" }` |
+| POST | `/api/miner/restart` | same | — | `{ status: "ok" }` |
 
-- `miner` — child liveness, pid, exit, circular log buffer
-- `mining` — status, shares, difficulty, per-worker hashrates, PCI map
-- `gpu` — last `nvidia-smi` rows
-- `dirty` — set whenever anything a subscriber would see changes
+CSRF: `X-Requested-With: XMLHttpRequest` and same-origin `Origin` (or absent).
+Non-loopback `HOST` without `PASSPHRASE` is fatal at boot.
 
-There is no database and no message bus. HTTP handlers read that object;
-`SseHub.broadcast()` serializes it.
+Rate limits: login 10/10s, status 3/2s, events 3/2s, miner 2/2s. Sessions:
+HMAC-SHA256(`SESSION_SECRET`, 32 random bytes), sliding 30 min, `HttpOnly`
+`SameSite=Strict`. 5 login failures / 60s → 30s IP lockout.
 
-On Windows the dashboard drops itself to `PRIORITY_BELOW_NORMAL` and raises the
-child to `PRIORITY_NORMAL` so the host process does not compete with hashing.
+SSE: max 4 clients; overflow sends `event: rejected`. First frame is a full
+snapshot; later frames throttle 50ms and send `logsSince` deltas. Write-blocked
+clients drop after 5 ticks.
 
-Shutdown is ordered: stop GPU polling, close SSE clients, `SIGINT` the miner,
-close the HTTP server. A 12s watchdog force-exits if any step hangs. A second
-Ctrl+C while the child is already stopping is ignored so the stop sequence is
-not re-entered.
+## Snapshot fields (`formatStatsSnapshot`)
 
-## Demand-driven work
+| Field | Type | Source |
+| --- | --- | --- |
+| `now` | number ms | clock |
+| `uptimeSeconds` | number | `miner.startedAt` while running |
+| `acceptedRatio` | number\|null | `100 * accepted / submitted` |
+| `miner.running` `pid` `startedAt` `exitCode` `signal` | mixed | child |
+| `miner.wallet` | string | `-u` before `.` |
+| `miner.logs[]` | `{ id, text, type }` | ring, capacity 25 |
+| `logsFrom` `logSeq` `logCount` `logCapacity` | number | ring metadata |
+| `mining.status` | string | state machine below |
+| `mining.hashrateKHs` | number\|null | sum of device rates or `accepted:` total |
+| `mining.accepted` `submitted` `rejected` | number | `accepted: A/S` → A, S, S−A |
+| `mining.difficulty` | number\|null | applog or protocol-dump JSON |
+| `mining.lastAcceptedAt` | number\|null | last accept line |
+| `gpu[]` | objects | smi row + `hashrate` via PCI join |
+| `gpuError` | string | last smi failure |
+| `host.hostname` `host.tz` | string | OS |
 
-Stdio parsing and `nvidia-smi` only run while at least one SSE client is
-connected. `SseHub` reports subscriber count; `Server._onSubscriberChange`
-toggles both subsystems.
+## Miner process contract
 
-With no browser tab the miner still runs, but its output is not tokenized and
-the GPU poller is idle. Opening a tab enables parsing (and a catch-up
-broadcast) and starts the poller. Closing the last tab disables both.
+| Step | argv | Result |
+| --- | --- | --- |
+| Probe | `MINER_EXE --device-list` in `MINER_CWD`, 8s | CUDA section → `mining.pciMap[normalizedPci] = index` |
+| Run | `MINER_EXE MINER_ARGS` (+ `--protocol-dump` if missing) | stdin inherit, stdout/stderr piped |
+| Stop | `SIGINT` → 2s → `SIGKILL` or `taskkill /T /F` | 10s give-up → `STOPPED` |
+| Restart | stop → 500ms → start | — |
 
-That is the main CPU/IO lever. The miner child is independent of it.
+`shell: false`. Empty `MINER_CWD` / `MINER_ARGS` stays `STOPPED` (dashboard
+stays up). Probe failure is non-fatal.
 
-## Configuration pipeline
+`--cu-devices` / `--cl-devices` including `0:w131072` become integer indices
+via `parseInt`. `--all-cu-devices` / `--all-cl-devices` set that side of
+`workerMap` to `null` (worker index == device index).
 
-`server/core/config.js` loads a dotenv-style file (default `.env`, override
-`ENV_FILE`) and fills only keys that are not already in `process.env`. OS
-environment therefore wins.
+## Stdio contract (VerthashMiner 0.7.2)
 
-`buildConfig` then:
+Applog: `[YYYY-MM-DD HH:MM:SS] %-5s message` on stderr. Levels `ERROR` `WARN`
+`INFO` `DEBUG`.
 
-1. Clamps `PORT` and `GPU_POLL_MS` into safe ranges.
-2. Tokenizes `MINER_ARGS` with a quote-aware splitter.
-3. Injects `--protocol-dump` unless `-P` is already present. Protocol dump is
-   how share rejects and `mining.set_difficulty` become visible on stdio.
-4. Derives `WALLET` from `-u` / `--user` (text before the first `.`).
-5. Derives `DEVICE_SELECTION` from `--all-cu-devices` / `--all-cl-devices` and
-   the index lists on `--cu-devices` / `--cl-devices`. Prefixed tokens such as
-   `0:w131072` parse as index `0` via `parseInt`.
-
-Validation is split. Missing `SESSION_SECRET`, or a non-loopback `HOST`
-without `PASSPHRASE`, is fatal and the process exits. Short secrets, short
-passphrases, and LAN binds are advisories printed at start.
-
-## Miner lifecycle
-
-`MinerManager` is the only code that creates or kills the child.
-
-**Start.** If `MINER_CWD` or `MINER_ARGS` is empty the manager stays `STOPPED`
-and records the reason; it does not crash the dashboard. Otherwise it resets
-share/hashrate stats and runs two sequential spawns:
-
-1. Probe — `MINER_EXE --device-list` in `MINER_CWD`, 8s watchdog. Combined
-   stdout/stderr (capped) is parsed into `mining.pciMap`. Probe failure is
-   non-fatal; mining still starts without a PCI join.
-2. Miner — `MINER_EXE MINER_ARGS` with stdin inherited and both output pipes
-   captured. `shell: false`, argv array, no interpolation.
-
-**Streams.** `createStreamReader` splits on newlines, bounds a 16 KiB tail if
-a line never arrives, optionally mirrors bytes to the launcher terminal
-(`FORWARD_CONSOLE`), and calls `parseMinerLine` only when parsing is enabled.
-
-**Actions.** `POST /api/miner/{start,stop,restart}` does not spawn immediately.
-`requestAction` writes a transitional status (`STARTING` / `STOPPING` /
-`RESTARTING`), waits 2s, then runs the method. A second click of the same
-action is ignored; a different action cancels the pending one and restores the
-previous status. Idle `restart` degenerates to `start`. Idle `stop` is a no-op.
-
-**Stop.** `SIGINT` the child, then after 2s `SIGKILL` (Unix) or
-`taskkill /T /F` (Windows process tree). A 10s watchdog gives up and marks
-`STOPPED` even if the OS has not reaped the pid. Restart is stop → 500ms gap →
-start.
-
-**Exit classification.** A deliberate stop stays `STOPPED` / `STOPPING`. Any
-other non-zero exit or signal becomes `CRASHED`.
-
-## Mining state machine
-
-`parseMinerLine` is the only writer of live mining fields. It classifies each
-line (official applog is `[YYYY-MM-DD HH:MM:SS] LEVEL message`) and updates
-status, counters, and hashrates in place.
-
-```
-STOPPED ──start──► STARTING ──"Starting Stratum on …"──► CONNECTED
-                                    │
-                                    ▼
-                              first cu_/cl_ hashrate
-                              or accepted: N/M
-                                    │
-                                    ▼
-                                 MINING ◄──── hashrate / accepted
-                                    │
-                    pool error      │      child death
-                         ▼          │           ▼
-                  DISCONNECTED ─────┘       CRASHED
-                         │
-                         └── next hashrate / accepted ──► MINING
-```
-
-`STOPPING` / `RESTARTING` / `STOPPED` are sticky: parser status writes are
-suppressed so a late log line cannot flip a miner that is already being torn
-down.
-
-**Shares.** Official `accepted: A/S` is treated as accepted=`A`, submitted=`S`,
-rejected=`S-A`. `--protocol-dump` JSON of the form
-`"result": false, "error": [code, "reason"` increments `jsonRejects` and
-prints a console reject. If `S-A` grows faster than those JSON rejects, a
-failsafe reject line is synthesized.
-
-**Hashrate.** `cu_device(N)` / `cl_device(N)` lines (optional `err:` / `temp:` /
-`power:` / `fan:` prefix) write `gpuHashrates.{cu,cl}_<mapped>`. The total is
-the sum of those keys once every expected worker has reported, or the
-`total hashrate` field on the `accepted:` line when it is not `(pending...)`.
-Units are kH/s, stored as `hashrateKHs`.
-
-`expectedWorkers` comes from `Configured N(CL) and M(CUDA) workers`, with
-`N miner threads started` as fallback. `workerMap` from `DEVICE_SELECTION`
-remaps the `N` in `cu_device(N)` onto the physical index used by the GPU
-overlay. Two virtual workers on the same index (`--cu-devices 0,0`) share one
-slot; the accepted-line total is still the true aggregate.
-
-**Protocol dump.** Lines containing `"id":` or `"method":` are not appended to
-the web console. Difficulty and reject payloads inside them are still applied.
-
-**Pool loss.** `Stratum connection failed|timed out|interrupted`,
-`stratum_recv_line timed out`, `Stratum authentication failed`, and related
-`json_rpc_call failed` patterns set `DISCONNECTED` rather than `CRASHED`. The
-official miner retries on its own; the next hashrate or accept returns
-`MINING`.
-
-Logs sit in a 25-entry circular buffer with monotonic ids. The snapshot can
-return a delta (`logsSince`) so SSE clients do not re-download the whole ring.
-
-## GPU overlay
-
-`GpuManager` execs `nvidia-smi --query-gpu=… --format=csv,noheader,nounits`
-with a 1.5s timeout and a 32 KiB cap. It is start-to-start cooled by
-`GPU_POLL_MS` (clamped 3–10s). Extra SSE clients or tab refreshes cannot stack
-polls. After three consecutive failures the interval doubles up to 120s.
-
-`normalizePci` reduces both the miner probe id (`01:00:0`) and the smi bus id
-(`00000000:01:00.0`) to the last three colon/dot parts. `hashrateForGpu` then
-does `pciMap[bus] → cu_<index>` (OpenCL key as fallback). OpenCL-only hosts
-still get totals from `cl_device` lines; the card grid stays empty without
-smi.
-
-Smi is read-only. Clock, power, and fan changes are not issued from this
-process.
-
-## HTTP control plane
-
-`createHttpServer` is a plain `http.createServer` with a method+path map. No
-framework, no CORS wide-open, no directory listing.
-
-| Surface | Role |
+| Official line | Parser write |
 | --- | --- |
-| Static allowlist | HTML/CSS/JS/SVG built once at listen |
-| `GET /health` | Liveness, unauthenticated |
-| `GET /api/status` | Full snapshot; if this IP is SSE-locked it also carries `streamRetryAfterMs` |
-| `GET /events` | SSE `stats` events |
-| `POST /api/login` | Passphrase → `vm_session` cookie |
-| `POST /api/miner/*` | Action queue described above |
+| `Starting Stratum on stratum+tcp://…` | `CONNECTED` |
+| `cu_device(N): … hashrate: X kH/s` / `cl_device(N):` | `gpuHashrates.{cu,cl}_<mapped>=X`, maybe `MINING` |
+| `accepted: A/S (…%), total hashrate: X kH/s` | A / S / S−A / total; `MINING` |
+| `accepted: A/S … (pending...)` | shares only |
+| `Stratum difficulty set to D` | `difficulty=D` |
+| `"method": "mining.set_difficulty", "params": [D]` | same; line hidden from console |
+| `"result": false, "error": [code, "reason"` | `jsonRejects++`, console reject; line hidden |
+| `Configured N(CL) and M(CUDA) workers` | `expectedWorkers=N+M` |
+| `N miner threads started` | fallback `expectedWorkers` |
+| `Stratum connection failed\|timed out\|interrupted` | `DISCONNECTED` |
+| `stratum_recv_line timed out`, `Stratum authentication failed`, `json_rpc_call failed` | `DISCONNECTED` |
+| `Verthash data file has been loaded succesfully!` | console `SUCCESS` (official typo) |
 
-When `PASSPHRASE` is set, every API except login requires a valid cookie.
-Login and miner POSTs also require `X-Requested-With: XMLHttpRequest` and a
-same-origin `Origin` (or no Origin). Bodies are capped at 4 KiB.
+JSON protocol lines (`"id":` or `"method":`) are not mirrored. PCI from probe
+`pcieId: 01:00:0` and smi `00000000:01:00.0` both normalize to `01:00:0`.
+Hashrate unit is kH/s.
 
-**Sessions.** Tokens are HMAC-SHA256(`SESSION_SECRET`, 32 random bytes), stored
-server-side with a sliding 30-minute TTL, `HttpOnly` + `SameSite=Strict`.
-Passphrase compare is SHA-256 then `timingSafeEqual`, so length does not leak.
-Five failures in a minute lock the IP for 30s.
+```
+STOPPED ─start→ STARTING ─"Starting Stratum"→ CONNECTED
+                                    │
+                         first hashrate / accepted
+                                    ▼
+         DISCONNECTED ← pool error  MINING  child death → CRASHED
+                │                     ▲
+                └──── next hashrate / accepted ────┘
+```
 
-**Rate limits.** Independent token buckets: login 10/10s, status 3/2s, events
-3/2s, miner actions 2/2s, each with a penalty window. `429` includes
-`Retry-After` and JSON. Events additionally parks the IP in `streamBlocks` so
-status can tell the UI how long to wait before reopening SSE.
+`STOPPING` / `RESTARTING` / `STOPPED` ignore parser status writes.
 
-**SSE.** Cap of 4 live clients; dead sockets are reaped before the cap is
-enforced, otherwise the new socket gets `event: rejected`. First frame is a
-full snapshot; later frames are throttled to 50ms and carry only logs newer
-than that client’s `lastLogSeq`. A 15s comment heartbeat keeps proxies from
-idling the socket out. A client that stays write-blocked for five ticks is
-dropped.
+## GPU poller
 
-Request timeouts: 20s headers, 30s request, 5s keep-alive, 64 header cap.
-`clientError` is a hard `400` close.
+`nvidia-smi --query-gpu=name,temperature.gpu,power.draw,utilization.gpu,clocks.gr,clocks.mem,memory.used,memory.total,pstate,pci.bus_id --format=csv,noheader,nounits`
 
-## Asset composition
+Start-to-start cooldown `GPU_POLL_MS` (clamped 3000–10000). Timeout 1500ms,
+buffer 32 KiB. Three failures → exponential backoff to 120s. Read-only.
 
-At listen time `buildAssets` reads `web/`, rewrites the HTML module tag to
-`/app.js`, and runs a tiny import/export transformer (`server/http/bundle.js`)
-over the `web/` graph starting at `core/app`. The result is one IIFE with
-numeric module ids — no `/web/*` or `/js/*` URL is ever registered.
+## Config derivation
 
-Compressible assets ≥512 B are gzipped once. Responses honor `ETag` /
-`If-None-Match` and `Accept-Encoding`. HTML carries a strict CSP
-(`default-src 'self'`, no object, no form-action) plus a disabled Permissions
-Policy. That is the whole delivery path; there is no watch mode and no source
-map.
+File then OS. Fatal: missing `SESSION_SECRET`; non-local `HOST` without
+`PASSPHRASE`. Advisories: short secret (<32), short passphrase (<8), LAN bind.
+`WALLET` = `-u`/`--user` before `.`. Keys themselves are in `.env.example`.
+
+## Shutdown
+
+GPU stop → SSE close → miner SIGINT → HTTP close. 12s watchdog. Second Ctrl+C
+during child stop is ignored. Windows: dashboard `PRIORITY_BELOW_NORMAL`,
+child `PRIORITY_NORMAL`.

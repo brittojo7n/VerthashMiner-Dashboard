@@ -159,8 +159,6 @@ function parseMinerLine(raw, state, pushLog) {
 
   if (!isFatal && canSetRunStatus(state) && mining.status !== STATUS.MINING) {
     let next = null;
-    // Official VerthashMiner 0.7.2 announces the pool with "Starting Stratum on <url>".
-    // "stratum" + "connect" still matches older/custom builds and reconnect notices.
     if (lc.includes("starting stratum") || (lc.includes("stratum") && lc.includes("connect"))) next = STATUS.CONNECTED;
     else if (lc.includes("waiting") || lc.includes("paused") || lc.includes("no work")) next = STATUS.WAITING;
     if (next && mining.status !== next) { mining.status = next; state.dirty = true; }
