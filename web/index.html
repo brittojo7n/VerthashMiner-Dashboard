@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>VerthashMiner Dashboard</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="topbar-brand">
+        <div class="title-row">
+          <h1>VerthashMiner Dashboard</h1>
+          <button type="button" class="refresh-btn" id="btnRefresh" title="Refresh data"
+            aria-label="Refresh data: fetch the latest stats without ending the session">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="sub" id="host">Initializing connection...</div>
+      </div>
+      <div class="topbar-controls">
+        <div class="btn-group-header">
+          <button class="c-btn btn-start" id="btnAction" disabled>START</button>
+          <button class="c-btn btn-restart" id="btnRestart" disabled>RESTART</button>
+        </div>
+        <div class="status"><span class="dot" id="dot"></span><span id="status">CONNECTING</span></div>
+      </div>
+    </header>
+
+    <main class="grid">
+      <div class="summary" id="summary"></div>
+
+      <section class="panel wide">
+        <div class="gpu-head">
+          <div>
+            <div class="gpu-name">GPU Telemetry</div>
+            <div class="small">Live data from nvidia-smi</div>
+          </div>
+        </div>
+        <div id="gpus"></div>
+      </section>
+
+      <section class="panel wide">
+        <div class="gpu-head">
+          <div class="min-w-0">
+            <div class="gpu-name">Mining Metrics</div>
+            <div id="identity"></div>
+          </div>
+        </div>
+        <div class="metrics" id="miningMetrics"></div>
+        <div class="console-box">
+          <div class="console-topbar">
+            <div class="console-title-group">
+              <div class="console-dots">
+                <span class="cdot cdot-red"></span>
+                <span class="cdot cdot-yellow"></span>
+                <span class="cdot cdot-green"></span>
+              </div>
+              <span class="console-title">CONSOLE</span>
+              <span class="console-live-badge"><span class="pulse-indicator"></span>LIVE</span>
+            </div>
+            <div class="console-actions">
+              <span class="console-counter" id="logCount">0 logs</span>
+              <button type="button" class="c-btn active" id="btnAutoScroll" title="Toggle Auto Scroll">Auto-scroll:
+                ON</button>
+            </div>
+          </div>
+          <div class="console-terminal" id="terminal">
+            <div id="logLines" class="log-lines-wrapper">
+              <div class="log-empty">
+                <span class="log-prompt">&gt;</span>
+                <span class="log-text">VerthashMiner console initialized. Waiting for miner output...</span>
+                <span class="term-cursor">_</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="error" class="errorbox" role="alert" aria-live="assertive"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="local-time-bar" id="localTimeBar">
+    <span class="local-time-value" id="localTime">—</span>
+  </div>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="false"></div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+
+</html>
