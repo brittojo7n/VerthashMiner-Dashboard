@@ -48,24 +48,17 @@ function splitArgs(raw) {
   return (String(raw || "").match(/"([^"]*)"|(\S+)/g) || []).map(token => token.replace(/^"|"$/g, ""));
 }
 
-function argValue(args, names) {
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (names.includes(arg)) return i + 1 < args.length ? args[i + 1] : "";
-    for (const name of names) { if (arg.startsWith(`${name}=`)) return arg.slice(name.length + 1); }
-  }
-  return null;
-}
-
 function parseIndexList(value) {
   if (!value) return null;
   const list = String(value).split(",").map(part => Number.parseInt(part.trim(), 10)).filter(Number.isInteger);
   return list.length ? list : null;
 }
 
-function deviceSelection(args) {
-  const all = flag => args.includes(flag);
-  return { cu: all("--all-cu-devices") ? null : parseIndexList(argValue(args, ["--cu-devices", "-D"])), cl: all("--all-cl-devices") ? null : parseIndexList(argValue(args, ["--cl-devices", "-d"])) };
+function deviceSelection(flags) {
+  return {
+    cu: flags.allCuDevices ? null : parseIndexList(flags.cuDevices),
+    cl: flags.allClDevices ? null : parseIndexList(flags.clDevices)
+  };
 }
 
 function applyUserArg(args, user) {
@@ -86,11 +79,6 @@ function applyUserArg(args, user) {
   }
 }
 
-function extractIdentity(args) {
-  const parsed = parseMinerUser(argValue(args, ["-u", "--user"]));
-  return { user: formatMinerUser(parsed), wallet: parsed.wallet, worker: parsed.worker };
-}
-
 function buildConfig(env = process.env, opts = {}) {
   const platform = opts.platform || process.platform;
   const warnings = [];
@@ -104,13 +92,14 @@ function buildConfig(env = process.env, opts = {}) {
   const MINER_EXE = env.MINER_EXE || (platform === "win32" ? "VerthashMiner.exe" : "VerthashMiner");
   const MINER_ARGS = splitArgs(env.MINER_ARGS);
   if (!MINER_ARGS.includes("-P") && !MINER_ARGS.includes("--protocol-dump")) MINER_ARGS.push("--protocol-dump");
-  const identity = extractIdentity(MINER_ARGS);
+  const flags = parseMinerArgs(MINER_ARGS);
+  const identity = resolveIdentity(flags);
   if (identity.user) applyUserArg(MINER_ARGS, identity.user);
   return Object.freeze({
     PORT, HOST, GPU_POLL_MS, GPU_POLL_MIN_MS, GPU_POLL_MAX_MS, GPU_POLL_DEFAULT_MS, clampGpuPollMs,
     MINER_EXE, MINER_ARGS: Object.freeze(MINER_ARGS), MINER_CWD: env.MINER_CWD || "", PASSPHRASE: env.PASSPHRASE || "",
     SESSION_SECRET: env.SESSION_SECRET || "", USER: identity.user, WALLET: identity.wallet, WORKER: identity.worker,
-    DEVICE_SELECTION: Object.freeze(deviceSelection(MINER_ARGS)), FORWARD_CONSOLE: env.FORWARD_CONSOLE === "true", warnings: Object.freeze(warnings)
+    DEVICE_SELECTION: Object.freeze(deviceSelection(flags)), FORWARD_CONSOLE: env.FORWARD_CONSOLE === "true", warnings: Object.freeze(warnings)
   });
 }
 

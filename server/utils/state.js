@@ -63,7 +63,7 @@ function getServerTz() {
 const SERVER_TZ = getServerTz();
 const HOSTNAME = os.hostname();
 
-function createState(wallet = "", maxLogs = 50, worker = null) {
+function createState(wallet = "", maxLogs = 50, worker = null, user = "") {
   return {
     dirty: true,
     startedAt: Date.now(),
@@ -77,6 +77,7 @@ function createState(wallet = "", maxLogs = 50, worker = null) {
       lastLine: "",
       lastError: "",
       logs: new CircularLogBuffer(maxLogs),
+      user: user || "",
       wallet,
       worker: worker || null
     },
