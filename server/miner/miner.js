@@ -287,8 +287,8 @@ class MinerManager {
 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
-    child.stdout.on("data", createStreamReader(onLine, onFlush, alwaysEnabled, mirror(process.stdout)));
-    child.stderr.on("data", createStreamReader(onLine, onFlush, alwaysEnabled, mirror(process.stderr)));
+    child.stdout.on("data", createStreamReader(onLine, onFlush, alwaysEnabled, mirror ? mirror(process.stdout) : null));
+    child.stderr.on("data", createStreamReader(onLine, onFlush, alwaysEnabled, mirror ? mirror(process.stderr) : null));
     child.stdout.on("error", (err) => {
       if (err.code === "EPIPE" || err.code === "ECONNRESET") return;
       console.error("[dashboard] stdout error:", err.message);
