@@ -176,13 +176,22 @@ function createHttpServer({ config, state, sseHub, minerManager, gpuManager, web
 
   routes.set("GET /health", (req, res) => {
     const snapshot = formatStatsSnapshot(state);
-    sendJson(res, 200, {
-      status: "ok",
-      miner: { running: snapshot.miner.running, pid: snapshot.miner.pid, status: snapshot.mining.status },
-      gpu: snapshot.gpuError ? { error: snapshot.gpuError } : { count: snapshot.gpu.length },
-      sse: { clients: sseHub.size },
-      uptime: snapshot.uptimeSeconds,
-    });
+    const minerRunning = snapshot.miner.running;
+    const minerStatus = minerRunning ? "pass" : "warn";
+    const gpuPolling = gpuManager.running;
+    const gpuDevices = state.gpu.length;
+    const gpuError = state.gpuError || "";
+    const gpuStatus = !gpuPolling ? "pass" : gpuError ? "warn" : "pass";
+    const gpuCheck = { status: gpuStatus, polling: gpuPolling };
+    if (gpuPolling) gpuCheck.devices = gpuDevices;
+    if (gpuError) gpuCheck.error = gpuError;
+    const checks = {
+      miner: { status: minerStatus, state: snapshot.mining.status, pid: snapshot.miner.pid },
+      gpu: gpuCheck,
+      sse: { status: "pass", connections: sseHub.size },
+    };
+    const overallStatus = minerRunning ? "pass" : "warn";
+    sendJson(res, 200, { status: overallStatus, uptime: snapshot.uptimeSeconds, checks });
   });
 
   const minerControl = (action) => (req, res, ip) => {
