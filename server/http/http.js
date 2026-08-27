@@ -181,7 +181,7 @@ function createHttpServer({ config, state, sseHub, minerManager, gpuManager, web
     const gpuPolling = gpuManager ? gpuManager.running : false;
     const gpuDevices = state.gpu.length;
     const gpuError = state.gpuError || "";
-    const gpuStatus = gpuError ? "fail" : !gpuPolling ? "warn" : "pass";
+    const gpuStatus = gpuError ? "fail" : "pass";
     const gpuCheck = { status: gpuStatus, polling: gpuPolling };
     if (gpuPolling) gpuCheck.devices = gpuDevices;
     if (gpuError) gpuCheck.error = gpuError;
