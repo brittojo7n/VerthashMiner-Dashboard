@@ -27,8 +27,8 @@ function buildCsp() {
     "img-src 'self' data:",
     "connect-src 'self'",
     "object-src 'none'",
-    "base-uri 'none",
-    "form-action 'none",
+    "base-uri 'none'",
+    "form-action 'none'",
   ].join("; ");
 }
 

@@ -110,16 +110,10 @@ function formatStatsSnapshot(state, options) {
   const entries = sinceId > 0 ? logs.since(sinceId) : logs.toJSON();
   const logsFrom = entries.length ? entries[0].id : logs.seq + 1;
 
-  const gpu = new Array(state.gpu.length);
   for (let i = 0; i < state.gpu.length; i++) {
-    const g = state.gpu[i];
-    gpu[i] = {
-      index: g.index, name: g.name, temperatureC: g.temperatureC, powerW: g.powerW,
-      utilizationPct: g.utilizationPct, coreMHz: g.coreMHz, memoryMHz: g.memoryMHz,
-      memoryUsedMB: g.memoryUsedMB, memoryTotalMB: g.memoryTotalMB, pstate: g.pstate,
-      pciBusId: g.pciBusId, hashrate: hashrateForGpu(state, g),
-    };
+    state.gpu[i].hashrate = hashrateForGpu(state, state.gpu[i]);
   }
+  const gpu = state.gpu;
 
   return {
     now,

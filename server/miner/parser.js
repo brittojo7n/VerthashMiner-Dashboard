@@ -55,42 +55,21 @@ function deviceIndexFor(state, prefix, workerIndex) {
 function classifyLine(line, lc, level) {
   if (level === "ERROR") {
     const isPoolDown = RX_POOL_DOWN.test(line);
-    return {
-      isFatal: isPoolDown || RX_FATAL.test(line),
-      isPoolDown,
-      type: LOG.ERROR,
-    };
+    return { isFatal: isPoolDown || RX_FATAL.test(line), isPoolDown, type: LOG.ERROR };
   }
-  if (level === "WARN")
-    return { isFatal: false, isPoolDown: false, type: LOG.WARN };
+  if (level === "WARN") return { isFatal: false, isPoolDown: false, type: LOG.WARN };
   if (level === null) {
-    if (RX_POOL_DOWN.test(line))
-      return { isFatal: true, isPoolDown: true, type: LOG.ERROR };
-    if (RX_FATAL.test(line))
-      return { isFatal: true, isPoolDown: false, type: LOG.ERROR };
+    if (RX_POOL_DOWN.test(line)) return { isFatal: true, isPoolDown: true, type: LOG.ERROR };
+    if (RX_FATAL.test(line)) return { isFatal: true, isPoolDown: false, type: LOG.ERROR };
   }
-  if (RX_NZERR.test(line))
-    return { isFatal: false, isPoolDown: false, type: LOG.ERROR };
-  if (RX_DEV_MEMERR.test(line))
-    return { isFatal: false, isPoolDown: false, type: LOG.WARN };
-  const successPrefixes = [
-    "accepted:",
-    "share accepted",
-    "loaded succes",
-    "verified succes",
-    "successfully configured",
-  ];
-  if (successPrefixes.some((prefix) => lc.includes(prefix)))
+  if (RX_NZERR.test(line)) return { isFatal: false, isPoolDown: false, type: LOG.ERROR };
+  if (RX_DEV_MEMERR.test(line)) return { isFatal: false, isPoolDown: false, type: LOG.WARN };
+  
+  if (/(?:accepted:|share accepted|loaded succes|verified succes|successfully configured)/i.test(lc))
     return { isFatal: false, isPoolDown: false, type: LOG.SUCCESS };
-  const accentPrefixes = [
-    "stratum",
-    "difficulty",
-    "hashrate:",
-    "device",
-    "mining.set_difficulty",
-  ];
-  if (accentPrefixes.some((prefix) => lc.includes(prefix)))
+  if (/(?:stratum|difficulty|hashrate:|device|mining\.set_difficulty)/i.test(lc))
     return { isFatal: false, isPoolDown: false, type: LOG.ACCENT };
+    
   return { isFatal: false, isPoolDown: false, type: LOG.INFO };
 }
 

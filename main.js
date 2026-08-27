@@ -1,5 +1,4 @@
 "use strict";
-
 const config = require("./server/utils/config");
 const { createState } = require("./server/utils/state");
 const { GpuManager } = require("./server/miner/gpu");
@@ -10,50 +9,50 @@ const crypto = require("node:crypto");
 const { createHttpServer, getLanIp } = require("./server/http/http");
 const { LIMITS, LOG } = require("./server/utils/constants");
 const { unrefTimer } = require("./server/utils/timers");
-
 function yieldCpuToMiner() {
   if (process.platform !== "win32") return false;
   try {
     os.setPriority(process.pid, os.constants.priority.PRIORITY_BELOW_NORMAL);
     return true;
-  } catch (err) {
-    console.error("[dashboard] yieldCpuToMiner failed:", err.message);
-  }
+  } catch (err) {}
   return false;
 }
-
 class Server {
   constructor(options = {}) {
     this.config = options.config || config;
     this.state = createState(this.config.WALLET, LIMITS.MAX_LOGS, this.config.WORKER, this.config.USER);
     this._exiting = false;
     this._shutdownWatchdog = null;
-
+    let idleTimeout = null;
     this.sseHub = new SseHub({
       state: this.state,
-      onSubscriberChange: (count) => this._onSubscriberChange(count),
+      onSubscriberChange: (count) => {
+        if (count > 0) {
+          if (idleTimeout) {
+            clearTimeout(idleTimeout);
+            idleTimeout = null;
+          }
+          this.gpuManager.start();
+        } else {
+          if (!idleTimeout) {
+            idleTimeout = unrefTimer(() => {
+              this.gpuManager.stop();
+              idleTimeout = null;
+            }, 20000);
+          }
+        }
+      },
     });
-
-    this.gpuManager = new GpuManager({
-      state: this.state,
-      pollMs: this.config.GPU_POLL_MS,
-      onUpdate: () => this.sseHub.broadcast(),
-    });
-
-    this.minerManager = new MinerManager({
-      config: this.config,
-      state: this.state,
-      onUpdate: () => this.sseHub.broadcast(),
-    });
-
+    this.gpuManager = new GpuManager({ state: this.state, pollMs: this.config.GPU_POLL_MS, onUpdate: () => this.sseHub.broadcast() });
+    this.minerManager = new MinerManager({ config: this.config, state: this.state, onUpdate: () => this.sseHub.broadcast() });
     this.httpServer = createHttpServer({
       config: this.config,
       state: this.state,
       sseHub: this.sseHub,
       minerManager: this.minerManager,
+      gpuManager: this.gpuManager,
       webDir: options.webDir,
     });
-
     this.boundExit = () => this.stop();
     this.handleSigint = () => {
       if (this.minerManager && this.minerManager.isStoppingChild) return;
@@ -61,71 +60,40 @@ class Server {
     };
     this.handleFault = (scope, err) => this._onFault(scope, err);
   }
-
-  _onSubscriberChange(count) {
-    this.gpuManager.updateSubscribers(count);
-    if (count > 0) this.minerManager.enableParsing();
-    this.minerManager.updateSubscribers(count);
-  }
-
   _onFault(scope, err) {
-    const message = `[dashboard] ${scope}: ${(err && err.stack) || err}`;
     try {
-      console.error(message);
       this.minerManager.pushLog(`Dashboard internal error (${scope}): ${(err && err.message) || err}`, LOG.ERROR);
       this.sseHub.broadcast();
-    } catch (logErr) {
-      console.error("[dashboard] fault handler failed:", logErr.message);
-    }
+    } catch (logErr) {}
   }
-
   start() {
     this._attachSignalHandlers();
-    if (yieldCpuToMiner()) console.log("[dashboard] running at below-normal priority");
-
+    yieldCpuToMiner();
     this._listening = false;
-
     this.httpServer.on("error", (err) => {
-      if (!this._listening) {
-        if (err && err.code === "EADDRINUSE") {
-          console.error(`[FATAL] Port ${this.config.PORT} is already in use. Another dashboard instance is probably running.`);
-        } else {
-          console.error(`[FATAL] Could not bind ${this.config.HOST}:${this.config.PORT} - ${err && err.message}`);
-        }
-        process.exit(1);
-      }
+      if (!this._listening) process.exit(1);
       this._onFault("http", err);
     });
-
     this.httpServer.listen(this.config.PORT, this.config.HOST, () => {
       this._listening = true;
       const port = this.httpServer.address().port;
-      console.log(`[dashboard] http://${this.config.HOST}:${port}\n[dashboard] LAN: http://${getLanIp()}:${port}`);
+      console.log(`http://${this.config.HOST}:${port}\nLAN: http://${getLanIp()}:${port}`);
     });
-
     this.minerManager.start();
     return this;
   }
-
   stop(exitCode = 0) {
     if (this._exiting) return this._stopPromise || Promise.resolve();
     this._exiting = true;
-
     this.gpuManager.stop();
     this.sseHub.closeAll();
-
-    this._shutdownWatchdog = unrefTimer(() => {
-      console.error("[dashboard] shutdown watchdog fired; forcing exit.");
-      process.exit(exitCode);
-    }, LIMITS.SHUTDOWN_TIMEOUT_MS);
-
+    this._shutdownWatchdog = unrefTimer(() => process.exit(exitCode), LIMITS.SHUTDOWN_TIMEOUT_MS);
     const closeHttpServer = () =>
       new Promise((resolve) => {
         if (!this.httpServer.listening) return resolve();
         if (typeof this.httpServer.closeAllConnections === "function") this.httpServer.closeAllConnections();
         this.httpServer.close(() => resolve());
       });
-
     this._stopPromise = Promise.resolve()
       .then(() => this.minerManager.stop())
       .catch((err) => this._onFault("miner-stop", err))
@@ -139,20 +107,16 @@ class Server {
         this._detachSignalHandlers();
         process.exit(exitCode);
       });
-
     return this._stopPromise;
   }
-
   _attachSignalHandlers() {
     this._onUncaught = (err) => this.handleFault("uncaughtException", err);
     this._onRejection = (err) => this.handleFault("unhandledRejection", err);
-
     process.on("SIGINT", this.handleSigint);
     process.on("SIGTERM", this.boundExit);
     process.on("uncaughtException", this._onUncaught);
     process.on("unhandledRejection", this._onRejection);
   }
-
   _detachSignalHandlers() {
     process.removeListener("SIGINT", this.handleSigint);
     process.removeListener("SIGTERM", this.boundExit);
@@ -160,26 +124,15 @@ class Server {
     if (this._onRejection) process.removeListener("unhandledRejection", this._onRejection);
   }
 }
-
 function main() {
   const fatal = config.validateConfig(config);
-  if (fatal.length) {
-    for (const problem of fatal) console.error(`[FATAL] ${problem}`);
-    console.error("[FATAL] The dashboard will now shut down.");
-    process.exit(1);
-  }
-  for (const note of config.advisories(config)) console.warn(`[dashboard] ${note}`);
-
+  if (fatal.length) process.exit(1);
   new Server().start();
 }
-
 function generateSecret() {
   const secret = crypto.randomBytes(32).toString("hex");
   console.log(secret);
-  console.log(`\n[+] ${secret.length}-character cryptographic secret generated.`);
-  console.log("    Paste this into your .env as SESSION_SECRET=<value>");
 }
-
 if (require.main === module) {
   if (process.argv.includes("--generate-secret") || process.argv.includes("--gen-secret")) {
     generateSecret();
@@ -187,5 +140,4 @@ if (require.main === module) {
   }
   main();
 }
-
 module.exports = { Server };

@@ -125,15 +125,15 @@ function readJsonBody(req) {
   });
 }
 
-function createHttpServer({ config, state, sseHub, minerManager, webDir }) {
+function createHttpServer({ config, state, sseHub, minerManager, gpuManager, webDir }) {
   const staticFiles = buildAssets(webDir);
   const requiresAuth = config.PASSPHRASE.length > 0;
   const sessions = new SessionStore({ secret: config.SESSION_SECRET });
   const streamBlocks = new Map();
 
   const limitMiner = createRateLimiter(30, 60000, 2000);
-  const limitStatus = createRateLimiter(120, 60000, 2000);
-  const limitEvents = createRateLimiter(30, 60000, 2000);
+  const limitStatus = createRateLimiter(3, 5000, 3000, 4000);
+  const limitEvents = createRateLimiter(3, 5000, 3000, 4000);
   const limitLogin = createRateLimiter(20, 60000, 5000);
 
   const routes = new Map();

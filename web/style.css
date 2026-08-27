@@ -132,6 +132,7 @@ button, input, select, textarea { font-family: inherit; }
   gap: 6px;
   min-width: 120px;
   width: 120px;
+  min-height: 34px;
   flex-shrink: 0;
   padding: 8px 10px;
   border-radius: var(--radius-pill);
@@ -224,6 +225,7 @@ button, input, select, textarea { font-family: inherit; }
   align-items: baseline;
   gap: 4px;
   min-width: 0;
+  min-height: 1.25em;
   font-weight: 800;
   letter-spacing: -0.5px;
   line-height: 1.15;
@@ -599,6 +601,10 @@ button, input, select, textarea { font-family: inherit; }
   z-index: 100;
   pointer-events: none;
   user-select: none;
+  white-space: nowrap;
+  contain: paint layout;
+  min-height: 29px;
+  box-sizing: border-box;
 }
 .fx .local-time-bar {
   background: rgba(var(--surface-1-rgb), 0.72);
@@ -606,7 +612,15 @@ button, input, select, textarea { font-family: inherit; }
   -webkit-backdrop-filter: blur(12px) saturate(140%);
   border-color: rgba(var(--white-rgb), 0.12);
 }
-.local-time-value { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0.4px; font-variant-numeric: tabular-nums; }
+.local-time-value {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.4px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 
 :root:not(.fx) .modal,
 :root:not(.fx) .toast {

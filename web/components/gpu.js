@@ -45,7 +45,6 @@ function buildCard(spec = DEFAULT_SPEC) {
 
   const metrics = make("div", "metrics mt-0");
   const refs = { name };
-  const metricRefs = [];
   for (const m of spec.metrics) {
     const metric = createMetric({
       label: m.label,
@@ -56,7 +55,6 @@ function buildCard(spec = DEFAULT_SPEC) {
     });
     metrics.appendChild(metric.node);
     refs[m.key] = metric;
-    metricRefs.push({ m, metric });
   }
 
   const util = createMetric({
@@ -71,7 +69,7 @@ function buildCard(spec = DEFAULT_SPEC) {
   panel.append(head, metrics);
   refs.util = util;
 
-  return { panel, refs, metricRefs };
+  return { panel, refs };
 }
 
 function resetCard(card, spec) {
@@ -121,13 +119,15 @@ export function render(container, gpus, gpuError, spec = DEFAULT_SPEC) {
     return;
   }
   rememberGpuCount(gpus.length);
-  if (hasPlaceholder || cards.length !== gpus.length) {
+  if (cards.length !== gpus.length || !cards.length) {
     hasPlaceholder = false;
     cards = gpus.map(() => buildCard(spec));
     container.textContent = "";
     const frag = document.createDocumentFragment();
     for (const card of cards) frag.appendChild(card.panel);
     container.appendChild(frag);
+  } else if (hasPlaceholder) {
+    hasPlaceholder = false;
   }
   for (let i = 0; i < gpus.length; i++) {
     const v = presentGpu(gpus[i], spec.tempLevels);

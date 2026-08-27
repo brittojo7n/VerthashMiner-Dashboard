@@ -75,7 +75,6 @@ class MinerManager {
       restartGap: timeouts.restartGap ?? LIMITS.RESTART_GAP_MS,
     };
     this.proc = null;
-    this.parsingEnabled = false;
     this.isStoppingChild = false;
     this._stopPromise = null;
     this._forceKillTimer = null;
@@ -89,12 +88,10 @@ class MinerManager {
   }
 
   _emit() {
-    if (this.parsingEnabled && typeof this.onUpdate === "function") {
+    if (typeof this.onUpdate === "function") {
       try {
         this.onUpdate();
-      } catch (err) {
-        console.error("[dashboard] miner onUpdate failed:", err.message);
-      }
+      } catch (err) {}
     }
   }
 
@@ -126,16 +123,6 @@ class MinerManager {
     this.state.dirty = true;
   }
 
-  enableParsing() {
-    this.parsingEnabled = true;
-    this._emit();
-  }
-  disableParsing() {
-    this.parsingEnabled = false;
-  }
-  updateSubscribers(n) {
-    this._subscribers = n;
-  }
 
   get _alive() {
     return Boolean(this.state.miner.running || this.proc || this._spawning);
@@ -161,7 +148,6 @@ class MinerManager {
 
     this._spawning = true;
     this._setMining({ status: STATUS.STARTING });
-    this.enableParsing();
     this.pushLog("Starting miner...", LOG.SYSTEM);
     this._emit();
 
