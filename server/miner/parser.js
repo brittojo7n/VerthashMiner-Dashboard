@@ -53,24 +53,23 @@ function deviceIndexFor(state, prefix, workerIndex) {
 }
 
 function classifyLine(line, lc, level) {
+  const base = { isFatal: false, isPoolDown: false };
   if (level === "ERROR") {
     const isPoolDown = RX_POOL_DOWN.test(line);
-    return { isFatal: isPoolDown || RX_FATAL.test(line), isPoolDown, type: LOG.ERROR };
+    return { ...base, isFatal: isPoolDown || RX_FATAL.test(line), isPoolDown, type: LOG.ERROR };
   }
-  if (level === "WARN") return { isFatal: false, isPoolDown: false, type: LOG.WARN };
+  if (level === "WARN") return { ...base, type: LOG.WARN };
   if (level === null) {
-    if (RX_POOL_DOWN.test(line)) return { isFatal: true, isPoolDown: true, type: LOG.ERROR };
-    if (RX_FATAL.test(line)) return { isFatal: true, isPoolDown: false, type: LOG.ERROR };
+    if (RX_POOL_DOWN.test(line)) return { ...base, isFatal: true, isPoolDown: true, type: LOG.ERROR };
+    if (RX_FATAL.test(line)) return { ...base, isFatal: true, type: LOG.ERROR };
   }
-  if (RX_NZERR.test(line)) return { isFatal: false, isPoolDown: false, type: LOG.ERROR };
-  if (RX_DEV_MEMERR.test(line)) return { isFatal: false, isPoolDown: false, type: LOG.WARN };
-  
+  if (RX_NZERR.test(line)) return { ...base, type: LOG.ERROR };
+  if (RX_DEV_MEMERR.test(line)) return { ...base, type: LOG.WARN };
   if (/(?:accepted:|share accepted|loaded succes|verified succes|successfully configured)/i.test(lc))
-    return { isFatal: false, isPoolDown: false, type: LOG.SUCCESS };
+    return { ...base, type: LOG.SUCCESS };
   if (/(?:stratum|difficulty|hashrate:|device|mining\.set_difficulty)/i.test(lc))
-    return { isFatal: false, isPoolDown: false, type: LOG.ACCENT };
-    
-  return { isFatal: false, isPoolDown: false, type: LOG.INFO };
+    return { ...base, type: LOG.ACCENT };
+  return { ...base, type: LOG.INFO };
 }
 
 function sumDeviceHashrates(rates) {

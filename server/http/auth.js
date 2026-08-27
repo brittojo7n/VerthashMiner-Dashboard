@@ -13,9 +13,7 @@ const TOKEN_RE = /(?:^|;\s*)vm_session=([0-9a-f]{16,128})(?:\s*;|\s*$)/;
 
 function safeEqual(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
-  const ha = crypto.createHash("sha256").update(a, "utf8").digest();
-  const hb = crypto.createHash("sha256").update(b, "utf8").digest();
-  return crypto.timingSafeEqual(ha, hb);
+  return crypto.timingSafeEqual(crypto.createHash("sha256").update(a).digest(), crypto.createHash("sha256").update(b).digest());
 }
 
 class SessionStore {
@@ -32,9 +30,7 @@ class SessionStore {
     const now = this.now();
     if (!force && this.sessions.size < MAX_SESSIONS && now - this.lastSweep < SWEEP_INTERVAL_MS) return;
     this.lastSweep = now;
-    for (const [token, expiry] of this.sessions) {
-      if (now > expiry) this.sessions.delete(token);
-    }
+    for (const [token, expiry] of this.sessions) if (now > expiry) this.sessions.delete(token);
   }
 
   issue() {

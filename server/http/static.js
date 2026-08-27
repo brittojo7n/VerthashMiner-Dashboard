@@ -18,19 +18,7 @@ const COMPRESSIBLE = new Set([".html", ".css", ".js", ".svg"]);
 const MIN_COMPRESS_BYTES = 512;
 const PERMISSIONS = "camera=(), microphone=(), geolocation=(), interest-cohort=()";
 
-function buildCsp() {
-  return [
-    "default-src 'self'",
-    "script-src 'self'",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data:",
-    "connect-src 'self'",
-    "object-src 'none'",
-    "base-uri 'none'",
-    "form-action 'none'",
-  ].join("; ");
-}
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'";
 
 function etagOf(buf) {
   return `"${crypto.createHash("sha1").update(buf).digest("base64url").slice(0, 22)}"`;
@@ -55,13 +43,7 @@ function headersFor(name, length, etag, encoding, csp) {
   return Object.freeze(headers);
 }
 
-function notModifiedHeaders(etag) {
-  return Object.freeze({
-    ETag: etag,
-    "Cache-Control": "no-cache",
-    Vary: "Accept-Encoding",
-  });
-}
+const notModifiedHdr = (etag) => Object.freeze({ ETag: etag, "Cache-Control": "no-cache", Vary: "Accept-Encoding" });
 
 function makeAsset(name, buf, csp) {
   const etag = etagOf(buf);
@@ -69,7 +51,7 @@ function makeAsset(name, buf, csp) {
     buf,
     etag,
     hdr: headersFor(name, buf.length, etag, undefined, csp),
-    notModified: notModifiedHeaders(etag),
+    notModified: notModifiedHdr(etag),
     compressible: COMPRESSIBLE.has(path.extname(name)),
     gzip: null,
     gzipHdr: null,
@@ -94,7 +76,7 @@ function makeAsset(name, buf, csp) {
 function buildAssets(webDir) {
   const root = webDir || path.resolve(__dirname, "..", "..", "web");
   const readScript = (name) => fs.readFileSync(path.join(root, `${name}.js`), "utf8");
-  const csp = buildCsp();
+  const csp = CSP;
 
   const modules = {};
   const app = bundleModules((id) => (modules[id] = readScript(id)));

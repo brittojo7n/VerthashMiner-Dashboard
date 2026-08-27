@@ -10,9 +10,9 @@ import { createConsole } from "../components/console.js";
 import { createConnection } from "./connection.js";
 
 const ACTION_META = {
-  start: { status: "STARTING", label: "START", toast: ["Starting Miner", "Launching the VerthashMiner process."] },
-  stop: { status: "STOPPING", label: "STOP", toast: ["Stopping Miner", "Shutting down the VerthashMiner process."] },
-  restart: { status: "RESTARTING", label: "RESTART", toast: ["Restarting Miner", "Stopping and relaunching the VerthashMiner process."] },
+  start: { status: "STARTING", label: "START", toast: ["Starting Miner", "Launching the miner process."] },
+  stop: { status: "STOPPING", label: "STOP", toast: ["Stopping Miner", "Shutting down the miner process."] },
+  restart: { status: "RESTARTING", label: "RESTART", toast: ["Restarting Miner", "Stopping and relaunching the miner process."] },
 };
 
 function buildAuthContent() {

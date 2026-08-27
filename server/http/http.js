@@ -8,34 +8,12 @@ const { buildAssets, negotiate } = require("./static");
 const { SessionStore, safeEqual } = require("./auth");
 const { createRateLimiter } = require("./ratelimit");
 
-const NO_STORE = "no-store";
-const NOSNIFF = "nosniff";
-const FRAME_OPTIONS = "DENY";
-const HDR_JSON = Object.freeze({
-  "Content-Type": "application/json; charset=utf-8",
-  "Cache-Control": NO_STORE,
-  "X-Content-Type-Options": NOSNIFF,
-  "X-Frame-Options": FRAME_OPTIONS,
-  "Referrer-Policy": "no-referrer",
-});
-const HDR_TEXT = Object.freeze({
-  "Content-Type": "text/plain; charset=utf-8",
-  "Cache-Control": NO_STORE,
-  "X-Content-Type-Options": NOSNIFF,
-  "X-Frame-Options": FRAME_OPTIONS,
-  "Referrer-Policy": "no-referrer",
-});
-const HDR_SSE = Object.freeze({
-  "Content-Type": "text/event-stream; charset=utf-8",
-  "Cache-Control": "no-cache, no-transform",
-  Connection: "keep-alive",
-  "X-Accel-Buffering": "no",
-  "X-Content-Type-Options": NOSNIFF,
-  "X-Frame-Options": FRAME_OPTIONS,
-  "Referrer-Policy": "no-referrer",
-});
-
 const MAX_BODY_BYTES = 4096;
+const COMMON_HDR = Object.freeze({ "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer" });
+const HDR_JSON = Object.freeze({ "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...COMMON_HDR });
+const HDR_TEXT = Object.freeze({ "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", ...COMMON_HDR });
+const HDR_SSE = Object.freeze({ "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no", ...COMMON_HDR });
+
 const MAX_STREAM_BLOCKS = 128;
 const TOO_LARGE = Symbol("payload_too_large");
 const SAFE_PATH_RE = /^[a-zA-Z0-9_\-\/\.]+$/;
@@ -198,13 +176,24 @@ function createHttpServer({ config, state, sseHub, minerManager, gpuManager, web
 
   routes.set("GET /health", (req, res) => {
     const snapshot = formatStatsSnapshot(state);
-    sendJson(res, 200, {
-      status: "ok",
-      miner: { running: snapshot.miner.running, pid: snapshot.miner.pid, status: snapshot.mining.status },
-      gpu: snapshot.gpuError ? { error: snapshot.gpuError } : { count: snapshot.gpu.length },
-      sse: { clients: sseHub.size },
-      uptime: snapshot.uptimeSeconds,
-    });
+    const minerRunning = snapshot.miner.running;
+    const minerStatus = minerRunning ? "pass" : "warn";
+    const gpuPolling = gpuManager ? gpuManager.running : false;
+    const gpuDevices = state.gpu.length;
+    const gpuError = state.gpuError || "";
+    const gpuStatus = gpuError ? "fail" : "pass";
+    const gpuCheck = { status: gpuStatus, polling: gpuPolling };
+    if (gpuPolling) gpuCheck.devices = gpuDevices;
+    if (gpuError) gpuCheck.error = gpuError;
+    const sseStatus = "pass";
+    const checks = {
+      miner: { status: minerStatus, state: snapshot.mining.status, pid: snapshot.miner.pid },
+      gpu: gpuCheck,
+      sse: { status: sseStatus, connections: sseHub.size },
+    };
+    const checkStatuses = [minerStatus, gpuStatus, sseStatus];
+    const overallStatus = checkStatuses.includes("fail") ? "fail" : checkStatuses.includes("warn") ? "warn" : "pass";
+    sendJson(res, 200, { status: overallStatus, uptime: snapshot.uptimeSeconds, checks });
   });
 
   const minerControl = (action) => (req, res, ip) => {

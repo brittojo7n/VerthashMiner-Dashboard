@@ -45,9 +45,7 @@ async function retryDelay(response) {
   try {
     const data = await response.clone().json();
     if (Number.isFinite(data?.retryAfterMs)) return data.retryAfterMs;
-  } catch (err) {
-    console.error("[dashboard] retry delay parse failed:", err.message);
-  }
+  } catch {}
   const header = Number.parseInt(response.headers.get("Retry-After") || "", 10);
   return Number.isFinite(header) && header > 0 ? header * 1000 : 5000;
 }

@@ -8,27 +8,22 @@ function parseMinerUser(raw) {
   return { wallet, worker: worker || null };
 }
 
-function formatMinerUser(identity) {
-  const wallet = identity && identity.wallet ? String(identity.wallet).trim() : "";
-  const worker = identity && identity.worker ? String(identity.worker).trim() : "";
-  if (!wallet) return "";
-  return worker ? `${wallet}.${worker}` : wallet;
+function formatMinerUser({ wallet, worker }) {
+  const w = wallet ? String(wallet).trim() : "";
+  const wk = worker ? String(worker).trim() : "";
+  return w ? (wk ? `${w}.${wk}` : w) : "";
 }
 
 function workerFromPass(pass) {
-  const value = pass == null ? "" : String(pass).trim();
-  if (!value || /^x$/i.test(value) || value.includes("=")) return null;
-  return value;
+  const v = pass == null ? "" : String(pass).trim();
+  if (!v || /^x$/i.test(v) || v.includes("=")) return null;
+  return v;
 }
 
 function resolveIdentity(flags) {
   const parsed = parseMinerUser(flags && flags.user);
   const worker = parsed.worker || workerFromPass(flags && flags.pass);
-  return {
-    wallet: parsed.wallet,
-    worker,
-    user: formatMinerUser({ wallet: parsed.wallet, worker }),
-  };
+  return { wallet: parsed.wallet, worker, user: formatMinerUser({ wallet: parsed.wallet, worker }) };
 }
 
 function minerUserSource(miner = {}) {
