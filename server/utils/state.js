@@ -105,16 +105,10 @@ function formatStatsSnapshot(state, options) {
   const { miner, mining } = state;
   const minerStart = miner.startedAt || state.startedAt;
   const logs = miner.logs;
-
   const sinceId = options && Number.isFinite(options.logsSince) ? options.logsSince : 0;
   const entries = sinceId > 0 ? logs.since(sinceId) : logs.toJSON();
   const logsFrom = entries.length ? entries[0].id : logs.seq + 1;
-
-  for (let i = 0; i < state.gpu.length; i++) {
-    state.gpu[i].hashrate = hashrateForGpu(state, state.gpu[i]);
-  }
-  const gpu = state.gpu;
-
+  for (let i = 0; i < state.gpu.length; i++) state.gpu[i].hashrate = hashrateForGpu(state, state.gpu[i]);
   return {
     now,
     uptimeSeconds: miner.running && minerStart ? Math.max(0, Math.floor((now - minerStart) / 1000)) : 0,
@@ -126,18 +120,13 @@ function formatStatsSnapshot(state, options) {
       lastError: miner.lastError, user: miner.user || "", wallet: miner.wallet,
       worker: miner.worker || null, logs: entries,
     },
-    logsFrom,
-    logSeq: logs.seq,
-    logCount: logs.length,
-    logCapacity: logs.capacity,
+    logsFrom, logSeq: logs.seq, logCount: logs.length, logCapacity: logs.capacity,
     mining: {
       hashrateKHs: mining.hashrateKHs, accepted: mining.accepted, submitted: mining.submitted,
       rejected: mining.rejected, difficulty: mining.difficulty, status: mining.status,
       lastAcceptedAt: mining.lastAcceptedAt,
     },
-    gpuError: state.gpuError || "",
-    gpu,
-    host: state.host,
+    gpuError: state.gpuError || "", gpu: state.gpu, host: state.host,
   };
 }
 

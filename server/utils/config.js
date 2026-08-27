@@ -8,7 +8,6 @@ const { parseMinerArgs } = require("./args");
 const GPU_POLL_MIN_MS = 3000;
 const GPU_POLL_MAX_MS = 10000;
 const GPU_POLL_DEFAULT_MS = 5000;
-const WEAK_SECRET_LENGTH = 32;
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
 function parseEnvFile(text) {
@@ -105,7 +104,7 @@ function buildConfig(env = process.env, opts = {}) {
   const identity = resolveIdentity(flags);
   if (identity.user) applyUserArg(MINER_ARGS, identity.user);
   return Object.freeze({
-    PORT, HOST, GPU_POLL_MS, GPU_POLL_MIN_MS, GPU_POLL_MAX_MS, GPU_POLL_DEFAULT_MS, clampGpuPollMs,
+    PORT, HOST, GPU_POLL_MS, GPU_POLL_DEFAULT_MS, clampGpuPollMs,
     MINER_EXE, MINER_ARGS: Object.freeze(MINER_ARGS), MINER_CWD: env.MINER_CWD || "",
     PASSPHRASE: env.PASSPHRASE || "", SESSION_SECRET: env.SESSION_SECRET || "",
     USER: identity.user, WALLET: identity.wallet, WORKER: identity.worker,
@@ -122,15 +121,7 @@ function validateConfig(config) {
   return fatal;
 }
 
-function advisories(config) {
-  const notes = [...config.warnings];
-  if (config.SESSION_SECRET && config.SESSION_SECRET.length < WEAK_SECRET_LENGTH) notes.push(`SESSION_SECRET is only ${config.SESSION_SECRET.length} characters; use at least ${WEAK_SECRET_LENGTH} for a meaningful security margin.`);
-  if (config.PASSPHRASE && config.PASSPHRASE.length < 8) notes.push("PASSPHRASE is shorter than 8 characters and is trivially brute-forced.");
-  if (!LOCAL_HOSTS.has(config.HOST)) notes.push("Dashboard is reachable from the LAN over plain HTTP; never forward this port to the internet.");
-  return notes;
-}
-
 loadEnvFile();
 const config = buildConfig(process.env);
 
-module.exports = Object.assign({}, config, { validateConfig, advisories, clampGpuPollMs });
+module.exports = Object.assign({}, config, { validateConfig, clampGpuPollMs });

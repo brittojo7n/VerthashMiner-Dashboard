@@ -107,15 +107,5 @@ class GpuManager {
       this._notify();
     }
   }
-  pollNow() {
-    this.running = true;
-    if (!this.busy) {
-      if (this.timer) {
-        clearTimeout(this.timer);
-        this.timer = null;
-      }
-      this._poll();
-    }
-  }
 }
 module.exports = { GpuManager };

@@ -8,34 +8,12 @@ const { buildAssets, negotiate } = require("./static");
 const { SessionStore, safeEqual } = require("./auth");
 const { createRateLimiter } = require("./ratelimit");
 
-const NO_STORE = "no-store";
-const NOSNIFF = "nosniff";
-const FRAME_OPTIONS = "DENY";
-const HDR_JSON = Object.freeze({
-  "Content-Type": "application/json; charset=utf-8",
-  "Cache-Control": NO_STORE,
-  "X-Content-Type-Options": NOSNIFF,
-  "X-Frame-Options": FRAME_OPTIONS,
-  "Referrer-Policy": "no-referrer",
-});
-const HDR_TEXT = Object.freeze({
-  "Content-Type": "text/plain; charset=utf-8",
-  "Cache-Control": NO_STORE,
-  "X-Content-Type-Options": NOSNIFF,
-  "X-Frame-Options": FRAME_OPTIONS,
-  "Referrer-Policy": "no-referrer",
-});
-const HDR_SSE = Object.freeze({
-  "Content-Type": "text/event-stream; charset=utf-8",
-  "Cache-Control": "no-cache, no-transform",
-  Connection: "keep-alive",
-  "X-Accel-Buffering": "no",
-  "X-Content-Type-Options": NOSNIFF,
-  "X-Frame-Options": FRAME_OPTIONS,
-  "Referrer-Policy": "no-referrer",
-});
-
 const MAX_BODY_BYTES = 4096;
+const COMMON_HDR = Object.freeze({ "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer" });
+const HDR_JSON = Object.freeze({ "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...COMMON_HDR });
+const HDR_TEXT = Object.freeze({ "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", ...COMMON_HDR });
+const HDR_SSE = Object.freeze({ "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no", ...COMMON_HDR });
+
 const MAX_STREAM_BLOCKS = 128;
 const TOO_LARGE = Symbol("payload_too_large");
 const SAFE_PATH_RE = /^[a-zA-Z0-9_\-\/\.]+$/;

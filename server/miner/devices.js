@@ -10,7 +10,7 @@ const RX_PCI_LINE = /pcieid:\s*([0-9a-fA-F:.]+)/i;
 const RX_UNAVAILABLE = /not\s*avilable/i;
 
 const stripAnsi = (line) => String(line).replace(RX_ANSI, "");
-const pad2 = (part) => (part.length === 1 ? `0${part}` : part);
+const pad2 = (p) => p.length === 1 ? `0${p}` : p;
 
 function normalizePci(raw) {
   const text = String(raw).trim().toLowerCase();

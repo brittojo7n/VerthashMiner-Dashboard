@@ -139,15 +139,7 @@ class SseHub {
     this.state.dirty = false;
     this._startHeartbeat();
     this._notifyChange();
-    const cleanup = () => {
-      if (!this.clients.has(res)) return;
-      this.clients.delete(res);
-      if (this.clients.size === 0) {
-        this._stopHeartbeat();
-        if (this.bcastTimer) { clearTimeout(this.bcastTimer); this.bcastTimer = null; }
-      }
-      this._notifyChange();
-    };
+    const cleanup = () => this._drop(res);
     req.on("close", cleanup);
     req.on("error", cleanup);
     res.on("close", cleanup);
