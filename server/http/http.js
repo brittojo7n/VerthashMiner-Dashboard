@@ -178,19 +178,21 @@ function createHttpServer({ config, state, sseHub, minerManager, gpuManager, web
     const snapshot = formatStatsSnapshot(state);
     const minerRunning = snapshot.miner.running;
     const minerStatus = minerRunning ? "pass" : "warn";
-    const gpuPolling = gpuManager.running;
+    const gpuPolling = gpuManager ? gpuManager.running : false;
     const gpuDevices = state.gpu.length;
     const gpuError = state.gpuError || "";
-    const gpuStatus = !gpuPolling ? "pass" : gpuError ? "warn" : "pass";
+    const gpuStatus = gpuError ? "fail" : !gpuPolling ? "warn" : "pass";
     const gpuCheck = { status: gpuStatus, polling: gpuPolling };
     if (gpuPolling) gpuCheck.devices = gpuDevices;
     if (gpuError) gpuCheck.error = gpuError;
+    const sseStatus = "pass";
     const checks = {
       miner: { status: minerStatus, state: snapshot.mining.status, pid: snapshot.miner.pid },
       gpu: gpuCheck,
-      sse: { status: "pass", connections: sseHub.size },
+      sse: { status: sseStatus, connections: sseHub.size },
     };
-    const overallStatus = minerRunning ? "pass" : "warn";
+    const checkStatuses = [minerStatus, gpuStatus, sseStatus];
+    const overallStatus = checkStatuses.includes("fail") ? "fail" : checkStatuses.includes("warn") ? "warn" : "pass";
     sendJson(res, 200, { status: overallStatus, uptime: snapshot.uptimeSeconds, checks });
   });
 
