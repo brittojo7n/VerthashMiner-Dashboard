@@ -46,7 +46,7 @@ function buildConfirmContent() {
 function buildSummary(host) {
   const cards = {
     hashrate: createMetric({ label: "Total Hashrate", value: DASH, unit: "kH/s", accent: "cyan", surface: 1 }),
-    accepted: createMetric({ label: "Shares (Acc / Sub)", value: DASH, accent: "green", surface: 1 }),
+    accepted: createMetric({ label: "Shares", value: DASH, accent: "green", surface: 1 }),
     ratio: createMetric({ label: "Acceptance Ratio", value: DASH, surface: 1 }),
     uptime: createMetric({ label: "Uptime", value: DASH, surface: 1 }),
   };
@@ -56,7 +56,14 @@ function buildSummary(host) {
 
 function buildMiningMetrics(host) {
   const cards = {
-    rejected: createMetric({ label: "Rejected", value: "0", accent: "red", surface: 2 }),
+    shares: createMetric({
+      label: "Accepted \u2022 Rejected",
+      surface: 2,
+      parts: [
+        { key: "accepted", value: "0", accent: "green" },
+        { key: "rejected", value: "0", accent: "red" },
+      ],
+    }),
     spm: createMetric({ label: "Shares Per Minute", value: DASH, accent: "green", surface: 2 }),
     difficulty: createMetric({ label: "Network Difficulty", value: DASH, accent: "violet", surface: 2 }),
     lastAccepted: createMetric({ label: "Last Share", value: DASH, surface: 2, small: true }),
@@ -178,7 +185,7 @@ class Dashboard {
     this.summary.hashrate.set({ value: display.hashrate });
     this.summary.accepted.set({ value: display.accepted });
     this.summary.ratio.set({ value: display.ratio });
-    this.mining.rejected.set({ value: display.rejected });
+    this.mining.shares.set({ parts: { accepted: display.acceptedCount, rejected: display.rejected } });
     this.mining.difficulty.set({ value: display.difficulty });
     this.mining.lastAccepted.set({ value: display.lastAccepted });
     this.identity.set({ user: snapshot.miner.user, wallet: snapshot.miner.wallet, worker: snapshot.miner.worker });

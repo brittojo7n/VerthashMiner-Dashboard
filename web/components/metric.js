@@ -48,14 +48,30 @@ export function createMetric(opts = {}) {
   const refs = { node, label: labelEl, value: valueBox };
 
   if (parts) {
-    const used = make("span", "metric-num", parts.used != null ? parts.used : DASH);
-    const total = make("span", "metric-num", parts.total != null ? parts.total : DASH);
-    valueBox.append(used, document.createTextNode(" / "), total);
+    const isArr = Array.isArray(parts);
+    refs.parts = {};
+    const items = isArr ? parts : [
+      { key: "used", value: parts.used, unit: "" },
+      { key: "total", value: parts.total, unit: "" },
+    ];
+    items.forEach((p, i) => {
+      if (i > 0) valueBox.appendChild(make("span", "metric-sep", p.sep || (isArr ? " \u2022 " : " / ")));
+      const item = make("span", "metric-part");
+      if (p.accent && ACCENT_CLASS[p.accent]) item.classList.add(ACCENT_CLASS[p.accent]);
+      const num = make("span", "metric-num", p.value != null ? String(p.value) : DASH);
+      item.appendChild(num);
+      if (p.unit) {
+        const u = make("span", "metric-unit", p.unit);
+        item.append(document.createTextNode(" "), u);
+        refs.parts[`${p.key}Unit`] = u;
+      }
+      valueBox.appendChild(item);
+      refs.parts[p.key] = num;
+      refs[p.key] = num;
+    });
     const unitEl = make("span", "metric-unit", unit || "");
     if (!unit) unitEl.style.display = "none";
-    valueBox.append(document.createTextNode(" "), unitEl);
-    refs.used = used;
-    refs.total = total;
+    if (unit) valueBox.append(document.createTextNode(" "), unitEl);
     refs.unit = unitEl;
   } else {
     const num = make("span", "metric-num", value != null ? String(value) : DASH);
@@ -86,8 +102,10 @@ export function createMetric(opts = {}) {
     set(next = {}) {
       if (next.value !== undefined) text(refs.num, next.value);
       if (next.parts !== undefined) {
-        if (next.parts.used !== undefined) text(refs.used, next.parts.used);
-        if (next.parts.total !== undefined) text(refs.total, next.parts.total);
+        for (const [k, v] of Object.entries(next.parts)) {
+          if (refs.parts && refs.parts[k]) text(refs.parts[k], v);
+          else if (refs[k]) text(refs[k], v);
+        }
       }
       if (next.accent !== undefined) currentAccent = next.accent;
       if (next.status !== undefined) currentStatus = next.status;

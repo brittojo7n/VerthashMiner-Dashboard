@@ -237,12 +237,14 @@ button, input, select, textarea { font-family: inherit; }
 .metric-num { font-variant-numeric: tabular-nums; min-width: 0; }
 .metric-unit { font-size: var(--fs-unit); font-weight: 500; opacity: 0.62; white-space: nowrap; }
 .metric--card .metric-unit { font-size: 14px; }
+.metric-part { display: inline-flex; align-items: baseline; gap: 4px; }
+.metric-sep { color: var(--text-faint); font-weight: 400; opacity: 0.45; user-select: none; }
 
-.metric-value.accent-cyan { color: var(--cyan-bright); }
-.metric-value.accent-green { color: var(--green-bright); }
-.metric-value.accent-red { color: var(--red-bright); }
-.metric-value.accent-amber { color: var(--amber-bright); }
-.metric-value.accent-violet { color: var(--violet-bright); }
+.metric-value.accent-cyan, .metric-part.accent-cyan { color: var(--cyan-bright); }
+.metric-value.accent-green, .metric-part.accent-green { color: var(--green-bright); }
+.metric-value.accent-red, .metric-part.accent-red { color: var(--red-bright); }
+.metric-value.accent-amber, .metric-part.accent-amber { color: var(--amber-bright); }
+.metric-value.accent-violet, .metric-part.accent-violet { color: var(--violet-bright); }
 
 .metric-bar { height: 6px; border-radius: var(--radius-pill); background: rgba(var(--white-rgb), 0.08); margin-top: 12px; overflow: hidden; }
 .metric-bar-fill { height: 100%; background: var(--cyan); width: 100%; transform: scaleX(0) translateZ(0); transform-origin: 0 50%; transition: transform 0.3s ease-out; will-change: transform; }
