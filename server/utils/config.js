@@ -5,9 +5,7 @@ const path = require("node:path");
 const { resolveIdentity } = require("../../web/lib/user");
 const { parseMinerArgs } = require("./args");
 
-const GPU_POLL_MIN_MS = 3000;
-const GPU_POLL_MAX_MS = 10000;
-const GPU_POLL_DEFAULT_MS = 5000;
+const GPU_POLL_MS = 5000;
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
 function parseEnvFile(text) {
@@ -45,10 +43,6 @@ function loadEnvFile(envPath, env = process.env) {
     console.error("[dashboard] env load failed:", err.message);
   }
   return env;
-}
-
-function clampGpuPollMs(value) {
-  return clampInt(value, GPU_POLL_MIN_MS, GPU_POLL_MAX_MS, GPU_POLL_DEFAULT_MS);
 }
 
 function clampInt(value, min, max, fallback) {
@@ -93,10 +87,6 @@ function buildConfig(env = process.env, opts = {}) {
   const PORT = clampInt(rawPort, 0, 65535, 4067);
   if (rawPort != null && rawPort !== "" && Number(rawPort) !== PORT) warnings.push(`PORT "${rawPort}" is invalid; using ${PORT}.`);
   const HOST = env.HOST || "127.0.0.1";
-  const rawGpuPoll = env.GPU_POLL_MS;
-  const GPU_POLL_MS = clampGpuPollMs(rawGpuPoll || GPU_POLL_DEFAULT_MS);
-  if (rawGpuPoll != null && rawGpuPoll !== "" && Number(rawGpuPoll) !== GPU_POLL_MS)
-    warnings.push(`GPU_POLL_MS clamped to ${GPU_POLL_MS}ms (allowed ${GPU_POLL_MIN_MS}-${GPU_POLL_MAX_MS}).`);
   const MINER_EXE = env.MINER_EXE || (platform === "win32" ? "VerthashMiner.exe" : "VerthashMiner");
   const MINER_ARGS = splitArgs(env.MINER_ARGS);
   if (!MINER_ARGS.includes("-P") && !MINER_ARGS.includes("--protocol-dump")) MINER_ARGS.push("--protocol-dump");
@@ -104,7 +94,7 @@ function buildConfig(env = process.env, opts = {}) {
   const identity = resolveIdentity(flags);
   if (identity.user) applyUserArg(MINER_ARGS, identity.user);
   return Object.freeze({
-    PORT, HOST, GPU_POLL_MS, GPU_POLL_DEFAULT_MS, clampGpuPollMs,
+    PORT, HOST, GPU_POLL_MS,
     MINER_EXE, MINER_ARGS: Object.freeze(MINER_ARGS), MINER_CWD: env.MINER_CWD || "",
     PASSPHRASE: env.PASSPHRASE || "", SESSION_SECRET: env.SESSION_SECRET || "",
     USER: identity.user, WALLET: identity.wallet, WORKER: identity.worker,
@@ -124,4 +114,4 @@ function validateConfig(config) {
 loadEnvFile();
 const config = buildConfig(process.env);
 
-module.exports = Object.assign({}, config, { validateConfig, clampGpuPollMs });
+module.exports = Object.assign({}, config, { validateConfig, buildConfig, loadEnvFile, parseEnvFile, GPU_POLL_MS });

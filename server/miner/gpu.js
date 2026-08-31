@@ -1,7 +1,7 @@
 "use strict";
 const { execFile } = require("node:child_process");
 const { LIMITS } = require("../utils/constants");
-const { clampGpuPollMs, GPU_POLL_DEFAULT_MS } = require("../utils/config");
+const { GPU_POLL_MS } = require("../utils/config");
 const { normalizePci } = require("./devices");
 const { unrefTimer } = require("../utils/timers");
 const SMI_QUERY = Object.freeze(["--query-gpu=name,temperature.gpu,power.draw,utilization.gpu,clocks.gr,clocks.mem,memory.used,memory.total,pstate,pci.bus_id", "--format=csv,noheader,nounits"]);
@@ -15,9 +15,9 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 class GpuManager {
-  constructor({ state, pollMs = GPU_POLL_DEFAULT_MS, onUpdate, exec = execFile } = {}) {
+  constructor({ state, pollMs = GPU_POLL_MS, onUpdate, exec = execFile } = {}) {
     this.state = state;
-    this.pollMs = clampGpuPollMs(pollMs);
+    this.pollMs = pollMs;
     this.onUpdate = onUpdate;
     this.exec = exec;
     this.timer = null;

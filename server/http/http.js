@@ -2,7 +2,6 @@
 
 const http = require("node:http");
 const os = require("node:os");
-const path = require("node:path");
 const { formatStatsSnapshot } = require("../utils/state");
 const { buildAssets, negotiate } = require("./static");
 const { SessionStore, safeEqual } = require("./auth");
@@ -16,7 +15,7 @@ const HDR_SSE = Object.freeze({ "Content-Type": "text/event-stream; charset=utf-
 
 const MAX_STREAM_BLOCKS = 128;
 const TOO_LARGE = Symbol("payload_too_large");
-const SAFE_PATH_RE = /^[a-zA-Z0-9_\-\/\.]+$/;
+const SAFE_PATH_RE = /^[a-zA-Z0-9_.\-/]+$/;
 
 const SERVER_TIMEOUTS = Object.freeze({
   headersTimeout: 20000,
@@ -56,6 +55,18 @@ function getLanIp() {
   return "127.0.0.1";
 }
 
+// Normalise IPv6-mapped IPv4 addresses (::ffff:1.2.3.4 → 1.2.3.4) so that
+// a single client always maps to one rate-limit / lockout bucket regardless
+// of whether the OS dual-stacks the connection.
+function normalizeIp(addr) {
+  if (!addr) return "";
+  if (addr.startsWith("::ffff:")) {
+    const v4 = addr.slice(7);
+    if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(v4)) return v4;
+  }
+  return addr;
+}
+
 function isValidHostHeader(host) {
   if (!host) return false;
   const hostWithoutPort = host.split(":")[0];
@@ -79,9 +90,9 @@ function passesXhrGuard(req) {
 
 function isSafePath(pathname) {
   if (!pathname || pathname.length > 256) return false;
-  if (!SAFE_PATH_RE.test(pathname)) return false;
-  const normalized = path.normalize(pathname);
-  return !normalized.includes("..") && !normalized.includes("\0");
+  // Explicitly block path-traversal and null-byte sequences before regex.
+  if (pathname.includes("..") || pathname.includes("\0")) return false;
+  return SAFE_PATH_RE.test(pathname);
 }
 
 function readJsonBody(req) {
@@ -99,7 +110,8 @@ function readJsonBody(req) {
       try { finish(JSON.parse(Buffer.concat(chunks).toString("utf8"))); } catch { finish(null); }
     });
     req.on("error", () => finish(null));
-    req.on("aborted", () => finish(null));
+    // "aborted" is deprecated since Node 17; "close" covers all early disconnects.
+    req.on("close", () => finish(null));
   });
 }
 
@@ -212,7 +224,7 @@ function createHttpServer({ config, state, sseHub, minerManager, gpuManager, web
     const queryAt = url.indexOf("?");
     const pathname = queryAt === -1 ? url : url.slice(0, queryAt);
     const method = req.method || "GET";
-    const ip = req.socket.remoteAddress || "";
+    const ip = normalizeIp(req.socket.remoteAddress || "");
 
     if (!isValidHostHeader(req.headers.host)) {
       res.writeHead(400, HDR_TEXT);
@@ -228,8 +240,8 @@ function createHttpServer({ config, state, sseHub, minerManager, gpuManager, web
       }
     }
 
-    const isApi = pathname.startsWith("/api/") || pathname === "/events";
-    if (requiresAuth && isApi && pathname !== "/api/login") {
+    const isProtected = pathname.startsWith("/api/") || pathname === "/events" || pathname === "/health";
+    if (requiresAuth && isProtected && pathname !== "/api/login") {
       if (pathname === "/events") sessions.prune();
       if (!sessions.verify(req.headers.cookie)) return sendText(res, 401, "Unauthorized");
     }

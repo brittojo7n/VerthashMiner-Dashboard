@@ -370,7 +370,7 @@ class MinerManager {
       };
       try { child.kill("SIGINT"); } catch {}
       this._forceKillTimer = timer(forceKill, this.timeouts.forceKill);
-      var watchdog = timer(() => {
+      let watchdog = timer(() => {
         if (settled) return;
         this.pushLog("Miner did not exit in time; giving up on a clean stop.", LOG.WARN);
         forceKill(); finish();
