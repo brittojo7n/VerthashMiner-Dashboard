@@ -9,7 +9,7 @@ const LOCKOUT_THRESHOLD = 5;
 const LOCKOUT_MS = 30000;
 const FAILURE_WINDOW_MS = 60000;
 const SWEEP_INTERVAL_MS = 10000;
-const TOKEN_RE = /(?:^|;\s*)vm_session=([0-9a-f]{16,128})(?:\s*;|\s*$)/;
+const TOKEN_RE = /(?:^|;)[ \t]*vm_session=([0-9a-f]{16,128})(?=[ \t]*(?:;|$))/;
 
 function safeEqual(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
@@ -36,7 +36,8 @@ class SessionStore {
   issue() {
     const token = crypto.createHmac("sha256", this.secret).update(crypto.randomBytes(32)).digest("hex");
     this.prune(true);
-    while (this.sessions.size >= MAX_SESSIONS) this.sessions.delete(this.sessions.keys().next().value);
+    const sessIter = this.sessions.keys();
+    while (this.sessions.size >= MAX_SESSIONS) this.sessions.delete(sessIter.next().value);
     this.sessions.set(token, this.now() + this.ttlMs);
     return token;
   }
@@ -90,7 +91,8 @@ class SessionStore {
     if (!entry) {
       if (this.attempts.size >= MAX_TRACKED_IPS) {
         this._sweepAttempts(now);
-        while (this.attempts.size >= MAX_TRACKED_IPS) this.attempts.delete(this.attempts.keys().next().value);
+        const attIter = this.attempts.keys();
+        while (this.attempts.size >= MAX_TRACKED_IPS) this.attempts.delete(attIter.next().value);
       }
       entry = { failures: [], blockedUntil: 0 };
       this.attempts.set(ip, entry);
@@ -98,7 +100,10 @@ class SessionStore {
     entry.failures.push(now);
     if (entry.failures.length > LOCKOUT_THRESHOLD * 2) entry.failures = entry.failures.slice(-LOCKOUT_THRESHOLD);
     const recent = entry.failures.filter((t) => now - t < FAILURE_WINDOW_MS);
-    if (recent.length >= LOCKOUT_THRESHOLD) entry.blockedUntil = now + LOCKOUT_MS;
+    if (recent.length >= LOCKOUT_THRESHOLD) {
+      entry.blockedUntil = now + LOCKOUT_MS;
+      entry.failures = recent;
+    }
   }
 
   clearFailures(ip) {

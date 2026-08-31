@@ -44,16 +44,16 @@ Open `http://127.0.0.1:4067` (or your LAN IP if you had given `0.0.0.0` as the I
 ```plain
 main.js                   entry point (node main.js)
 server/                   Node.js application runtime
-  core/                   shared foundations: config, constants, state, timers
-  http/                   HTTP subsystem: http, sse, auth, ratelimit, static, bundle
-  miner/                  miner process + hardware: miner, parser, devices, gpu
+  utils/                  shared foundations: args, config, constants, state, timers
+  http/                   HTTP subsystem: auth, bundle, http, ratelimit, sse, static
+  miner/                  miner process + hardware: devices, gpu, miner, parser
 web/                      browser-facing web application
   index.html              document template
   style.css               stylesheet
   favicon.svg             favicon
-  core/                   bootstrap + infrastructure: app, head, connection, perf
-  components/             UI components: console, gpu, modal, toast
-  lib/                    shared utilities: dom, present
+  services/               bootstrap + infrastructure: app, connection, perf
+  components/             UI components: console, gpu, identity, metric, modal, toast
+  lib/                    shared utilities: dom, present, user
 ```
 
 Delivery follows a three-layer model: the `web/` source is composed at startup into a single bundle and served through an explicit allowlist (`/`, `/index.html`, `/app.js`, `/style.css`, `/favicon.svg`). Internal paths such as `/js/*`, `/server/*`, `/web/*` and any traversal are never resolvable over HTTP.
