@@ -89,6 +89,7 @@ desktop.ini
 verthash.dat
 *.dat
 *.bin
+VerthashMiner/
 VerthashMiner
 VerthashMiner.exe
 *.sqlite
